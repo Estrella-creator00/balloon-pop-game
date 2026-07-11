@@ -1,0 +1,11 @@
+{
+  "name": "풍선 팡팡",
+  "short_name": "풍선팡팡",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#87CEEB",
+  "theme_color": "#4FC3F7",
+  "description": "풍선을 터뜨리는 귀여운 30초 게임",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}
