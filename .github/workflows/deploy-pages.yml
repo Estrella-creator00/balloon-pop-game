@@ -1,0 +1,66 @@
+name: Build and deploy Flutter Web
+
+on:
+  push:
+    branches:
+      - source
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: balloon-pop-game-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source branch
+        uses: actions/checkout@v4
+
+      - name: Install Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        run: flutter build web --release --base-href "/balloon-pop-game/"
+
+      - name: Prepare GitHub Pages files
+        shell: bash
+        run: |
+          touch build/web/.nojekyll
+          cp build/web/index.html build/web/404.html
+
+      - name: Check out main deployment branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: pages
+
+      - name: Replace main with the web build
+        shell: bash
+        run: |
+          find pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a build/web/. pages/
+
+      - name: Commit and push deployment
+        shell: bash
+        working-directory: pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "No deployment changes to commit."
+            exit 0
+          fi
+          git commit -m "Deploy Flutter Web from source ${GITHUB_SHA} [skip ci]"
+          git push origin HEAD:main
