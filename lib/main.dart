@@ -38,15 +38,19 @@ class Balloon {
     required this.size,
     required this.floatPhase,
     required this.floatPower,
+    required this.hp,
+    required this.maxHp,
   });
 
   final int id;
   Offset position;
   Offset velocity;
   final Color color;
-  final double size;
+  double size;
   double floatPhase;
   final double floatPower;
+  int hp;
+  final int maxHp;
 }
 
 class BossBalloon {
@@ -54,13 +58,57 @@ class BossBalloon {
     required this.position,
     required this.velocity,
     required this.size,
+    required this.maxHp,
   });
 
   Offset position;
   Offset velocity;
   double size;
-  int hp = 10;
+  final int maxHp;
+  late int hp = maxHp;
   double turnCooldown = 0.65;
+}
+
+class StageConfig {
+  const StageConfig({
+    required this.stage,
+    required this.isBoss,
+    required this.balloonCount,
+    required this.balloonHp,
+    required this.duration,
+    required this.bossHp,
+    required this.bossSpeed,
+    required this.bossBonus,
+  });
+
+  final int stage;
+  final bool isBoss;
+  final int balloonCount;
+  final int balloonHp;
+  final Duration duration;
+  final int bossHp;
+  final double bossSpeed;
+  final int bossBonus;
+
+  factory StageConfig.forStage(int stage) {
+    final isBoss = stage % 10 == 0;
+    final tier = (stage - 1) ~/ 10;
+    final positionInTier = (stage - 1) % 10 + 1;
+    final timeGroup = (positionInTier - 1) ~/ 3;
+
+    return StageConfig(
+      stage: stage,
+      isBoss: isBoss,
+      balloonCount: isBoss ? 0 : positionInTier + 1,
+      balloonHp: tier + 1,
+      duration: Duration(
+        seconds: isBoss ? 8 + tier * 2 : 10 + tier * 2 + timeGroup * 5,
+      ),
+      bossHp: isBoss ? 10 + tier * 5 : 0,
+      bossSpeed: isBoss ? 105 * pow(1.2, tier).toDouble() : 0,
+      bossBonus: isBoss ? 200 + tier * 100 : 0,
+    );
+  }
 }
 
 class PopPiece {
@@ -112,6 +160,7 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
   static const _tick = Duration(milliseconds: 16);
   static const _stageClearDelay = Duration(milliseconds: 400);
   static const _bossClearDelay = Duration(seconds: 1);
+  static const _finalStage = 20;
   static const _colors = [
     Color(0xFFFF5C8A),
     Color(0xFFFFC857),
@@ -137,12 +186,7 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
   GamePhase _phase = GamePhase.playing;
   BossBalloon? _boss;
 
-  Duration get _stageDuration => switch (_stage) {
-        <= 3 => const Duration(seconds: 10),
-        <= 6 => const Duration(seconds: 15),
-        <= 9 => const Duration(seconds: 20),
-        _ => const Duration(seconds: 8),
-      };
+  StageConfig get _stageConfig => StageConfig.forStage(_stage);
 
   @override
   void initState() {
@@ -186,12 +230,12 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
       return;
     }
 
-    if (_stage == 10) {
+    if (_stageConfig.isBoss) {
       _spawnBoss();
     } else {
-      _spawnBalloons(_stage + 1);
+      _spawnBalloons(_stageConfig.balloonCount);
     }
-    _secondsLeft = _stageDuration.inSeconds;
+    _secondsLeft = _stageConfig.duration.inSeconds;
     _stopwatch
       ..reset()
       ..start();
@@ -211,19 +255,26 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
           size: size,
           floatPhase: _random.nextDouble() * pi * 2,
           floatPower: 10 + _random.nextDouble() * 10,
+          hp: _stageConfig.balloonHp,
+          maxHp: _stageConfig.balloonHp,
         ),
       );
     }
   }
 
   void _spawnBoss() {
-    final size = min(_playArea.shortestSide * 0.58, 270.0).clamp(210.0, 290.0);
+    final config = _stageConfig;
+    final maxSize = _stage >= 20 ? 300.0 : 270.0;
+    final minSize = _stage >= 20 ? 225.0 : 210.0;
+    final size =
+        min(_playArea.shortestSide * 0.62, maxSize).clamp(minSize, maxSize);
     final angle = _random.nextDouble() * pi * 2;
-    const speed = 105.0;
+    final speed = config.bossSpeed;
     _boss = BossBalloon(
       position: _randomPosition(size),
       velocity: Offset(cos(angle) * speed, sin(angle) * speed),
       size: size,
+      maxHp: config.bossHp,
     );
   }
 
@@ -246,7 +297,7 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
       return;
     }
 
-    final remaining = _stageDuration - _stopwatch.elapsed;
+    final remaining = _stageConfig.duration - _stopwatch.elapsed;
     if (remaining <= Duration.zero) {
       _finishGame();
       return;
@@ -279,7 +330,8 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
       final speed = boss.velocity.distance;
       final angle = _random.nextDouble() * pi * 2;
       boss.velocity = Offset(cos(angle) * speed, sin(angle) * speed);
-      boss.turnCooldown = 0.28 + boss.hp * 0.035;
+      final hpRatio = boss.hp / boss.maxHp;
+      boss.turnCooldown = 0.24 + hpRatio * 0.38;
     }
     final next = boss.position + boss.velocity * dt;
     boss.position = _bounce(next, boss.velocity, boss.size, (velocity) {
@@ -340,6 +392,15 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
   void _popBalloon(Balloon balloon) {
     if (_phase != GamePhase.playing) return;
 
+    if (balloon.hp > 1) {
+      PopSound.playLightTap();
+      setState(() {
+        balloon.hp--;
+        balloon.size *= 0.88;
+      });
+      return;
+    }
+
     PopSound.play();
     final center =
         balloon.position + Offset(balloon.size / 2, balloon.size / 2);
@@ -349,6 +410,7 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     setState(() {
       final removed = _balloons.remove(balloon);
       if (!removed) return;
+      balloon.hp = 0;
       if (_balloons.isEmpty) {
         _showStageClear();
       }
@@ -375,7 +437,7 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
 
     PopSound.play();
     final center = boss.position + Offset(boss.size / 2, boss.size / 2);
-    final hitColor = _bossColor(boss.hp);
+    final hitColor = _bossColor(boss);
     _spawnPieces(center, hitColor, boss.size * 0.35, big: false);
 
     setState(() {
@@ -386,14 +448,16 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
       }
       boss.size *= 0.965;
       boss.velocity *= 1.075;
-      boss.turnCooldown = min(boss.turnCooldown, 0.22 + boss.hp * 0.025);
+      final hpRatio = boss.hp / boss.maxHp;
+      boss.turnCooldown = min(boss.turnCooldown, 0.18 + hpRatio * 0.28);
     });
   }
 
   void _clearBoss(Offset center, Color color) {
+    final config = _stageConfig;
     _stopwatch.stop();
     _boss = null;
-    _score += 200 + _secondsLeft;
+    _score += config.bossBonus + _secondsLeft;
     _phase = GamePhase.bossClear;
     PopSound.playBossExplosion();
     _spawnPieces(center, color, 280, big: true);
@@ -402,8 +466,14 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     _stageTimer?.cancel();
     _stageTimer = Timer(_bossClearDelay, () {
       if (!mounted || _phase != GamePhase.bossClear) return;
-      _completeGame();
-      setState(() {});
+      setState(() {
+        if (_stage >= _finalStage) {
+          _completeGame();
+        } else {
+          _stage++;
+          _startStage();
+        }
+      });
     });
   }
 
@@ -523,7 +593,10 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
                         if (_phase == GamePhase.stageClear)
                           _buildCenterMessage('Stage Clear!', null),
                         if (_phase == GamePhase.bossClear)
-                          _buildCenterMessage('BOSS CLEAR!', 'Bonus +200'),
+                          _buildCenterMessage(
+                            'BOSS CLEAR!',
+                            'Bonus +${_stageConfig.bossBonus}',
+                          ),
                         if (_phase == GamePhase.completed)
                           _buildGameOver(completed: true),
                         if (_phase == GamePhase.gameOver) _buildGameOver(),
@@ -573,6 +646,12 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _infoPill('점수', '$_score', const Color(0xFFFFB300)),
+              const SizedBox(width: 10),
+              _infoPill(
+                '남은 풍선',
+                '${_boss != null ? 1 : _balloons.length}',
+                const Color(0xFF7E57C2),
+              ),
               const SizedBox(width: 10),
               _infoPill(
                 '시간',
@@ -625,7 +704,9 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
         child: SizedBox(
           width: balloon.size,
           height: balloon.size + 26,
-          child: CustomPaint(painter: BalloonPainter(color: balloon.color)),
+          child: CustomPaint(
+            painter: BalloonPainter(color: _balloonColor(balloon)),
+          ),
         ),
       ),
     );
@@ -644,8 +725,9 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
           height: boss.size + 32,
           child: CustomPaint(
             painter: BossBalloonPainter(
-              color: _bossColor(boss.hp),
+              color: _bossColor(boss),
               hp: boss.hp,
+              maxHp: boss.maxHp,
             ),
           ),
         ),
@@ -653,10 +735,16 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     );
   }
 
-  Color _bossColor(int hp) => Color.lerp(
+  Color _balloonColor(Balloon balloon) => Color.lerp(
+        balloon.color,
+        const Color(0xFF3B246B),
+        (balloon.maxHp - balloon.hp) / balloon.maxHp * 0.38,
+      )!;
+
+  Color _bossColor(BossBalloon boss) => Color.lerp(
         const Color(0xFF7E57C2),
         const Color(0xFFFF3D67),
-        (10 - hp) / 10,
+        (boss.maxHp - boss.hp) / boss.maxHp,
       )!;
 
   Widget _buildPiece(PopPiece piece) {
@@ -874,10 +962,15 @@ class BalloonPainter extends CustomPainter {
 }
 
 class BossBalloonPainter extends CustomPainter {
-  const BossBalloonPainter({required this.color, required this.hp});
+  const BossBalloonPainter({
+    required this.color,
+    required this.hp,
+    required this.maxHp,
+  });
 
   final Color color;
   final int hp;
+  final int maxHp;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -916,7 +1009,7 @@ class BossBalloonPainter extends CustomPainter {
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(barLeft, barTop, barWidth * hp / 10, 11),
+        Rect.fromLTWH(barLeft, barTop, barWidth * hp / maxHp, 11),
         const Radius.circular(8),
       ),
       Paint()..color = const Color(0xFFFFD54F),
@@ -925,7 +1018,9 @@ class BossBalloonPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant BossBalloonPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.hp != hp;
+      oldDelegate.color != color ||
+      oldDelegate.hp != hp ||
+      oldDelegate.maxHp != maxHp;
 }
 
 class PopPiecePainter extends CustomPainter {

@@ -63,6 +63,30 @@ abstract final class PopSound {
     }
   }
 
+  static void playLightTap() {
+    try {
+      final context = _context ??= _AudioContext();
+      context.resume();
+      final now = context.currentTime;
+      final oscillator = context.createOscillator();
+      final gain = context.createGain();
+      oscillator
+        ..type = 'sine'
+        ..frequency.setValueAtTime(760, now)
+        ..frequency.exponentialRampToValueAtTime(520, now + 0.045)
+        ..connect(gain);
+      gain
+        ..gain.setValueAtTime(0.16, now)
+        ..gain.exponentialRampToValueAtTime(0.001, now + 0.055)
+        ..connect(context.destination);
+      oscillator
+        ..start(now)
+        ..stop(now + 0.06);
+    } catch (_) {
+      // A missing audio device must not affect balloon health.
+    }
+  }
+
   static void playBossExplosion() {
     try {
       final context = _context ??= _AudioContext();
