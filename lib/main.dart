@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import 'audio/pop_sound.dart';
+import 'storage/progress_storage.dart';
 
 void main() {
   runApp(const BalloonPopApp());
@@ -27,7 +28,15 @@ class BalloonPopApp extends StatelessWidget {
   }
 }
 
-enum GamePhase { playing, stageClear, bossClear, completed, gameOver }
+enum GamePhase {
+  menu,
+  playing,
+  paused,
+  stageClear,
+  bossClear,
+  completed,
+  gameOver,
+}
 
 class Balloon {
   Balloon({
@@ -55,12 +64,14 @@ class Balloon {
 
 class BossBalloon {
   BossBalloon({
+    required this.id,
     required this.position,
     required this.velocity,
     required this.size,
     required this.maxHp,
   });
 
+  final int id;
   Offset position;
   Offset velocity;
   double size;
@@ -78,7 +89,7 @@ class StageConfig {
     required this.duration,
     required this.bossHp,
     required this.bossSpeed,
-    required this.bossBonus,
+    required this.bossCount,
   });
 
   final int stage;
@@ -88,7 +99,7 @@ class StageConfig {
   final Duration duration;
   final int bossHp;
   final double bossSpeed;
-  final int bossBonus;
+  final int bossCount;
 
   factory StageConfig.forStage(int stage) {
     final isBoss = stage % 10 == 0;
@@ -106,7 +117,7 @@ class StageConfig {
       ),
       bossHp: isBoss ? 10 + tier * 5 : 0,
       bossSpeed: isBoss ? 105 * pow(1.2, tier).toDouble() : 0,
-      bossBonus: isBoss ? 200 + tier * 100 : 0,
+      bossCount: isBoss ? tier + 1 : 0,
     );
   }
 }
@@ -156,11 +167,11 @@ class BalloonGamePage extends StatefulWidget {
   State<BalloonGamePage> createState() => _BalloonGamePageState();
 }
 
-class _BalloonGamePageState extends State<BalloonGamePage> {
+class _BalloonGamePageState extends State<BalloonGamePage>
+    with WidgetsBindingObserver {
   static const _tick = Duration(milliseconds: 16);
   static const _stageClearDelay = Duration(milliseconds: 400);
   static const _bossClearDelay = Duration(seconds: 1);
-  static const _finalStage = 20;
   static const _colors = [
     Color(0xFFFF5C8A),
     Color(0xFFFFC857),
@@ -183,30 +194,43 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
   int _score = 0;
   int _stage = 1;
   int _secondsLeft = 15;
-  GamePhase _phase = GamePhase.playing;
-  BossBalloon? _boss;
+  int _sectionStartStage = 1;
+  GamePhase _phase = GamePhase.menu;
+  final List<BossBalloon> _bosses = [];
+  bool _secondSectionUnlocked = false;
 
   StageConfig get _stageConfig => StageConfig.forStage(_stage);
 
   @override
   void initState() {
     super.initState();
-    _startGame();
+    WidgetsBinding.instance.addObserver(this);
+    _secondSectionUnlocked = ProgressStorage.isSecondSectionUnlocked();
   }
 
-  void _startGame() {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _pauseGame();
+    }
+  }
+
+  void _startGame(int startStage) {
     _timer?.cancel();
     _stageTimer?.cancel();
     _stopwatch.reset();
     _nextId = 0;
     _score = 0;
-    _stage = 1;
-    _secondsLeft = 10;
+    _sectionStartStage = startStage;
+    _stage = startStage;
+    _secondsLeft = StageConfig.forStage(startStage).duration.inSeconds;
     _phase = GamePhase.playing;
     _balloons.clear();
     _pieces.clear();
     _rings.clear();
-    _boss = null;
+    _bosses.clear();
     _startStage();
     _timer = Timer.periodic(_tick, _updateGame);
     if (mounted) {
@@ -214,11 +238,72 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     }
   }
 
+  void _returnToMenu() {
+    _timer?.cancel();
+    _stageTimer?.cancel();
+    _stopwatch.stop();
+    setState(() {
+      _score = 0;
+      _stage = 1;
+      _secondsLeft = 10;
+      _phase = GamePhase.menu;
+      _balloons.clear();
+      _pieces.clear();
+      _rings.clear();
+      _bosses.clear();
+    });
+  }
+
+  void _pauseGame() {
+    if (_phase != GamePhase.playing) return;
+    _stopwatch.stop();
+    setState(() {
+      _phase = GamePhase.paused;
+    });
+  }
+
+  void _resumeGame() {
+    if (_phase != GamePhase.paused) return;
+    _stopwatch.start();
+    setState(() {
+      _phase = GamePhase.playing;
+    });
+  }
+
+  Future<void> _confirmEndGame() async {
+    if (_phase != GamePhase.playing) return;
+    _pauseGame();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('게임 끝내기'),
+        content: const Text('현재 게임을 끝내고 시작 화면으로 돌아갈까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('끝내기'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (confirmed == true) {
+      _returnToMenu();
+    } else {
+      _resumeGame();
+    }
+  }
+
   void _startStage() {
     _stageTimer?.cancel();
     _phase = GamePhase.playing;
     _balloons.clear();
-    _boss = null;
+    _bosses.clear();
 
     if (_playArea == Size.zero) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -268,14 +353,40 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     final minSize = _stage >= 20 ? 225.0 : 210.0;
     final size =
         min(_playArea.shortestSide * 0.62, maxSize).clamp(minSize, maxSize);
-    final angle = _random.nextDouble() * pi * 2;
-    final speed = config.bossSpeed;
-    _boss = BossBalloon(
-      position: _randomPosition(size),
-      velocity: Offset(cos(angle) * speed, sin(angle) * speed),
-      size: size,
-      maxHp: config.bossHp,
-    );
+    for (var id = 0; id < config.bossCount; id++) {
+      final angle = _random.nextDouble() * pi * 2;
+      final speed = config.bossSpeed;
+      _bosses.add(
+        BossBalloon(
+          id: id,
+          position: _nonOverlappingBossPosition(size),
+          velocity: Offset(cos(angle) * speed, sin(angle) * speed),
+          size: size,
+          maxHp: config.bossHp,
+        ),
+      );
+    }
+  }
+
+  Offset _nonOverlappingBossPosition(double size) {
+    for (var attempt = 0; attempt < 80; attempt++) {
+      final candidate = _randomPosition(size);
+      final candidateRect =
+          Rect.fromLTWH(candidate.dx, candidate.dy, size, size);
+      final overlaps = _bosses.any((boss) {
+        final bossRect = Rect.fromLTWH(
+          boss.position.dx,
+          boss.position.dy,
+          boss.size,
+          boss.size,
+        );
+        return candidateRect.overlaps(bossRect.inflate(12));
+      });
+      if (!overlaps) return candidate;
+    }
+    final maxX = max(0.0, _playArea.width - size);
+    final maxY = max(0.0, _playArea.height - size - 26);
+    return _bosses.isEmpty ? Offset.zero : Offset(maxX, maxY);
   }
 
   Offset _randomPosition(double size) {
@@ -288,14 +399,16 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     if (!mounted) return;
 
     final dt = _tick.inMilliseconds / 1000;
-    _updateBalloons(dt);
-    _updateBoss(dt);
-    _updateEffects(dt);
-
-    if (_phase != GamePhase.playing) {
+    if (_phase == GamePhase.stageClear || _phase == GamePhase.bossClear) {
+      _updateEffects(dt);
       setState(() {});
       return;
     }
+    if (_phase != GamePhase.playing) return;
+
+    _updateBalloons(dt);
+    _updateBoss(dt);
+    _updateEffects(dt);
 
     final remaining = _stageConfig.duration - _stopwatch.elapsed;
     if (remaining <= Duration.zero) {
@@ -322,21 +435,22 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
   }
 
   void _updateBoss(double dt) {
-    final boss = _boss;
-    if (_phase != GamePhase.playing || boss == null) return;
+    if (_phase != GamePhase.playing) return;
 
-    boss.turnCooldown -= dt;
-    if (boss.turnCooldown <= 0) {
-      final speed = boss.velocity.distance;
-      final angle = _random.nextDouble() * pi * 2;
-      boss.velocity = Offset(cos(angle) * speed, sin(angle) * speed);
-      final hpRatio = boss.hp / boss.maxHp;
-      boss.turnCooldown = 0.24 + hpRatio * 0.38;
+    for (final boss in _bosses) {
+      boss.turnCooldown -= dt;
+      if (boss.turnCooldown <= 0) {
+        final speed = boss.velocity.distance;
+        final angle = _random.nextDouble() * pi * 2;
+        boss.velocity = Offset(cos(angle) * speed, sin(angle) * speed);
+        final hpRatio = boss.hp / boss.maxHp;
+        boss.turnCooldown = 0.24 + hpRatio * 0.38;
+      }
+      final next = boss.position + boss.velocity * dt;
+      boss.position = _bounce(next, boss.velocity, boss.size, (velocity) {
+        boss.velocity = velocity;
+      });
     }
-    final next = boss.position + boss.velocity * dt;
-    boss.position = _bounce(next, boss.velocity, boss.size, (velocity) {
-      boss.velocity = velocity;
-    });
   }
 
   Offset _bounce(
@@ -431,9 +545,8 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     });
   }
 
-  void _hitBoss() {
-    final boss = _boss;
-    if (_phase != GamePhase.playing || boss == null) return;
+  void _hitBoss(BossBalloon boss) {
+    if (_phase != GamePhase.playing || !_bosses.contains(boss)) return;
 
     PopSound.play();
     final center = boss.position + Offset(boss.size / 2, boss.size / 2);
@@ -443,7 +556,7 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     setState(() {
       boss.hp--;
       if (boss.hp <= 0) {
-        _clearBoss(center, hitColor);
+        _clearBoss(boss, center, hitColor);
         return;
       }
       boss.size *= 0.965;
@@ -453,25 +566,32 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     });
   }
 
-  void _clearBoss(Offset center, Color color) {
-    final config = _stageConfig;
-    _stopwatch.stop();
-    _boss = null;
-    _score += config.bossBonus + _secondsLeft;
-    _phase = GamePhase.bossClear;
+  void _clearBoss(BossBalloon boss, Offset center, Color color) {
+    final removed = _bosses.remove(boss);
+    if (!removed) return;
+    _score += 10;
     PopSound.playBossExplosion();
     _spawnPieces(center, color, 280, big: true);
     _spawnRing(center, const Color(0xFFFFD54F), 190);
     _spawnRing(center, const Color(0xFFFF5C8A), 250);
+    if (_bosses.isNotEmpty) return;
+
+    _stopwatch.stop();
+    _score += _secondsLeft;
+    _phase = GamePhase.bossClear;
+    if (_stage == 10) {
+      _secondSectionUnlocked = true;
+      ProgressStorage.unlockSecondSection();
+    }
     _stageTimer?.cancel();
     _stageTimer = Timer(_bossClearDelay, () {
       if (!mounted || _phase != GamePhase.bossClear) return;
       setState(() {
-        if (_stage >= _finalStage) {
-          _completeGame();
-        } else {
-          _stage++;
+        if (_stage == 10 && _sectionStartStage == 1) {
+          _stage = 11;
           _startStage();
+        } else {
+          _completeGame();
         }
       });
     });
@@ -529,20 +649,166 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
       _secondsLeft = 0;
       _phase = GamePhase.gameOver;
       _balloons.clear();
-      _boss = null;
+      _bosses.clear();
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _stageTimer?.cancel();
     _stopwatch.stop();
     super.dispose();
   }
 
+  Future<void> _confirmProgressReset() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('진행 초기화'),
+        content: const Text('저장된 진행 상태를 초기화할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('초기화'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    ProgressStorage.clear();
+    setState(() {
+      _secondSectionUnlocked = false;
+      _score = 0;
+      _stage = 1;
+      _sectionStartStage = 1;
+      _secondsLeft = 10;
+      _phase = GamePhase.menu;
+    });
+  }
+
+  Widget _buildStartScreen() {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF77D5FF), Color(0xFFDDF7FF)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 460),
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33004D73),
+                      blurRadius: 20,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      '🎈 풍선 팡팡 🎈',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 38,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFF5C8A),
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    _menuButton(
+                      label: '1~10 STAGE 시작',
+                      icon: Icons.play_arrow_rounded,
+                      onPressed: () => _startGame(1),
+                    ),
+                    const SizedBox(height: 16),
+                    _menuButton(
+                      label: _secondSectionUnlocked
+                          ? '11~20 STAGE 시작'
+                          : '11~20 STAGE 시작 🔒',
+                      icon: _secondSectionUnlocked
+                          ? Icons.play_arrow_rounded
+                          : Icons.lock_rounded,
+                      onPressed:
+                          _secondSectionUnlocked ? () => _startGame(11) : null,
+                    ),
+                    if (!_secondSectionUnlocked) ...[
+                      const SizedBox(height: 10),
+                      const Text(
+                        '10 STAGE 보스를 먼저 클리어하세요',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF607D8B),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    OutlinedButton.icon(
+                      onPressed: _confirmProgressReset,
+                      icon: const Icon(Icons.restart_alt_rounded),
+                      label: const Text('진행 초기화'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 56),
+                        textStyle: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _menuButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+  }) {
+    return FilledButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 30),
+      label: Text(label),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(double.infinity, 68),
+        backgroundColor: const Color(0xFFFF5C8A),
+        disabledBackgroundColor: const Color(0xFFB0BEC5),
+        textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_phase == GamePhase.menu) {
+      return _buildStartScreen();
+    }
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -567,12 +833,12 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
                       _playArea = newSize;
                       if (_phase == GamePhase.playing &&
                           _balloons.isEmpty &&
-                          _boss == null) {
+                          _bosses.isEmpty) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (mounted &&
                               _phase == GamePhase.playing &&
                               _balloons.isEmpty &&
-                              _boss == null) {
+                              _bosses.isEmpty) {
                             setState(_startStage);
                           }
                         });
@@ -589,14 +855,12 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
                         for (final ring in _rings) _buildRing(ring),
                         for (final piece in _pieces) _buildPiece(piece),
                         for (final balloon in _balloons) _buildBalloon(balloon),
-                        if (_boss != null) _buildBoss(_boss!),
+                        for (final boss in _bosses) _buildBoss(boss),
                         if (_phase == GamePhase.stageClear)
                           _buildCenterMessage('Stage Clear!', null),
                         if (_phase == GamePhase.bossClear)
-                          _buildCenterMessage(
-                            'BOSS CLEAR!',
-                            'Bonus +${_stageConfig.bossBonus}',
-                          ),
+                          _buildCenterMessage('BOSS CLEAR!', null),
+                        if (_phase == GamePhase.paused) _buildPauseOverlay(),
                         if (_phase == GamePhase.completed)
                           _buildGameOver(completed: true),
                         if (_phase == GamePhase.gameOver) _buildGameOver(),
@@ -649,7 +913,7 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
               const SizedBox(width: 10),
               _infoPill(
                 '남은 풍선',
-                '${_boss != null ? 1 : _balloons.length}',
+                '${_bosses.isNotEmpty ? _bosses.length : _balloons.length}',
                 const Color(0xFF7E57C2),
               ),
               const SizedBox(width: 10),
@@ -657,6 +921,41 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
                 '시간',
                 '$_secondsLeft',
                 _secondsLeft <= 5 ? Colors.redAccent : const Color(0xFF26A69A),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FilledButton.icon(
+                key: const ValueKey('pause-button'),
+                onPressed: _phase == GamePhase.playing ? _pauseGame : null,
+                icon: const Icon(Icons.pause_rounded, size: 25),
+                label: const Text('일시정지'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(132, 50),
+                  backgroundColor: const Color(0xFF7E57C2),
+                  textStyle: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                key: const ValueKey('end-button'),
+                onPressed: _phase == GamePhase.playing ? _confirmEndGame : null,
+                icon: const Icon(Icons.stop_circle_rounded, size: 25),
+                label: const Text('끝내기'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(120, 50),
+                  backgroundColor: const Color(0xFFFF7043),
+                  textStyle: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
             ],
           ),
@@ -680,13 +979,16 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
             ),
           ],
         ),
-        child: Text(
-          '$label  $value',
-          maxLines: 1,
-          style: TextStyle(
-            color: color,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            '$label  $value',
+            maxLines: 1,
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
       ),
@@ -714,12 +1016,12 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
 
   Widget _buildBoss(BossBalloon boss) {
     return Positioned(
-      key: const ValueKey('boss-balloon'),
+      key: ValueKey('boss-balloon-${boss.id}'),
       left: boss.position.dx,
       top: boss.position.dy,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _hitBoss,
+        onTap: () => _hitBoss(boss),
         child: SizedBox(
           width: boss.size,
           height: boss.size + 32,
@@ -742,8 +1044,12 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
       )!;
 
   Color _bossColor(BossBalloon boss) => Color.lerp(
-        const Color(0xFF7E57C2),
-        const Color(0xFFFF3D67),
+        _stage >= 20
+            ? (boss.id == 0 ? const Color(0xFFFF6B6B) : const Color(0xFF64B5F6))
+            : const Color(0xFF7E57C2),
+        _stage >= 20
+            ? (boss.id == 0 ? const Color(0xFFB71C1C) : const Color(0xFF0D47A1))
+            : const Color(0xFFFF3D67),
         (boss.maxHp - boss.hp) / boss.maxHp,
       )!;
 
@@ -829,6 +1135,72 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
     );
   }
 
+  Widget _buildPauseOverlay() {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: const Color(0x88004D73),
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 30),
+            constraints: const BoxConstraints(maxWidth: 420),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x44000000),
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '일시정지',
+                  style: TextStyle(
+                    fontSize: 38,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF7E57C2),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  key: const ValueKey('resume-button'),
+                  onPressed: _resumeGame,
+                  icon: const Icon(Icons.play_arrow_rounded, size: 30),
+                  label: const Text('계속하기'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 60),
+                    textStyle: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _returnToMenu,
+                  icon: const Icon(Icons.home_rounded, size: 28),
+                  label: const Text('시작 화면으로'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 58),
+                    textStyle: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildGameOver({bool completed = false}) {
     return Positioned.fill(
       child: ColoredBox(
@@ -880,7 +1252,7 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
                 ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
-                  onPressed: _startGame,
+                  onPressed: () => _startGame(_sectionStartStage),
                   icon: const Icon(Icons.refresh_rounded, size: 30),
                   label: const Text(
                     '다시 시작',
@@ -895,6 +1267,24 @@ class _BalloonGamePageState extends State<BalloonGamePage> {
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _returnToMenu,
+                  icon: const Icon(Icons.home_rounded, size: 28),
+                  label: const Text(
+                    '시작 화면으로 돌아가기',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(22),
                     ),
                   ),
                 ),
