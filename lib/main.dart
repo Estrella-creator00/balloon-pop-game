@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -17,7 +18,7 @@ class BalloonPopApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: '풍선 팡팡',
+      title: 'POPPOP',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF6B9D)),
         useMaterial3: true,
@@ -168,7 +169,7 @@ class BalloonGamePage extends StatefulWidget {
 }
 
 class _BalloonGamePageState extends State<BalloonGamePage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   static const _tick = Duration(milliseconds: 16);
   static const _stageClearDelay = Duration(milliseconds: 400);
   static const _bossClearDelay = Duration(seconds: 1);
@@ -198,6 +199,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   GamePhase _phase = GamePhase.menu;
   final List<BossBalloon> _bosses = [];
   bool _secondSectionUnlocked = false;
+  late final AnimationController _skyController;
+  late final AnimationController _entranceController;
+  int _bestScore = 0;
+  int _lastScore = 0;
+  bool _isNewBest = false;
+  bool _resultSaved = false;
+  bool _showShop = false;
+  late final PageController _stagePageController;
+  int _stagePage = 0;
 
   StageConfig get _stageConfig => StageConfig.forStage(_stage);
 
@@ -206,6 +216,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _secondSectionUnlocked = ProgressStorage.isSecondSectionUnlocked();
+    _bestScore = ProgressStorage.bestScore();
+    _lastScore = ProgressStorage.lastScore();
+    _skyController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    )..repeat();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    )..forward();
+    _stagePageController = PageController();
   }
 
   @override
@@ -218,11 +239,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _startGame(int startStage) {
+    _skyController.stop();
     _timer?.cancel();
     _stageTimer?.cancel();
     _stopwatch.reset();
     _nextId = 0;
     _score = 0;
+    _resultSaved = false;
+    _isNewBest = false;
     _sectionStartStage = startStage;
     _stage = startStage;
     _secondsLeft = StageConfig.forStage(startStage).duration.inSeconds;
@@ -247,11 +271,22 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _stage = 1;
       _secondsLeft = 10;
       _phase = GamePhase.menu;
+      _showShop = false;
       _balloons.clear();
       _pieces.clear();
       _rings.clear();
       _bosses.clear();
     });
+    _entranceController.forward(from: 0);
+    if (!_skyController.isAnimating) _skyController.repeat();
+  }
+
+  void _recordResult() {
+    if (_resultSaved) return;
+    _resultSaved = true;
+    _lastScore = _score;
+    _isNewBest = ProgressStorage.saveScore(_score);
+    _bestScore = ProgressStorage.bestScore();
   }
 
   void _pauseGame() {
@@ -601,6 +636,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _timer?.cancel();
     _stageTimer?.cancel();
     _stopwatch.stop();
+    _recordResult();
     _phase = GamePhase.completed;
   }
 
@@ -645,6 +681,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _timer?.cancel();
     _stageTimer?.cancel();
     _stopwatch.stop();
+    _recordResult();
     setState(() {
       _secondsLeft = 0;
       _phase = GamePhase.gameOver;
@@ -659,6 +696,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _timer?.cancel();
     _stageTimer?.cancel();
     _stopwatch.stop();
+    _skyController.dispose();
+    _entranceController.dispose();
+    _stagePageController.dispose();
     super.dispose();
   }
 
@@ -685,6 +725,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     ProgressStorage.clear();
     setState(() {
       _secondSectionUnlocked = false;
+      _bestScore = 0;
+      _lastScore = 0;
+      _isNewBest = false;
       _score = 0;
       _stage = 1;
       _sectionStartStage = 1;
@@ -695,111 +738,1067 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   Widget _buildStartScreen() {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF77D5FF), Color(0xFFDDF7FF)],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/sky_background.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              filterQuality: FilterQuality.high,
+              gaplessPlayback: true,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 460),
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.94),
-                  borderRadius: BorderRadius.circular(32),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x33004D73),
-                      blurRadius: 20,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      '🎈 풍선 팡팡 🎈',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 38,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFFFF5C8A),
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    _menuButton(
-                      label: '1~10 STAGE 시작',
-                      icon: Icons.play_arrow_rounded,
-                      onPressed: () => _startGame(1),
-                    ),
-                    const SizedBox(height: 16),
-                    _menuButton(
-                      label: _secondSectionUnlocked
-                          ? '11~20 STAGE 시작'
-                          : '11~20 STAGE 시작 🔒',
-                      icon: _secondSectionUnlocked
-                          ? Icons.play_arrow_rounded
-                          : Icons.lock_rounded,
-                      onPressed:
-                          _secondSectionUnlocked ? () => _startGame(11) : null,
-                    ),
-                    if (!_secondSectionUnlocked) ...[
-                      const SizedBox(height: 10),
-                      const Text(
-                        '10 STAGE 보스를 먼저 클리어하세요',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF607D8B),
-                          fontWeight: FontWeight.bold,
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/forest_back.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.bottomCenter,
+              filterQuality: FilterQuality.high,
+              gaplessPlayback: true,
+            ),
+          ),
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/ground_road.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.bottomCenter,
+              filterQuality: FilterQuality.high,
+              gaplessPlayback: true,
+            ),
+          ),
+          const Positioned.fill(child: NatureLeftLayer()),
+          const Positioned.fill(child: NatureRightLayer()),
+          const Positioned.fill(child: GrassFrontLayer()),
+          AnimatedBuilder(
+            animation: Listenable.merge([_skyController, _entranceController]),
+            builder: (context, _) => CustomPaint(
+              painter: MenuBalloonPainter(progress: _skyController.value),
+              child: SafeArea(
+                minimum: const EdgeInsets.all(4),
+                child: Center(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => FittedBox(
+                      fit: BoxFit.contain,
+                      alignment: Alignment.center,
+                      child: Opacity(
+                        opacity:
+                            Curves.easeOut.transform(_entranceController.value),
+                        child: SizedBox(
+                          width: 520,
+                          height: 950,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned(
+                                top: 5,
+                                right: 8,
+                                child: _currencyHud(),
+                              ),
+                              Positioned(
+                                top: 18,
+                                left: 55,
+                                right: 55,
+                                height: 300,
+                                child: _buildPoppopLogo(),
+                              ),
+                              Positioned(
+                                top: 316,
+                                left: 54,
+                                right: 54,
+                                height: 88,
+                                child: _recordBoard(),
+                              ),
+                              Positioned(
+                                top: 418,
+                                left: 45,
+                                right: 45,
+                                height: 300,
+                                child: PageView(
+                                  controller: _stagePageController,
+                                  onPageChanged: (page) =>
+                                      setState(() => _stagePage = page),
+                                  children: [
+                                    _stagePair(
+                                      leftTitle: '1 ~ 10',
+                                      rightTitle: '11 ~ 20',
+                                      leftColor: const Color(0xFFFF4F7B),
+                                      rightColor: const Color(0xFF7354E8),
+                                      leftTap: () => _startGame(1),
+                                      rightTap: _secondSectionUnlocked
+                                          ? () => _startGame(11)
+                                          : null,
+                                      rightLocked: !_secondSectionUnlocked,
+                                    ),
+                                    _stagePair(
+                                      leftTitle: '21 ~ 30',
+                                      rightTitle: '31 ~ 40',
+                                      leftColor: const Color(0xFF42B883),
+                                      rightColor: const Color(0xFF4D8EF7),
+                                      leftTap: null,
+                                      rightTap: null,
+                                      leftLocked: true,
+                                      rightLocked: true,
+                                    ),
+                                    _stagePair(
+                                      leftTitle: '41 ~ 50',
+                                      rightTitle: '51 ~ 60',
+                                      leftColor: const Color(0xFFFF9F43),
+                                      rightColor: const Color(0xFFE85D9E),
+                                      leftTap: null,
+                                      rightTap: null,
+                                      leftLocked: true,
+                                      rightLocked: true,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Positioned(
+                                top: 727,
+                                left: 0,
+                                right: 0,
+                                child: _pageIndicator(),
+                              ),
+                              Positioned(
+                                top: 750,
+                                left: 164,
+                                right: 164,
+                                height: 50,
+                                child: _resetButton(),
+                              ),
+                              Positioned(
+                                top: 816,
+                                left: 39,
+                                right: 39,
+                                height: 82,
+                                child: _bottomMenu(),
+                              ),
+                              const Positioned(
+                                bottom: 12,
+                                left: 0,
+                                right: 0,
+                                child: Text(
+                                  'v0.6 UI REFRESH',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Color(0xFF214D66),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.6,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.white,
+                                        offset: Offset(0, 1),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 24),
-                    OutlinedButton.icon(
-                      onPressed: _confirmProgressReset,
-                      icon: const Icon(Icons.restart_alt_rounded),
-                      label: const Text('진행 초기화'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 56),
-                        textStyle: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pageIndicator() => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(
+          3,
+          (index) => AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            width: index == _stagePage ? 11 : 8,
+            height: index == _stagePage ? 11 : 8,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: index == _stagePage
+                  ? const Color(0xFFFF416C)
+                  : Colors.white.withValues(alpha: 0.82),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0x33004669)),
+              boxShadow: const [
+                BoxShadow(color: Color(0x33004669), offset: Offset(0, 2)),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  Widget _resetButton() => DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x3D194F66),
+              blurRadius: 7,
+              offset: Offset(0, 5),
+            ),
+            BoxShadow(
+              color: Colors.white,
+              blurRadius: 2,
+              offset: Offset(0, -1),
+            ),
+          ],
+        ),
+        child: OutlinedButton.icon(
+          onPressed: _confirmProgressReset,
+          icon: const Icon(Icons.sync_rounded, size: 24),
+          label: const Text('진행 초기화'),
+          style: OutlinedButton.styleFrom(
+            padding: EdgeInsets.zero,
+            backgroundColor: const Color(0xFFFFFBF4),
+            foregroundColor: const Color(0xFF28546C),
+            side: const BorderSide(color: Color(0xFFE9D9C8), width: 1.5),
+            textStyle: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
+          ),
+        ),
+      );
+
+  Widget _currencyHud() => Align(
+        alignment: Alignment.centerRight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _currencyChip(
+              Icons.diamond_rounded,
+              '1250',
+              const Color(0xFFCB55FF),
+            ),
+            const SizedBox(height: 5),
+            _currencyChip(
+              Icons.monetization_on_rounded,
+              '23,450',
+              const Color(0xFFFFC107),
+            ),
+            const SizedBox(height: 5),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color(0xAA2E6695),
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(
+                  Icons.volume_up_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _currencyChip(IconData icon, String value, Color color) => Container(
+        padding: const EdgeInsets.fromLTRB(8, 4, 5, 4),
+        decoration: BoxDecoration(
+          color: const Color(0xCC28618F),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(color: Color(0x44003366), offset: Offset(0, 3)),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 5),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(width: 5),
+            const CircleAvatar(
+              radius: 10,
+              backgroundColor: Color(0xFF4D7DA4),
+              child: Icon(Icons.add, size: 16, color: Colors.white),
+            ),
+          ],
+        ),
+      );
+
+  Widget _buildPoppopLogo() => CustomPaint(
+        painter: LogoFestivalPainter(progress: _skyController.value),
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              top: 24,
+              child: _logoLine(
+                'POP',
+                const [
+                  Color(0xFFFFFF72),
+                  Color(0xFFFFC400),
+                  Color(0xFFFF8A00),
+                ],
+                const Color(0xFFD96500),
+                isLowerLine: false,
+              ),
+            ),
+            Positioned(
+              top: 119,
+              child: _logoLine(
+                'POP',
+                const [
+                  Color(0xFFFFB5C2),
+                  Color(0xFFFF5275),
+                  Color(0xFFE91E63),
+                ],
+                const Color(0xFFAD174F),
+                isLowerLine: true,
+              ),
+            ),
+            Positioned(
+              bottom: 7,
+              width: 278,
+              height: 55,
+              child: CustomPaint(
+                painter: const RibbonPainter(),
+                child: const Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 5),
+                    child: Text(
+                      '터치해서 터뜨려!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.6,
+                        shadows: [
+                          Shadow(
+                            color: Color(0xAA3E116F),
+                            offset: Offset(0, 3),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _logoLine(String text, List<Color> colors, Color depthColor,
+      {required bool isLowerLine}) {
+    const style = TextStyle(
+      height: 0.88,
+      letterSpacing: -3,
+      fontSize: 114,
+      fontWeight: FontWeight.w900,
+      fontFamily: 'Arial Rounded MT Bold',
+      fontFamilyFallback: ['Arial', 'sans-serif'],
+    );
+    return SizedBox(
+      width: 380,
+      height: 120,
+      child: Transform.scale(
+        scaleX: 1.10,
+        scaleY: 0.94,
+        child: Stack(
+          alignment: Alignment.center,
+          children: List.generate(3, (index) {
+            final isCenter = index == 1;
+            final top = isCenter ? 0.0 : (isLowerLine ? 10.0 : 12.0);
+            final left = isLowerLine
+                ? const [32.0, 126.0, 220.0][index]
+                : const [42.0, 130.0, 218.0][index];
+            final degrees = isCenter
+                ? 0.0
+                : index == 0
+                    ? (isLowerLine ? -3.0 : -4.0)
+                    : (isLowerLine ? 3.0 : 4.0);
+            return Positioned(
+              left: left,
+              top: top,
+              width: 120,
+              height: 120,
+              child: Transform.rotate(
+                angle: degrees * pi / 180,
+                child: _logoLetter(
+                  text[index],
+                  style,
+                  colors,
+                  depthColor,
+                ),
+              ),
+            );
+          }),
         ),
       ),
     );
   }
 
-  Widget _menuButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback? onPressed,
+  Widget _logoLetter(
+    String letter,
+    TextStyle style,
+    List<Color> colors,
+    Color depthColor,
+  ) =>
+      Stack(
+        alignment: Alignment.center,
+        children: [
+          Transform.translate(
+            offset: const Offset(6, 19),
+            child: Text(
+              letter,
+              style: style.copyWith(
+                foreground: Paint()
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = 21
+                  ..strokeJoin = StrokeJoin.round
+                  ..strokeCap = StrokeCap.round
+                  ..color = const Color(0xFF123C67),
+                shadows: const [
+                  Shadow(
+                    color: Color(0x66001F3A),
+                    offset: Offset(4, 8),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Transform.translate(
+            offset: const Offset(3, 12),
+            child: Text(
+              letter,
+              style: style.copyWith(
+                foreground: Paint()
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = 15
+                  ..strokeJoin = StrokeJoin.round
+                  ..strokeCap = StrokeCap.round
+                  ..color = depthColor,
+              ),
+            ),
+          ),
+          Text(
+            letter,
+            style: style.copyWith(
+              foreground: Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 16
+                ..strokeJoin = StrokeJoin.round
+                ..strokeCap = StrokeCap.round
+                ..color = Colors.white,
+              shadows: const [
+                Shadow(
+                  color: Color(0x55002B4D),
+                  offset: Offset(5, 13),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+          ),
+          ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (bounds) => LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: colors,
+              stops: const [0, 0.55, 1],
+            ).createShader(bounds),
+            child: Text(
+              letter,
+              style: style.copyWith(color: Colors.white),
+            ),
+          ),
+          Transform.translate(
+            offset: const Offset(-2, -4),
+            child: ShaderMask(
+              blendMode: BlendMode.srcIn,
+              shaderCallback: (bounds) => const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xBFFFFFFF),
+                  Color(0x32FFFFFF),
+                  Color(0x00FFFFFF),
+                ],
+                stops: [0, 0.32, 0.58],
+              ).createShader(bounds),
+              child: Text(
+                letter,
+                style: style.copyWith(color: Colors.white),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 23,
+            left: 35,
+            child: Container(
+              width: 34,
+              height: 9,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.58),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    blurRadius: 5,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+
+  Widget _stagePair({
+    required String leftTitle,
+    required String rightTitle,
+    required Color leftColor,
+    required Color rightColor,
+    required VoidCallback? leftTap,
+    required VoidCallback? rightTap,
+    bool leftLocked = false,
+    bool rightLocked = false,
+  }) =>
+      Row(
+        children: [
+          Expanded(
+            child: _stagePanel(
+              title: leftTitle,
+              subtitle:
+                  leftTitle.startsWith('1 ') ? '기본 풍선 · 보스 도전!' : 'COMING SOON',
+              color: leftColor,
+              locked: leftLocked,
+              onTap: leftTap,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _stagePanel(
+              title: rightTitle,
+              subtitle: rightTitle.startsWith('11 ')
+                  ? '2회 터치 풍선 · 더블 보스!'
+                  : 'COMING SOON',
+              color: rightColor,
+              locked: rightLocked,
+              onTap: rightTap,
+            ),
+          ),
+        ],
+      );
+
+  Widget _stagePanel({
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback? onTap,
+    bool locked = false,
   }) {
-    return FilledButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 30),
-      label: Text(label),
-      style: FilledButton.styleFrom(
-        minimumSize: const Size(double.infinity, 68),
-        backgroundColor: const Color(0xFFFF5C8A),
-        disabledBackgroundColor: const Color(0xFFB0BEC5),
-        textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    final panelColor = locked ? const Color(0xFF607DA8) : color;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: locked
+                  ? const [Color(0xFFD6E2F2), Color(0xFF9DB3CB)]
+                  : [
+                      Color.lerp(panelColor, Colors.white, 0.76)!,
+                      Color.lerp(panelColor, Colors.white, 0.36)!,
+                    ],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white, width: 4),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x5525495C),
+                blurRadius: 10,
+                offset: Offset(0, 7),
+              ),
+              BoxShadow(
+                color: Color(0x66FFFFFF),
+                blurRadius: 2,
+                offset: Offset(0, -2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: StageCardLandscapePainter(
+                      tint: panelColor,
+                      locked: locked,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
+                  child: Column(
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: panelColor,
+                          fontSize: 32,
+                          height: 1,
+                          fontWeight: FontWeight.w900,
+                          shadows: const [
+                            Shadow(
+                              color: Colors.white,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        'STAGE',
+                        style: TextStyle(
+                          color: panelColor,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFF244F68),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const Spacer(),
+                      SizedBox(
+                        width: 82,
+                        height: 98,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            CustomPaint(
+                              size: const Size(78, 96),
+                              painter: BalloonPainter(color: panelColor),
+                            ),
+                            if (locked)
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xEFFFFFFF),
+                                  borderRadius: BorderRadius.circular(15),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Color(0x55002F4D),
+                                      blurRadius: 5,
+                                      offset: Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.lock_rounded,
+                                  color: Color(0xFF385B78),
+                                  size: 34,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x55002A43),
+                              blurRadius: 5,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: FilledButton.icon(
+                          key: ValueKey(
+                            title.startsWith('1 ')
+                                ? 'start-section-1'
+                                : title.startsWith('11 ')
+                                    ? 'start-section-2'
+                                    : 'start-$title',
+                          ),
+                          onPressed: onTap,
+                          icon: Icon(
+                            locked
+                                ? Icons.lock_rounded
+                                : Icons.play_arrow_rounded,
+                            size: 25,
+                          ),
+                          label: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Text(locked ? '잠김' : '시작하기'),
+                              if (title.startsWith('1 ') ||
+                                  title.startsWith('11 '))
+                                Opacity(
+                                  opacity: 0,
+                                  child: Text(
+                                    title.startsWith('1 ')
+                                        ? '1~10 STAGE 시작'
+                                        : locked
+                                            ? '11~20 STAGE 시작 🔒'
+                                            : '11~20 STAGE 시작',
+                                  ),
+                                ),
+                            ],
+                          ),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 46),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            backgroundColor: panelColor,
+                            disabledBackgroundColor: const Color(0xFF385B78),
+                            foregroundColor: Colors.white,
+                            textStyle: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x55000000),
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (title.startsWith('1 '))
+          Positioned(
+            top: -7,
+            left: -9,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF416C),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x55391B2B),
+                    blurRadius: 4,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Text(
+                '추천!',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _recordBoard() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFFFFFFF), Color(0xFFFFF7EC)],
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFFFFDF8), width: 3),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x55204A5F),
+              blurRadius: 10,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            _recordTile('BEST SCORE', _bestScore, _isNewBest),
+            Container(
+              width: 1.5,
+              height: 54,
+              color: const Color(0xFFE6D8CB),
+            ),
+            _recordTile('LAST SCORE', _lastScore, false),
+          ],
+        ),
+      );
+
+  Widget _recordTile(String label, int score, bool isNew) => Expanded(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 48,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: label.startsWith('BEST')
+                          ? const [Color(0xFFFFED58), Color(0xFFFF9800)]
+                          : const [Color(0xFF8DEBFF), Color(0xFF2688E8)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x44003D63),
+                        blurRadius: 4,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    label.startsWith('BEST')
+                        ? Icons.emoji_events_rounded
+                        : Icons.assignment_rounded,
+                    color: Colors.white,
+                    size: 34,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Color(0xFF244C67),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '$score',
+                      style: const TextStyle(
+                        fontSize: 32,
+                        height: 1.05,
+                        color: Color(0xFF244C67),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            if (isNew)
+              Positioned(
+                top: -5,
+                right: -5,
+                child: Transform.rotate(
+                  angle: -0.08,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF416C),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x443A1230),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Text(
+                      'NEW!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+
+  Widget _bottomMenu() => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _navItem(Icons.settings_rounded, '설정'),
+          _navItem(Icons.emoji_events_rounded, '업적'),
+          _navItem(Icons.help_rounded, '도움말'),
+          _navItem(Icons.storefront_rounded, '샵', shop: true),
+          _navItem(Icons.leaderboard_rounded, '랭킹'),
+        ],
+      );
+
+  Widget _navItem(IconData icon, String label, {bool shop = false}) => InkWell(
+        onTap: () {
+          if (shop) {
+            _skyController.stop();
+            setState(() => _showShop = true);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('$label 기능은 준비중입니다.')),
+            );
+          }
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 72,
+          height: 78,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFFFFFFF), Color(0xFFFFF5E8)],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFFFFDF8), width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x4D17485F),
+                blurRadius: 7,
+                offset: Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: shop ? const Color(0xFFFF6D4A) : const Color(0xFF378BCA),
+                size: 37,
+                shadows: const [
+                  Shadow(
+                    color: Color(0x33002C4E),
+                    offset: Offset(0, 3),
+                    blurRadius: 3,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF244B62),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _buildShopScreen() {
+    const skins = [
+      ('기본 풍선', Color(0xFFFF5C8A), Icons.circle),
+      ('파란 풍선', Color(0xFF54A8FF), Icons.circle),
+      ('노란 풍선', Color(0xFFFFC857), Icons.circle),
+      ('하트 풍선', Color(0xFFFF6B9D), Icons.favorite),
+      ('무지개 풍선', Color(0xFF8B7CF6), Icons.looks),
+      ('별 풍선', Color(0xFFFFB300), Icons.star),
+      ('얼음 풍선', Color(0xFF80DEEA), Icons.ac_unit),
+      ('검은 풍선', Color(0xFF37474F), Icons.circle),
+    ];
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFE8F8FF),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          leading: IconButton(
+            onPressed: () {
+              _skyController.repeat();
+              _entranceController.forward(from: 0);
+              setState(() => _showShop = false);
+            },
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          title: const Text('POPPOP SHOP',
+              style: TextStyle(fontWeight: FontWeight.w900)),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: '풍선 스킨'),
+              Tab(text: '캐릭터'),
+              Tab(text: '모션'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            GridView.builder(
+              padding: const EdgeInsets.all(18),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 180,
+                childAspectRatio: 0.95,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+              ),
+              itemCount: skins.length,
+              itemBuilder: (_, index) {
+                final skin = skins[index];
+                return Card(
+                  elevation: 5,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(skin.$3, color: skin.$2, size: 62),
+                      const SizedBox(height: 10),
+                      Text(skin.$1,
+                          style: const TextStyle(fontWeight: FontWeight.w900)),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const Center(child: Text('캐릭터 준비중')),
+            const Center(child: Text('모션 준비중')),
+          ],
+        ),
       ),
     );
   }
@@ -807,7 +1806,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   @override
   Widget build(BuildContext context) {
     if (_phase == GamePhase.menu) {
-      return _buildStartScreen();
+      return _showShop ? _buildShopScreen() : _buildStartScreen();
     }
     return Scaffold(
       body: Container(
@@ -882,7 +1881,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       child: Column(
         children: [
           const Text(
-            '🎈 풍선 팡팡 🎈',
+            'POPPOP',
             style: TextStyle(
               color: Colors.white,
               fontSize: 30,
@@ -1306,14 +2305,33 @@ class BalloonPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final balloonHeight = size.height - 26;
     final body = Rect.fromLTWH(3, 0, size.width - 6, balloonHeight - 9);
-    final paint = Paint()..color = color;
+    canvas.drawOval(
+      body.shift(const Offset(3, 6)),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.18)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+    final paint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.32, -0.42),
+        radius: 0.88,
+        colors: [
+          Color.lerp(color, Colors.white, 0.40)!,
+          color,
+          Color.lerp(color, Colors.black, 0.24)!,
+        ],
+        stops: const [0, 0.60, 1],
+      ).createShader(body);
     canvas.drawOval(body, paint);
+    canvas.drawOval(
+      body,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.34)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5,
+    );
 
-    final shade = Paint()..color = Colors.black.withValues(alpha: 0.06);
-    canvas.drawOval(body.shift(const Offset(4, 6)), shade);
-    canvas.drawOval(body, paint);
-
-    final shine = Paint()..color = Colors.white.withValues(alpha: 0.50);
+    final shine = Paint()..color = Colors.white.withValues(alpha: 0.70);
     canvas.drawOval(
       Rect.fromLTWH(
         size.width * 0.22,
@@ -1323,13 +2341,18 @@ class BalloonPainter extends CustomPainter {
       ),
       shine,
     );
+    canvas.drawCircle(
+      Offset(size.width * 0.36, balloonHeight * 0.13),
+      size.width * 0.035,
+      Paint()..color = Colors.white.withValues(alpha: 0.95),
+    );
 
     final knot = Path()
       ..moveTo(size.width / 2, balloonHeight - 11)
       ..lineTo(size.width / 2 - 8, balloonHeight + 5)
       ..lineTo(size.width / 2 + 8, balloonHeight + 5)
       ..close();
-    canvas.drawPath(knot, paint);
+    canvas.drawPath(knot, Paint()..color = color);
 
     final string = Paint()
       ..color = const Color(0xFF666666)
@@ -1462,6 +2485,1395 @@ class BurstRingPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant BurstRingPainter oldDelegate) =>
       oldDelegate.color != color || oldDelegate.progress != progress;
+}
+
+class LogoFestivalPainter extends CustomPainter {
+  const LogoFestivalPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height * 0.42);
+    canvas.drawCircle(
+      center,
+      size.width * 0.47,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.84),
+            const Color(0x55FFF59D),
+            Colors.transparent,
+          ],
+        ).createShader(
+          Rect.fromCircle(center: center, radius: size.width * 0.47),
+        ),
+    );
+
+    for (var i = 0; i < 10; i++) {
+      final angle = i * pi * 2 / 10 + progress * 0.055;
+      final inner = size.width * 0.16;
+      final outer = size.width * (i.isEven ? 0.53 : 0.47);
+      final path = Path()
+        ..moveTo(
+          center.dx + cos(angle - 0.105) * inner,
+          center.dy + sin(angle - 0.105) * inner,
+        )
+        ..lineTo(
+          center.dx + cos(angle) * outer,
+          center.dy + sin(angle) * outer,
+        )
+        ..lineTo(
+          center.dx + cos(angle + 0.105) * inner,
+          center.dy + sin(angle + 0.105) * inner,
+        )
+        ..close();
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = (i.isEven ? const Color(0xFFFFF176) : Colors.white)
+              .withValues(alpha: 0.22)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      );
+    }
+
+    const particles = [
+      (0.05, 0.18, Color(0xFFFFE22E), 13.0),
+      (0.91, 0.23, Color(0xFFFFE22E), 11.0),
+      (0.12, 0.52, Color(0xFFFF6BA1), 7.0),
+      (0.88, 0.58, Color(0xFF8D5CFF), 8.0),
+      (0.22, 0.05, Color(0xFFFFFFFF), 5.0),
+      (0.76, 0.07, Color(0xFFFFFFFF), 5.0),
+      (0.03, 0.73, Color(0xFF68E8F4), 6.0),
+      (0.97, 0.73, Color(0xFFFF8B52), 6.0),
+    ];
+    for (var i = 0; i < particles.length; i++) {
+      final particle = particles[i];
+      final pulse = 0.82 + sin(progress * pi * 2 + i) * 0.18;
+      final point = Offset(
+        size.width * particle.$1,
+        size.height * particle.$2,
+      );
+      _drawStar(canvas, point, particle.$4 * pulse, particle.$3);
+    }
+
+    _drawFirework(
+      canvas,
+      Offset(size.width * 0.10, size.height * 0.34),
+      18,
+      const Color(0xFFFFE13B),
+    );
+    _drawFirework(
+      canvas,
+      Offset(size.width * 0.90, size.height * 0.42),
+      15,
+      const Color(0xFFFF70A7),
+    );
+
+    for (var i = 0; i < 10; i++) {
+      final angle = i * 2.4;
+      final point = Offset(
+        center.dx + cos(angle) * size.width * (0.33 + (i % 3) * 0.055),
+        center.dy + sin(angle) * size.height * (0.31 + (i % 2) * 0.08),
+      );
+      canvas.save();
+      canvas.translate(point.dx, point.dy);
+      canvas.rotate(angle + progress * 0.2);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: i.isEven ? 5 : 9,
+            height: i.isEven ? 13 : 5,
+          ),
+          const Radius.circular(2),
+        ),
+        Paint()
+          ..color = [
+            const Color(0xFFFF4F83),
+            const Color(0xFFFFE13B),
+            const Color(0xFF7E57E8),
+            const Color(0xFF58E0D1),
+          ][i % 4],
+      );
+      canvas.restore();
+    }
+  }
+
+  void _drawStar(Canvas canvas, Offset center, double radius, Color color) {
+    final path = Path();
+    for (var i = 0; i < 10; i++) {
+      final angle = -pi / 2 + i * pi / 5;
+      final r = i.isEven ? radius : radius * 0.45;
+      final point = center + Offset(cos(angle) * r, sin(angle) * r);
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    path.close();
+    canvas.drawPath(
+      path.shift(const Offset(0, 2)),
+      Paint()..color = const Color(0x44003B62),
+    );
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  void _drawFirework(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    Color color,
+  ) {
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.78)
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 8; i++) {
+      final angle = i * pi / 4 + progress * 0.08;
+      final inner = center + Offset(cos(angle), sin(angle)) * radius * 0.45;
+      final outer = center + Offset(cos(angle), sin(angle)) * radius;
+      canvas.drawLine(inner, outer, paint);
+      canvas.drawCircle(outer, 2.2, Paint()..color = Colors.white);
+    }
+    canvas.drawCircle(
+      center,
+      3.2,
+      Paint()..color = Colors.white.withValues(alpha: 0.92),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant LogoFestivalPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+class RibbonPainter extends CustomPainter {
+  const RibbonPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shadow = Paint()..color = const Color(0x663A126F);
+    final leftTail = Path()
+      ..moveTo(24, 15)
+      ..lineTo(0, 25)
+      ..lineTo(17, 37)
+      ..lineTo(13, 49)
+      ..lineTo(52, 42)
+      ..close();
+    final rightTail = Path()
+      ..moveTo(size.width - 24, 15)
+      ..lineTo(size.width, 25)
+      ..lineTo(size.width - 17, 37)
+      ..lineTo(size.width - 13, 49)
+      ..lineTo(size.width - 52, 42)
+      ..close();
+    canvas.drawPath(leftTail.shift(const Offset(0, 4)), shadow);
+    canvas.drawPath(rightTail.shift(const Offset(0, 4)), shadow);
+    canvas.drawPath(leftTail, Paint()..color = const Color(0xFF6E2FC1));
+    canvas.drawPath(rightTail, Paint()..color = const Color(0xFF6E2FC1));
+
+    final center = RRect.fromRectAndRadius(
+      Rect.fromLTWH(25, 4, size.width - 50, 43),
+      const Radius.circular(15),
+    );
+    canvas.drawRRect(center.shift(const Offset(0, 5)), shadow);
+    canvas.drawRRect(
+      center,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFB75AEE), Color(0xFF7132CC)],
+        ).createShader(center.outerRect),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(40, 8, size.width - 80, 7),
+        const Radius.circular(5),
+      ),
+      Paint()..color = Colors.white.withValues(alpha: 0.22),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class StageCardLandscapePainter extends CustomPainter {
+  const StageCardLandscapePainter({
+    required this.tint,
+    required this.locked,
+  });
+
+  final Color tint;
+  final bool locked;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final horizon = size.height * 0.57;
+    canvas.drawRect(
+      Rect.fromLTWH(0, horizon, size.width, size.height - horizon),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: locked
+              ? const [Color(0x6699B7CE), Color(0x99738FA8)]
+              : const [Color(0x667BCB7A), Color(0xAA4FAE5A)],
+        ).createShader(Rect.fromLTWH(0, horizon, size.width, size.height)),
+    );
+
+    final hill = Path()
+      ..moveTo(0, size.height * 0.70)
+      ..quadraticBezierTo(
+        size.width * 0.25,
+        size.height * 0.55,
+        size.width * 0.52,
+        size.height * 0.69,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.77,
+        size.height * 0.54,
+        size.width,
+        size.height * 0.67,
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      hill,
+      Paint()
+        ..color = locked ? const Color(0x886F91AA) : const Color(0xAA70C968),
+    );
+
+    final path = Path()
+      ..moveTo(size.width * 0.47, horizon)
+      ..cubicTo(
+        size.width * 0.54,
+        size.height * 0.70,
+        size.width * 0.37,
+        size.height * 0.86,
+        size.width * 0.28,
+        size.height,
+      )
+      ..lineTo(size.width * 0.77, size.height)
+      ..cubicTo(
+        size.width * 0.65,
+        size.height * 0.84,
+        size.width * 0.57,
+        size.height * 0.69,
+        size.width * 0.53,
+        horizon,
+      )
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = locked ? const Color(0x558BA1B0) : const Color(0x77FFE09B),
+    );
+
+    for (var i = 0; i < 7; i++) {
+      final x = (0.08 + i * 0.145) * size.width;
+      final y = horizon + (i % 3) * 15;
+      final scale = 0.55 + (i % 3) * 0.12;
+      canvas.drawRect(
+        Rect.fromLTWH(x - 2, y + 13 * scale, 4, 15 * scale),
+        Paint()..color = const Color(0x99744C2C),
+      );
+      canvas.drawCircle(
+        Offset(x, y + 8 * scale),
+        14 * scale,
+        Paint()
+          ..color = locked ? const Color(0x887B95A5) : const Color(0xBB58B95D),
+      );
+      canvas.drawCircle(
+        Offset(x - 7 * scale, y + 11 * scale),
+        9 * scale,
+        Paint()
+          ..color = locked ? const Color(0x887B95A5) : const Color(0xBB7CD667),
+      );
+    }
+
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white.withValues(alpha: 0.18),
+            Colors.transparent,
+          ],
+        ).createShader(Offset.zero & size),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant StageCardLandscapePainter oldDelegate) =>
+      oldDelegate.tint != tint || oldDelegate.locked != locked;
+}
+
+class NatureLeftLayer extends StatefulWidget {
+  const NatureLeftLayer({super.key});
+
+  @override
+  State<NatureLeftLayer> createState() => _NatureLeftLayerState();
+}
+
+class _NatureLeftLayerState extends State<NatureLeftLayer> {
+  ImageStream? _imageStream;
+  ImageInfo? _imageInfo;
+
+  late final ImageStreamListener _imageListener = ImageStreamListener(
+    (imageInfo, _) {
+      if (mounted) setState(() => _imageInfo = imageInfo);
+    },
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final stream = const AssetImage(
+      'assets/images/nature_assets.png',
+    ).resolve(createLocalImageConfiguration(context));
+    if (stream.key == _imageStream?.key) return;
+    _imageStream?.removeListener(_imageListener);
+    _imageStream = stream..addListener(_imageListener);
+  }
+
+  @override
+  void dispose() {
+    _imageStream?.removeListener(_imageListener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imageInfo = _imageInfo;
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (imageInfo == null) return const SizedBox.expand();
+          return CustomPaint(
+            size: Size(constraints.maxWidth, constraints.maxHeight),
+            painter: NatureLeftPainter(image: imageInfo.image),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class NatureLeftPainter extends CustomPainter {
+  const NatureLeftPainter({required this.image});
+
+  final ui.Image image;
+
+  static const _grassLarge = Rect.fromLTWH(118, 78, 333, 162);
+  static const _grassStrip = Rect.fromLTWH(885, 136, 429, 103);
+  static const _grassTuft = Rect.fromLTWH(1080, 664, 194, 78);
+
+  static const _yellowFlower = Rect.fromLTWH(229, 308, 155, 124);
+  static const _whiteFlowerPatch = Rect.fromLTWH(416, 318, 222, 121);
+  static const _dandelionPatch = Rect.fromLTWH(630, 290, 255, 150);
+  static const _pinkFlower = Rect.fromLTWH(229, 480, 166, 129);
+  static const _blueFlowerPatch = Rect.fromLTWH(426, 502, 207, 106);
+  static const _whiteSmallPatch = Rect.fromLTWH(649, 500, 213, 103);
+
+  static const _rockGray = Rect.fromLTWH(199, 659, 203, 86);
+  static const _rockBrown = Rect.fromLTWH(395, 666, 215, 78);
+  static const _rockFlat = Rect.fromLTWH(600, 659, 281, 87);
+  static const _rockCluster = Rect.fromLTWH(875, 660, 230, 86);
+
+  static const _objects = <NatureObjectData>[
+    // Rocks are painted first so nearby grass can bury their lower edges.
+    NatureObjectData(_rockFlat, 0.018, 0.000, 0.052),
+    NatureObjectData(_rockBrown, 0.095, 0.012, 0.039),
+    NatureObjectData(_rockGray, 0.185, 0.054, 0.026),
+    NatureObjectData(_rockCluster, 0.265, 0.104, 0.014),
+
+    // Grass: dense foreground, then progressively smaller and sparser.
+    NatureObjectData(_grassLarge, -0.035, -0.012, 0.155),
+    NatureObjectData(_grassStrip, 0.055, -0.004, 0.125),
+    NatureObjectData(_grassLarge, 0.125, 0.018, 0.100),
+    NatureObjectData(_grassStrip, 0.165, 0.042, 0.078),
+    NatureObjectData(_grassTuft, 0.215, 0.070, 0.060),
+    NatureObjectData(_grassLarge, 0.258, 0.096, 0.043),
+    NatureObjectData(_grassTuft, 0.292, 0.118, 0.030),
+    NatureObjectData(_grassStrip, 0.322, 0.139, 0.021),
+    NatureObjectData(_grassTuft, 0.347, 0.154, 0.014),
+
+    // Flowers remain small accents among the grass.
+    NatureObjectData(_yellowFlower, 0.025, 0.050, 0.028),
+    NatureObjectData(_blueFlowerPatch, 0.075, 0.072, 0.023),
+    NatureObjectData(_pinkFlower, 0.115, 0.054, 0.020),
+    NatureObjectData(_whiteSmallPatch, 0.148, 0.090, 0.017),
+    NatureObjectData(_yellowFlower, 0.185, 0.105, 0.014),
+    NatureObjectData(_blueFlowerPatch, 0.218, 0.116, 0.012),
+    NatureObjectData(_pinkFlower, 0.245, 0.128, 0.010),
+    NatureObjectData(_dandelionPatch, 0.277, 0.137, 0.008),
+    NatureObjectData(_whiteFlowerPatch, 0.305, 0.148, 0.0065),
+    NatureObjectData(_yellowFlower, 0.331, 0.157, 0.005),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..filterQuality = FilterQuality.high
+      ..isAntiAlias = true;
+    for (final object in _objects) {
+      final visualWidth = size.width * object.width;
+      if (visualWidth < 4.5) continue;
+      final visualHeight =
+          visualWidth * object.source.height / object.source.width;
+      final destination = Rect.fromLTWH(
+        size.width * object.left,
+        size.height - size.height * object.bottom - visualHeight,
+        visualWidth,
+        visualHeight,
+      );
+      canvas.drawImageRect(image, object.source, destination, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant NatureLeftPainter oldDelegate) =>
+      oldDelegate.image != image;
+}
+
+class NatureObjectData {
+  const NatureObjectData(this.source, this.left, this.bottom, this.width);
+
+  final Rect source;
+  final double left;
+  final double bottom;
+  final double width;
+}
+
+class NatureRightLayer extends StatefulWidget {
+  const NatureRightLayer({super.key});
+
+  @override
+  State<NatureRightLayer> createState() => _NatureRightLayerState();
+}
+
+class _NatureRightLayerState extends State<NatureRightLayer> {
+  ImageStream? _imageStream;
+  ImageInfo? _imageInfo;
+
+  late final ImageStreamListener _imageListener = ImageStreamListener(
+    (imageInfo, _) {
+      if (mounted) setState(() => _imageInfo = imageInfo);
+    },
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final stream = const AssetImage(
+      'assets/images/nature_assets.png',
+    ).resolve(createLocalImageConfiguration(context));
+    if (stream.key == _imageStream?.key) return;
+    _imageStream?.removeListener(_imageListener);
+    _imageStream = stream..addListener(_imageListener);
+  }
+
+  @override
+  void dispose() {
+    _imageStream?.removeListener(_imageListener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imageInfo = _imageInfo;
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (imageInfo == null) return const SizedBox.expand();
+          return CustomPaint(
+            size: Size(constraints.maxWidth, constraints.maxHeight),
+            painter: NatureRightPainter(image: imageInfo.image),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class NatureRightPainter extends CustomPainter {
+  const NatureRightPainter({required this.image});
+
+  final ui.Image image;
+
+  static const _grassLarge = Rect.fromLTWH(118, 78, 333, 162);
+  static const _grassStrip = Rect.fromLTWH(885, 136, 429, 103);
+  static const _grassTuft = Rect.fromLTWH(1080, 664, 194, 78);
+
+  static const _yellowFlower = Rect.fromLTWH(229, 308, 155, 124);
+  static const _whiteFlowerPatch = Rect.fromLTWH(416, 318, 222, 121);
+  static const _dandelionPatch = Rect.fromLTWH(630, 290, 255, 150);
+  static const _pinkFlower = Rect.fromLTWH(229, 480, 166, 129);
+  static const _blueFlowerPatch = Rect.fromLTWH(426, 502, 207, 106);
+  static const _whiteSmallPatch = Rect.fromLTWH(649, 500, 213, 103);
+
+  static const _rockGray = Rect.fromLTWH(199, 659, 203, 86);
+  static const _rockBrown = Rect.fromLTWH(395, 666, 215, 78);
+  static const _rockFlat = Rect.fromLTWH(600, 659, 281, 87);
+  static const _rockCluster = Rect.fromLTWH(875, 660, 230, 86);
+
+  static const _objects = <NatureRightObjectData>[
+    // A different rock order and spacing from Nature Left.
+    NatureRightObjectData(_rockGray, 0.015, -0.002, 0.058),
+    NatureRightObjectData(_rockCluster, 0.105, 0.010, 0.042),
+    NatureRightObjectData(_rockFlat, 0.205, 0.050, 0.028),
+    NatureRightObjectData(_rockBrown, 0.295, 0.100, 0.015),
+
+    // Broader foreground, tapering toward the right edge of the distant road.
+    NatureRightObjectData(_grassStrip, -0.040, -0.014, 0.160),
+    NatureRightObjectData(_grassLarge, 0.045, -0.006, 0.135),
+    NatureRightObjectData(_grassTuft, 0.135, 0.014, 0.105),
+    NatureRightObjectData(_grassLarge, 0.180, 0.038, 0.082),
+    NatureRightObjectData(_grassStrip, 0.235, 0.065, 0.062),
+    NatureRightObjectData(_grassTuft, 0.282, 0.090, 0.045),
+    NatureRightObjectData(_grassStrip, 0.320, 0.113, 0.031),
+    NatureRightObjectData(_grassLarge, 0.350, 0.135, 0.022),
+    NatureRightObjectData(_grassTuft, 0.374, 0.150, 0.014),
+
+    // Flower accents use a new sequence and overlap pattern.
+    NatureRightObjectData(_whiteSmallPatch, 0.035, 0.045, 0.026),
+    NatureRightObjectData(_dandelionPatch, 0.085, 0.068, 0.022),
+    NatureRightObjectData(_yellowFlower, 0.145, 0.052, 0.019),
+    NatureRightObjectData(_pinkFlower, 0.165, 0.087, 0.017),
+    NatureRightObjectData(_whiteFlowerPatch, 0.205, 0.102, 0.014),
+    NatureRightObjectData(_blueFlowerPatch, 0.245, 0.113, 0.012),
+    NatureRightObjectData(_dandelionPatch, 0.275, 0.124, 0.010),
+    NatureRightObjectData(_yellowFlower, 0.310, 0.136, 0.008),
+    NatureRightObjectData(_pinkFlower, 0.345, 0.147, 0.006),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..filterQuality = FilterQuality.high
+      ..isAntiAlias = true;
+    for (final object in _objects) {
+      final visualWidth = size.width * object.width;
+      if (visualWidth < 4.5) continue;
+      final visualHeight =
+          visualWidth * object.source.height / object.source.width;
+      final destination = Rect.fromLTWH(
+        size.width - size.width * object.right - visualWidth,
+        size.height - size.height * object.bottom - visualHeight,
+        visualWidth,
+        visualHeight,
+      );
+      canvas.drawImageRect(image, object.source, destination, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant NatureRightPainter oldDelegate) =>
+      oldDelegate.image != image;
+}
+
+class NatureRightObjectData {
+  const NatureRightObjectData(this.source, this.right, this.bottom, this.width);
+
+  final Rect source;
+  final double right;
+  final double bottom;
+  final double width;
+}
+
+class GrassFrontLayer extends StatefulWidget {
+  const GrassFrontLayer({super.key});
+
+  @override
+  State<GrassFrontLayer> createState() => _GrassFrontLayerState();
+}
+
+class _GrassFrontLayerState extends State<GrassFrontLayer> {
+  ImageStream? _imageStream;
+  ImageInfo? _imageInfo;
+
+  late final ImageStreamListener _imageListener = ImageStreamListener(
+    (imageInfo, _) {
+      if (mounted) setState(() => _imageInfo = imageInfo);
+    },
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final stream = const AssetImage(
+      'assets/images/nature_assets.png',
+    ).resolve(createLocalImageConfiguration(context));
+    if (stream.key == _imageStream?.key) return;
+    _imageStream?.removeListener(_imageListener);
+    _imageStream = stream..addListener(_imageListener);
+  }
+
+  @override
+  void dispose() {
+    _imageStream?.removeListener(_imageListener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imageInfo = _imageInfo;
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (imageInfo == null) return const SizedBox.expand();
+          return CustomPaint(
+            size: Size(constraints.maxWidth, constraints.maxHeight),
+            painter: GrassFrontPainter(image: imageInfo.image),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class GrassFrontPainter extends CustomPainter {
+  const GrassFrontPainter({required this.image});
+
+  final ui.Image image;
+
+  static const _grassLarge = Rect.fromLTWH(118, 78, 333, 162);
+  static const _grassStrip = Rect.fromLTWH(885, 136, 429, 103);
+  static const _grassTuft = Rect.fromLTWH(1080, 664, 194, 78);
+
+  static const _yellowFlower = Rect.fromLTWH(229, 308, 155, 124);
+  static const _pinkFlower = Rect.fromLTWH(229, 480, 166, 129);
+  static const _blueFlowerPatch = Rect.fromLTWH(426, 502, 207, 106);
+  static const _whiteSmallPatch = Rect.fromLTWH(649, 500, 213, 103);
+
+  static const _rockGray = Rect.fromLTWH(199, 659, 203, 86);
+  static const _rockBrown = Rect.fromLTWH(395, 666, 215, 78);
+  static const _rockCluster = Rect.fromLTWH(875, 660, 230, 86);
+
+  static const _objects = <GrassFrontObjectData>[
+    // Rocks sit behind nearby grass so their bases feel embedded in the ground.
+    GrassFrontObjectData(_rockCluster, 0.060, -0.003, 0.030),
+    GrassFrontObjectData(_rockBrown, 0.770, -0.002, 0.028),
+    GrassFrontObjectData(_rockGray, 0.910, -0.004, 0.024),
+
+    // Foreground grass: high at both edges and low around the open road.
+    GrassFrontObjectData(_grassLarge, -0.035, -0.022, 0.155),
+    GrassFrontObjectData(_grassStrip, 0.045, -0.018, 0.125),
+    GrassFrontObjectData(_grassTuft, 0.145, -0.010, 0.090),
+    GrassFrontObjectData(_grassLarge, 0.245, -0.004, 0.060),
+    GrassFrontObjectData(_grassStrip, 0.350, 0.000, 0.032),
+    GrassFrontObjectData(_grassTuft, 0.430, -0.002, 0.020),
+    GrassFrontObjectData(_grassLarge, 0.555, -0.003, 0.020),
+    GrassFrontObjectData(_grassStrip, 0.620, 0.000, 0.035),
+    GrassFrontObjectData(_grassTuft, 0.700, -0.005, 0.060),
+    GrassFrontObjectData(_grassLarge, 0.785, -0.012, 0.095),
+    GrassFrontObjectData(_grassTuft, 0.865, -0.018, 0.120),
+    GrassFrontObjectData(_grassLarge, 0.945, -0.024, 0.145),
+
+    // Four restrained flower accents are mixed into, rather than above, grass.
+    GrassFrontObjectData(_yellowFlower, 0.090, 0.035, 0.018),
+    GrassFrontObjectData(_blueFlowerPatch, 0.195, 0.028, 0.014),
+    GrassFrontObjectData(_whiteSmallPatch, 0.730, 0.030, 0.016),
+    GrassFrontObjectData(_pinkFlower, 0.875, 0.038, 0.015),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..filterQuality = FilterQuality.high
+      ..isAntiAlias = true;
+    for (final object in _objects) {
+      final visualWidth = size.width * object.width;
+      if (visualWidth < 4.5) continue;
+      final visualHeight =
+          visualWidth * object.source.height / object.source.width;
+      final destination = Rect.fromLTWH(
+        size.width * object.left,
+        size.height - size.height * object.bottom - visualHeight,
+        visualWidth,
+        visualHeight,
+      );
+      canvas.drawImageRect(image, object.source, destination, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant GrassFrontPainter oldDelegate) =>
+      oldDelegate.image != image;
+}
+
+class GrassFrontObjectData {
+  const GrassFrontObjectData(this.source, this.left, this.bottom, this.width);
+
+  final Rect source;
+  final double left;
+  final double bottom;
+  final double width;
+}
+
+class MenuBalloonPainter extends CustomPainter {
+  const MenuBalloonPainter({required this.progress});
+
+  final double progress;
+
+  static const _colors = [
+    Color(0xFFFF4F83),
+    Color(0xFF8157F2),
+    Color(0xFFFFBE2E),
+    Color(0xFF35C978),
+    Color(0xFF3E9BFF),
+    Color(0xFFFF784F),
+    Color(0xFFFF63C4),
+    Color(0xFF7B5AEF),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (var i = 0; i < 8; i++) {
+      final diameter =
+          (42.0 + (i % 3) * 14) * (size.width / 520).clamp(.72, 1.2);
+      final leftSide = i.isEven;
+      final xBase = size.width *
+          (leftSide ? 0.045 + (i % 3) * 0.025 : 0.955 - (i % 3) * 0.025);
+      final wave = sin(progress * pi * 2 + i * 1.7) * size.width * 0.022;
+      final travel = (progress * (0.18 + i * 0.012) + i * 0.121) % 1;
+      final y = size.height * (1.08 - travel * 1.16);
+      final center = Offset(xBase + wave, y);
+      _drawBalloon(canvas, center, diameter, _colors[i], i);
+    }
+  }
+
+  void _drawBalloon(
+    Canvas canvas,
+    Offset center,
+    double diameter,
+    Color color,
+    int index,
+  ) {
+    final body = Rect.fromCenter(
+      center: center,
+      width: diameter,
+      height: diameter * 1.22,
+    );
+    canvas.drawOval(
+      body.shift(Offset(0, diameter * 0.10)),
+      Paint()
+        ..color = const Color(0x33002E4D)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+    canvas.drawOval(
+      body,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.32, -0.42),
+          radius: 0.83,
+          colors: [
+            Color.lerp(color, Colors.white, 0.36)!,
+            color,
+            Color.lerp(color, Colors.black, 0.22)!,
+          ],
+          stops: const [0, 0.58, 1],
+        ).createShader(body),
+    );
+    canvas.drawOval(
+      body,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.30)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = max(1.5, diameter * 0.035),
+    );
+    canvas.drawOval(
+      Rect.fromLTWH(
+        body.left + diameter * 0.19,
+        body.top + diameter * 0.14,
+        diameter * 0.17,
+        diameter * 0.28,
+      ),
+      Paint()..color = Colors.white.withValues(alpha: 0.72),
+    );
+    canvas.drawCircle(
+      Offset(body.left + diameter * 0.39, body.top + diameter * 0.12),
+      diameter * 0.045,
+      Paint()..color = Colors.white.withValues(alpha: 0.92),
+    );
+    final knot = Path()
+      ..moveTo(center.dx, body.bottom - 2)
+      ..lineTo(center.dx - diameter * 0.10, body.bottom + diameter * 0.14)
+      ..lineTo(center.dx + diameter * 0.10, body.bottom + diameter * 0.14)
+      ..close();
+    canvas.drawPath(knot, Paint()..color = color);
+    final string = Path()
+      ..moveTo(center.dx, body.bottom + diameter * 0.12)
+      ..cubicTo(
+        center.dx + (index.isEven ? 12 : -12),
+        body.bottom + diameter * 0.45,
+        center.dx - (index.isEven ? 8 : -8),
+        body.bottom + diameter * 0.72,
+        center.dx,
+        body.bottom + diameter,
+      );
+    canvas.drawPath(
+      string,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.88)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant MenuBalloonPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+class MenuSceneryPainter extends CustomPainter {
+  const MenuSceneryPainter({required this.progress});
+
+  final double progress;
+
+  static const _colors = [
+    Color(0xFFFF4F83),
+    Color(0xFF8157F2),
+    Color(0xFFFFBE2E),
+    Color(0xFF35C978),
+    Color(0xFF3E9BFF),
+    Color(0xFFFF784F),
+    Color(0xFFFF63C4),
+    Color(0xFF7B5AEF),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final horizon = size.height * 0.655;
+    _drawForestSilhouette(canvas, size, horizon);
+
+    final distantHill = Path()
+      ..moveTo(0, size.height * 0.745)
+      ..quadraticBezierTo(
+        size.width * 0.17,
+        size.height * 0.665,
+        size.width * 0.37,
+        size.height * 0.72,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.61,
+        size.height * 0.635,
+        size.width,
+        size.height * 0.715,
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      distantHill,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF9CDB79), Color(0xFF74C95A)],
+        ).createShader(
+          Rect.fromLTWH(0, horizon, size.width, size.height - horizon),
+        ),
+    );
+
+    final treeScale = size.width / 520;
+    _drawTree(
+      canvas,
+      Offset(size.width * 0.10, size.height * 0.715),
+      treeScale * 1.48,
+      muted: true,
+    );
+    _drawTree(
+      canvas,
+      Offset(size.width * 0.23, size.height * 0.705),
+      treeScale * 1.10,
+      muted: true,
+    );
+    _drawTree(
+      canvas,
+      Offset(size.width * 0.77, size.height * 0.695),
+      treeScale * 1.32,
+      muted: true,
+    );
+    _drawTree(
+      canvas,
+      Offset(size.width * 0.91, size.height * 0.72),
+      treeScale * 1.62,
+      muted: true,
+    );
+
+    final middleHill = Path()
+      ..moveTo(0, size.height * 0.835)
+      ..quadraticBezierTo(
+        size.width * 0.25,
+        size.height * 0.735,
+        size.width * 0.52,
+        size.height * 0.815,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.76,
+        size.height * 0.715,
+        size.width,
+        size.height * 0.795,
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      middleHill,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF85D86A), Color(0xFF6DB84F)],
+        ).createShader(
+          Rect.fromLTWH(0, size.height * 0.71, size.width, size.height * 0.29),
+        ),
+    );
+
+    final nearHill = Path()
+      ..moveTo(0, size.height * 0.90)
+      ..quadraticBezierTo(
+        size.width * 0.20,
+        size.height * 0.81,
+        size.width * 0.46,
+        size.height * 0.885,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.72,
+        size.height * 0.79,
+        size.width,
+        size.height * 0.865,
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      nearHill,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF74C95A), Color(0xFF55AD47)],
+        ).createShader(
+          Rect.fromLTWH(0, size.height * 0.79, size.width, size.height * 0.21),
+        ),
+    );
+
+    final road = Path()
+      ..moveTo(size.width * 0.488, horizon)
+      ..cubicTo(
+        size.width * 0.43,
+        size.height * 0.73,
+        size.width * 0.58,
+        size.height * 0.79,
+        size.width * 0.445,
+        size.height * 0.865,
+      )
+      ..cubicTo(
+        size.width * 0.37,
+        size.height * 0.91,
+        size.width * 0.31,
+        size.height * 0.96,
+        size.width * 0.255,
+        size.height,
+      )
+      ..lineTo(size.width * 0.745, size.height)
+      ..cubicTo(
+        size.width * 0.67,
+        size.height * 0.945,
+        size.width * 0.64,
+        size.height * 0.90,
+        size.width * 0.585,
+        size.height * 0.855,
+      )
+      ..cubicTo(
+        size.width * 0.68,
+        size.height * 0.78,
+        size.width * 0.53,
+        size.height * 0.72,
+        size.width * 0.512,
+        horizon,
+      )
+      ..close();
+    canvas.drawPath(
+      road,
+      Paint()
+        ..color = const Color(0xFFC69A60)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = max(5, size.width * 0.012)
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawPath(
+      road,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFEBD2A7), Color(0xFFDDBB87)],
+        ).createShader(
+          Rect.fromLTWH(
+            size.width * 0.24,
+            horizon,
+            size.width * 0.52,
+            size.height - horizon,
+          ),
+        ),
+    );
+    canvas.drawPath(
+      road,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.11)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = max(2, size.width * 0.005),
+    );
+
+    _drawGrassTexture(canvas, size);
+    const clusters = [
+      (0.055, 0.875, 0.88, 7),
+      (0.175, 0.935, 1.08, 10),
+      (0.315, 0.865, 0.72, 6),
+      (0.695, 0.875, 0.76, 7),
+      (0.825, 0.925, 1.08, 11),
+      (0.935, 0.845, 0.82, 8),
+    ];
+    for (var i = 0; i < clusters.length; i++) {
+      final cluster = clusters[i];
+      _drawFlowerCluster(
+        canvas,
+        Offset(size.width * cluster.$1, size.height * cluster.$2),
+        treeScale * cluster.$3,
+        cluster.$4,
+        i,
+      );
+    }
+
+    for (var i = 0; i < 8; i++) {
+      final diameter =
+          (42.0 + (i % 3) * 14) * (size.width / 520).clamp(.72, 1.2);
+      final leftSide = i.isEven;
+      final xBase = size.width *
+          (leftSide ? 0.045 + (i % 3) * 0.025 : 0.955 - (i % 3) * 0.025);
+      final wave = sin(progress * pi * 2 + i * 1.7) * size.width * 0.022;
+      final travel = (progress * (0.18 + i * 0.012) + i * 0.121) % 1;
+      final y = size.height * (1.08 - travel * 1.16);
+      final center = Offset(xBase + wave, y);
+      _drawBalloon(canvas, center, diameter, _colors[i], i);
+    }
+  }
+
+  void _drawForestSilhouette(Canvas canvas, Size size, double horizon) {
+    final backPaint = Paint()..color = const Color(0xFF4F8460);
+    final frontPaint = Paint()..color = const Color(0xFF3F7652);
+    canvas.drawRect(
+      Rect.fromLTWH(
+        0,
+        horizon + size.height * 0.018,
+        size.width,
+        size.height * 0.09,
+      ),
+      frontPaint,
+    );
+    for (var layer = 0; layer < 2; layer++) {
+      final count = layer == 0 ? 17 : 14;
+      final paint = layer == 0 ? backPaint : frontPaint;
+      for (var i = 0; i < count; i++) {
+        final x = size.width * ((i + (layer == 0 ? 0.2 : 0.65)) / count);
+        final radius = size.width * (0.034 + ((i * 7 + layer * 3) % 4) * 0.006);
+        final y = horizon +
+            size.height * (layer == 0 ? 0.004 : 0.023) -
+            radius * 0.46;
+        canvas.drawRect(
+          Rect.fromLTWH(
+            x - radius * 0.10,
+            y,
+            radius * 0.20,
+            radius * 1.85,
+          ),
+          Paint()..color = const Color(0x88635443),
+        );
+        canvas.drawCircle(Offset(x, y), radius, paint);
+        canvas.drawCircle(
+          Offset(x - radius * 0.62, y + radius * 0.24),
+          radius * 0.72,
+          paint,
+        );
+        canvas.drawCircle(
+          Offset(x + radius * 0.62, y + radius * 0.20),
+          radius * 0.70,
+          paint,
+        );
+      }
+    }
+  }
+
+  void _drawTree(
+    Canvas canvas,
+    Offset base,
+    double scale, {
+    bool muted = false,
+  }) {
+    final trunkColor =
+        muted ? const Color(0xFF886B4B) : const Color(0xFF8F613C);
+    final darkLeaf = muted ? const Color(0xFF5F9660) : const Color(0xFF3D9846);
+    final midLeaf = muted ? const Color(0xFF75A76B) : const Color(0xFF4EAD50);
+    final lightLeaf = muted ? const Color(0xFF89B778) : const Color(0xFF75CC5C);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          base.dx - 5 * scale,
+          base.dy - 38 * scale,
+          10 * scale,
+          42 * scale,
+        ),
+        Radius.circular(5 * scale),
+      ),
+      Paint()..color = trunkColor,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          base.dx - 2.5 * scale,
+          base.dy - 36 * scale,
+          2.5 * scale,
+          35 * scale,
+        ),
+        Radius.circular(2 * scale),
+      ),
+      Paint()..color = Colors.white.withValues(alpha: muted ? 0.08 : 0.16),
+    );
+    canvas.drawCircle(
+      base + Offset(0, -53 * scale),
+      28 * scale,
+      Paint()..color = midLeaf,
+    );
+    canvas.drawCircle(
+      base + Offset(-21 * scale, -44 * scale),
+      20 * scale,
+      Paint()..color = lightLeaf,
+    );
+    canvas.drawCircle(
+      base + Offset(22 * scale, -43 * scale),
+      21 * scale,
+      Paint()..color = darkLeaf,
+    );
+    canvas.drawCircle(
+      base + Offset(-11 * scale, -68 * scale),
+      19 * scale,
+      Paint()..color = lightLeaf,
+    );
+    canvas.drawCircle(
+      base + Offset(15 * scale, -66 * scale),
+      18 * scale,
+      Paint()..color = midLeaf,
+    );
+  }
+
+  void _drawGrassTexture(Canvas canvas, Size size) {
+    const grassColors = [
+      Color(0xFF3F9E43),
+      Color(0xFF6DB84F),
+      Color(0xFF85D86A),
+      Color(0xFF4EAC47),
+    ];
+    for (var i = 0; i < 54; i++) {
+      final xRatio = (i * 0.173 + 0.03) % 1;
+      final yRatio = 0.78 + (i * 0.067 % 0.215);
+      final perspective = ((yRatio - 0.78) / 0.215).clamp(0.0, 1.0);
+      final roadCenter =
+          0.50 + sin(perspective * pi * 1.55) * 0.075 * perspective;
+      final roadHalf = 0.025 + perspective * 0.225;
+      if ((xRatio - roadCenter).abs() < roadHalf) continue;
+
+      final origin = Offset(size.width * xRatio, size.height * yRatio);
+      final blade = (3.0 + perspective * 8.0) * size.width / 520;
+      final paint = Paint()
+        ..color = grassColors[i % grassColors.length].withValues(alpha: 0.72)
+        ..strokeWidth = max(1, blade * 0.18)
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+        origin,
+        origin + Offset(-blade * 0.42, -blade),
+        paint,
+      );
+      canvas.drawLine(
+        origin,
+        origin + Offset(blade * 0.48, -blade * 0.86),
+        paint,
+      );
+      if (i % 4 == 0) {
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: origin + Offset(blade * 0.65, -blade * 0.62),
+            width: blade,
+            height: blade * 0.48,
+          ),
+          Paint()..color = grassColors[(i + 1) % grassColors.length],
+        );
+      }
+    }
+  }
+
+  void _drawFlowerCluster(
+    Canvas canvas,
+    Offset base,
+    double scale,
+    int count,
+    int seed,
+  ) {
+    final swayDegrees = sin(progress * pi * 2 + seed * 1.4) * 1.6;
+    canvas.save();
+    canvas.translate(base.dx, base.dy);
+    canvas.rotate(swayDegrees * pi / 180);
+    const flowerColors = [
+      Color(0xFFFF78B5),
+      Color(0xFFFFDA45),
+      Color(0xFFB88AF3),
+      Color(0xFFFFFFFF),
+    ];
+    for (var i = 0; i < count; i++) {
+      final column = i % 4;
+      final row = i ~/ 4;
+      final x = (column - 1.5) * 13 * scale + sin(i * 2.1 + seed) * 4 * scale;
+      final groundY = row * 5 * scale;
+      final stemHeight = (18 + (i * 7 % 12)) * scale;
+      final stemPaint = Paint()
+        ..color = const Color(0xFF4D9E43)
+        ..strokeWidth = max(1.2, 1.7 * scale)
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+        Offset(x, groundY),
+        Offset(x + sin(i + seed) * 2 * scale, groundY - stemHeight),
+        stemPaint,
+      );
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(
+            x + (i.isEven ? 4 : -4) * scale,
+            groundY - stemHeight * 0.48,
+          ),
+          width: 8 * scale,
+          height: 4 * scale,
+        ),
+        Paint()..color = const Color(0xFF67B950),
+      );
+
+      final center = Offset(
+        x + sin(i + seed) * 2 * scale,
+        groundY - stemHeight,
+      );
+      final petals = 5 + (i + seed) % 4;
+      final petalRadius = (2.8 + (i % 3) * 0.45) * scale;
+      final petalPaint = Paint()..color = flowerColors[(i + seed) % 4];
+      for (var p = 0; p < petals; p++) {
+        final angle = p * pi * 2 / petals;
+        canvas.drawCircle(
+          center +
+              Offset(
+                cos(angle) * petalRadius * 1.45,
+                sin(angle) * petalRadius * 1.45,
+              ),
+          petalRadius,
+          petalPaint,
+        );
+      }
+      canvas.drawCircle(
+        center,
+        petalRadius * 0.72,
+        Paint()..color = const Color(0xFFFFA928),
+      );
+    }
+    canvas.restore();
+  }
+
+  void _drawBalloon(
+    Canvas canvas,
+    Offset center,
+    double diameter,
+    Color color,
+    int index,
+  ) {
+    final body = Rect.fromCenter(
+      center: center,
+      width: diameter,
+      height: diameter * 1.22,
+    );
+    canvas.drawOval(
+      body.shift(Offset(0, diameter * 0.10)),
+      Paint()
+        ..color = const Color(0x33002E4D)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+    canvas.drawOval(
+      body,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.32, -0.42),
+          radius: 0.83,
+          colors: [
+            Color.lerp(color, Colors.white, 0.36)!,
+            color,
+            Color.lerp(color, Colors.black, 0.22)!,
+          ],
+          stops: const [0, 0.58, 1],
+        ).createShader(body),
+    );
+    canvas.drawOval(
+      body,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.30)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = max(1.5, diameter * 0.035),
+    );
+    canvas.drawOval(
+      Rect.fromLTWH(
+        body.left + diameter * 0.19,
+        body.top + diameter * 0.14,
+        diameter * 0.17,
+        diameter * 0.28,
+      ),
+      Paint()..color = Colors.white.withValues(alpha: 0.72),
+    );
+    canvas.drawCircle(
+      Offset(body.left + diameter * 0.39, body.top + diameter * 0.12),
+      diameter * 0.045,
+      Paint()..color = Colors.white.withValues(alpha: 0.92),
+    );
+    final knot = Path()
+      ..moveTo(center.dx, body.bottom - 2)
+      ..lineTo(center.dx - diameter * 0.10, body.bottom + diameter * 0.14)
+      ..lineTo(center.dx + diameter * 0.10, body.bottom + diameter * 0.14)
+      ..close();
+    canvas.drawPath(knot, Paint()..color = color);
+    final string = Path()
+      ..moveTo(center.dx, body.bottom + diameter * 0.12)
+      ..cubicTo(
+        center.dx + (index.isEven ? 12 : -12),
+        body.bottom + diameter * 0.45,
+        center.dx - (index.isEven ? 8 : -8),
+        body.bottom + diameter * 0.72,
+        center.dx,
+        body.bottom + diameter,
+      );
+    canvas.drawPath(
+      string,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.88)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant MenuSceneryPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class SkyPainter extends CustomPainter {

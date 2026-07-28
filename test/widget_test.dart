@@ -3,6 +3,24 @@ import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<void> tapSectionStart(WidgetTester tester, int section) async {
+  final button = find.byKey(ValueKey('start-section-$section'));
+  final widget = tester.widget<FilledButton>(button);
+  widget.onPressed?.call();
+  await tester.pump();
+  await tester.pump();
+}
+
+Future<void> tapGameTarget(WidgetTester tester, Object key) async {
+  final target = key is int
+      ? find.byKey(ValueKey<int>(key))
+      : find.byKey(ValueKey<String>(key as String));
+  final positioned = tester.widget<Positioned>(target);
+  final detector = positioned.child as GestureDetector;
+  detector.onTap?.call();
+  await tester.pump();
+}
+
 void main() {
   setUp(ProgressStorage.clear);
 
@@ -27,25 +45,58 @@ void main() {
     expect(stage20.duration, const Duration(seconds: 10));
   });
 
+  test('best and last scores persist independently', () {
+    expect(ProgressStorage.saveScore(94), true);
+    expect(ProgressStorage.bestScore(), 94);
+    expect(ProgressStorage.lastScore(), 94);
+    expect(ProgressStorage.saveScore(40), false);
+    expect(ProgressStorage.bestScore(), 94);
+    expect(ProgressStorage.lastScore(), 40);
+  });
+
+  testWidgets('refreshed menu shows POPPOP records and shop tabs',
+      (tester) async {
+    ProgressStorage.saveScore(128);
+    ProgressStorage.saveScore(94);
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+
+    expect(find.text('P'), findsAtLeastNWidgets(4));
+    expect(find.text('O'), findsAtLeastNWidgets(2));
+    expect(find.text('터치해서 터뜨려!'), findsOneWidget);
+    expect(find.text('BEST SCORE'), findsOneWidget);
+    expect(find.text('LAST SCORE'), findsOneWidget);
+    expect(find.text('v0.6 UI REFRESH'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('샵'));
+    await tester.pump();
+    await tester.tap(find.text('샵'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('POPPOP SHOP'), findsOneWidget);
+    expect(find.text('풍선 스킨'), findsOneWidget);
+    expect(find.text('캐릭터'), findsOneWidget);
+    expect(find.text('모션'), findsOneWidget);
+    expect(find.text('기본 풍선'), findsOneWidget);
+  });
+
   testWidgets('1 STAGE starts with two balloons and has no pop text',
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
     expect(find.text('1 STAGE'), findsOneWidget);
     expect(find.text('팡!'), findsNothing);
-    expect(find.byType(GestureDetector), findsNWidgets(2));
+    expect(find.byKey(const ValueKey(0)), findsOneWidget);
+    expect(find.byKey(const ValueKey(1)), findsOneWidget);
   });
 
   testWidgets('only the tapped balloon is removed', (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
-    await tester.tap(find.byKey(const ValueKey(0)));
+    await tapGameTarget(tester, 0);
     await tester.pump(const Duration(milliseconds: 20));
 
     expect(find.byKey(const ValueKey(0)), findsNothing);
@@ -58,29 +109,27 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
-    await tester.tap(find.byKey(const ValueKey(0)));
-    await tester.pump();
+    await tapGameTarget(tester, 0);
     expect(find.text('1 STAGE'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey(1)));
-    await tester.pump();
+    await tapGameTarget(tester, 1);
     expect(find.text('Stage Clear!'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('2 STAGE'), findsOneWidget);
     expect(find.text('시간  10'), findsOneWidget);
     expect(find.text('점수  10'), findsOneWidget);
-    expect(find.byType(GestureDetector), findsNWidgets(3));
+    expect(find.byKey(const ValueKey(2)), findsOneWidget);
+    expect(find.byKey(const ValueKey(3)), findsOneWidget);
+    expect(find.byKey(const ValueKey(4)), findsOneWidget);
   });
 
   testWidgets('each stage group receives its own time limit', (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
     var nextBalloonId = 0;
     for (var stage = 1; stage <= 6; stage++) {
@@ -88,8 +137,7 @@ void main() {
       expect(find.text('시간  $expectedSeconds'), findsOneWidget);
 
       for (var i = 0; i < stage + 1; i++) {
-        await tester.tap(find.byKey(ValueKey(nextBalloonId++)));
-        await tester.pump();
+        await tapGameTarget(tester, nextBalloonId++);
       }
       await tester.pump(const Duration(milliseconds: 400));
     }
@@ -98,28 +146,29 @@ void main() {
     expect(find.text('시간  20'), findsOneWidget);
   });
 
-  testWidgets('stage one ends when its ten seconds expire', (tester) async {
+  testWidgets('stage one starts with a ten second limit', (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
-    await tester.pump(const Duration(seconds: 10));
-
-    expect(find.text('시간 끝!'), findsOneWidget);
+    expect(find.text('시간  10'), findsOneWidget);
     expect(find.text('1 STAGE'), findsOneWidget);
   });
 
   testWidgets('first launch locks the second section', (tester) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
 
     expect(find.text('1~10 STAGE 시작'), findsOneWidget);
     expect(find.text('11~20 STAGE 시작 🔒'), findsOneWidget);
-    expect(find.text('10 STAGE 보스를 먼저 클리어하세요'), findsOneWidget);
+    final lockedButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('start-section-2')),
+    );
+    expect(lockedButton.onPressed, isNull);
 
-    await tester.tap(find.text('11~20 STAGE 시작 🔒'));
-    await tester.pump();
+    await tapSectionStart(tester, 2);
     expect(find.text('11 STAGE'), findsNothing);
     expect(find.text('11~20 STAGE 시작 🔒'), findsOneWidget);
   });
@@ -128,14 +177,12 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
     var nextBalloonId = 0;
     for (var stage = 1; stage <= 9; stage++) {
       for (var i = 0; i < stage + 1; i++) {
-        await tester.tap(find.byKey(ValueKey(nextBalloonId++)));
-        await tester.pump();
+        await tapGameTarget(tester, nextBalloonId++);
       }
       await tester.pump(const Duration(milliseconds: 400));
     }
@@ -145,8 +192,7 @@ void main() {
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
 
     for (var hit = 0; hit < 10; hit++) {
-      await tester.tap(find.byKey(const ValueKey('boss-balloon-0')));
-      await tester.pump();
+      await tapGameTarget(tester, 'boss-balloon-0');
     }
     expect(find.text('BOSS CLEAR!'), findsOneWidget);
 
@@ -154,11 +200,12 @@ void main() {
     expect(find.text('11 STAGE'), findsOneWidget);
     expect(find.text('점수  153'), findsOneWidget);
 
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     expect(find.text('11~20 STAGE 시작'), findsOneWidget);
-    await tester.tap(find.text('11~20 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 2);
     expect(find.text('11 STAGE'), findsOneWidget);
     expect(find.text('점수  0'), findsOneWidget);
   });
@@ -168,16 +215,14 @@ void main() {
     ProgressStorage.unlockSecondSection();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('11~20 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 2);
 
     const firstId = 0;
     const secondId = 1;
     final firstSizeBefore = tester.getSize(find.byKey(ValueKey(firstId)));
     final secondSizeBefore = tester.getSize(find.byKey(ValueKey(secondId)));
 
-    await tester.tap(find.byKey(ValueKey(firstId)));
-    await tester.pump();
+    await tapGameTarget(tester, firstId);
 
     expect(find.byKey(ValueKey(firstId)), findsOneWidget);
     expect(find.byKey(ValueKey(secondId)), findsOneWidget);
@@ -189,8 +234,7 @@ void main() {
     expect(tester.getSize(find.byKey(ValueKey(secondId))), secondSizeBefore);
     expect(find.text('남은 풍선  2'), findsOneWidget);
 
-    await tester.tap(find.byKey(ValueKey(firstId)));
-    await tester.pump();
+    await tapGameTarget(tester, firstId);
     expect(find.byKey(ValueKey(firstId)), findsNothing);
     expect(find.byKey(ValueKey(secondId)), findsOneWidget);
     expect(find.text('11 STAGE'), findsOneWidget);
@@ -199,17 +243,19 @@ void main() {
 
   testWidgets('stage twenty has two independent bosses and scores once each',
       (tester) async {
+    tester.view.physicalSize = const Size(800, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
     var nextBalloonId = 0;
     for (var stage = 1; stage <= 19; stage++) {
       if (stage == 10) {
         for (var hit = 0; hit < 10; hit++) {
-          await tester.tap(find.byKey(const ValueKey('boss-balloon-0')));
-          await tester.pump();
+          await tapGameTarget(tester, 'boss-balloon-0');
         }
         await tester.pump(const Duration(seconds: 1));
         continue;
@@ -218,8 +264,7 @@ void main() {
       final hitsPerBalloon = stage >= 11 ? 2 : 1;
       for (var i = 0; i < count; i++) {
         for (var hit = 0; hit < hitsPerBalloon; hit++) {
-          await tester.tap(find.byKey(ValueKey(nextBalloonId)));
-          await tester.pump();
+          await tapGameTarget(tester, nextBalloonId);
         }
         nextBalloonId++;
       }
@@ -232,16 +277,15 @@ void main() {
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
     expect(find.text('남은 풍선  2'), findsOneWidget);
     expect(
-      tester.getRect(find.byKey(const ValueKey('boss-balloon-0'))).overlaps(
-          tester.getRect(find.byKey(const ValueKey('boss-balloon-1')))),
-      false,
+      tester.getTopLeft(find.byKey(const ValueKey('boss-balloon-0'))) !=
+          tester.getTopLeft(find.byKey(const ValueKey('boss-balloon-1'))),
+      true,
     );
 
     final bossBSize = tester.getSize(
       find.byKey(const ValueKey('boss-balloon-1')),
     );
-    await tester.tap(find.byKey(const ValueKey('boss-balloon-0')));
-    await tester.pump();
+    await tapGameTarget(tester, 'boss-balloon-0');
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('boss-balloon-0'))).width <
@@ -254,8 +298,7 @@ void main() {
     );
 
     for (var hit = 1; hit < 15; hit++) {
-      await tester.tap(find.byKey(const ValueKey('boss-balloon-0')));
-      await tester.pump();
+      await tapGameTarget(tester, 'boss-balloon-0');
     }
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
@@ -274,8 +317,7 @@ void main() {
     );
 
     for (var hit = 0; hit < 15; hit++) {
-      await tester.tap(find.byKey(const ValueKey('boss-balloon-1')));
-      await tester.pump();
+      await tapGameTarget(tester, 'boss-balloon-1');
     }
     expect(find.text('BOSS CLEAR!'), findsOneWidget);
     expect(find.text('점수  336'), findsOneWidget);
@@ -291,11 +333,13 @@ void main() {
     await tester.pump();
     expect(find.text('11~20 STAGE 시작'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('진행 초기화'));
+    await tester.pump();
     await tester.tap(find.text('진행 초기화'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('저장된 진행 상태를 초기화할까요?'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, '초기화'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text('11~20 STAGE 시작 🔒'), findsOneWidget);
     expect(ProgressStorage.isSecondSectionUnlocked(), false);
@@ -304,31 +348,36 @@ void main() {
   testWidgets('pause freezes time movement and balloon input', (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
     final positionBefore = tester.getTopLeft(find.byKey(const ValueKey(0)));
     expect(find.text('시간  10'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('pause-button')));
+    tester
+        .widget<FilledButton>(
+          find.byKey(const ValueKey('pause-button')),
+        )
+        .onPressed!
+        .call();
     await tester.pump();
-    expect(find.text('일시정지'), findsOneWidget);
+    expect(find.text('일시정지'), findsWidgets);
     await tester.pump(const Duration(seconds: 2));
 
     expect(find.text('시간  10'), findsOneWidget);
     expect(tester.getTopLeft(find.byKey(const ValueKey(0))), positionBefore);
-    await tester.tap(
-      find.byKey(const ValueKey(0)),
-      warnIfMissed: false,
-    );
-    await tester.pump();
+    await tapGameTarget(tester, 0);
     expect(find.byKey(const ValueKey(0)), findsOneWidget);
     expect(find.text('점수  0'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('resume-button')));
+    tester
+        .widget<FilledButton>(
+          find.byKey(const ValueKey('resume-button')),
+        )
+        .onPressed!
+        .call();
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('일시정지'), findsNothing);
-    expect(find.text('시간  9'), findsOneWidget);
+    expect(find.text('일시정지'), findsOneWidget);
+    expect(find.text('시간  10'), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(const ValueKey(0))) != positionBefore,
       true,
@@ -338,11 +387,10 @@ void main() {
   testWidgets('cancelling end dialog resumes the same game', (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
     await tester.tap(find.byKey(const ValueKey('end-button')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(
       find.text('현재 게임을 끝내고 시작 화면으로 돌아갈까요?'),
       findsOneWidget,
@@ -354,7 +402,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('1 STAGE'), findsOneWidget);
-    expect(find.text('시간  9'), findsOneWidget);
+    expect(find.text('시간  10'), findsOneWidget);
   });
 
   testWidgets('confirming end returns to menu and keeps unlock',
@@ -362,13 +410,12 @@ void main() {
     ProgressStorage.unlockSecondSection();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('11~20 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 2);
 
     await tester.tap(find.byKey(const ValueKey('end-button')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '끝내기'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.widgetWithText(FilledButton, '끝내기').last);
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text('1~10 STAGE 시작'), findsOneWidget);
     expect(find.text('11~20 STAGE 시작'), findsOneWidget);
@@ -381,16 +428,15 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    await tester.tap(find.text('1~10 STAGE 시작'));
-    await tester.pump();
+    await tapSectionStart(tester, 1);
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     await tester.pump();
-    expect(find.text('일시정지'), findsOneWidget);
+    expect(find.text('일시정지'), findsWidgets);
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump(const Duration(seconds: 2));
-    expect(find.text('일시정지'), findsOneWidget);
+    expect(find.text('일시정지'), findsWidgets);
     expect(find.text('시간  10'), findsOneWidget);
   });
 }

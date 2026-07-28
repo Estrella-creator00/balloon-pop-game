@@ -17,3 +17,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/sky_background.png
+    - assets/images/forest_back.png
+    - assets/images/ground_road.png
+    - assets/images/nature_assets.png
