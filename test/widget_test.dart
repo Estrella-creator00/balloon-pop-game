@@ -79,6 +79,16 @@ void main() {
     expect(find.text('기본 풍선'), findsOneWidget);
   });
 
+  testWidgets('idle menu does not schedule continuous animation frames',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+
+    expect(tester.binding.transientCallbackCount, 0);
+    expect(tester.binding.hasScheduledFrame, false);
+  });
+
   testWidgets('1 STAGE starts with two balloons and has no pop text',
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());

@@ -169,7 +169,7 @@ class BalloonGamePage extends StatefulWidget {
 }
 
 class _BalloonGamePageState extends State<BalloonGamePage>
-    with WidgetsBindingObserver, TickerProviderStateMixin {
+    with WidgetsBindingObserver {
   static const _tick = Duration(milliseconds: 16);
   static const _stageClearDelay = Duration(milliseconds: 400);
   static const _bossClearDelay = Duration(seconds: 1);
@@ -199,8 +199,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   GamePhase _phase = GamePhase.menu;
   final List<BossBalloon> _bosses = [];
   bool _secondSectionUnlocked = false;
-  late final AnimationController _skyController;
-  late final AnimationController _entranceController;
   int _bestScore = 0;
   int _lastScore = 0;
   bool _isNewBest = false;
@@ -218,14 +216,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _secondSectionUnlocked = ProgressStorage.isSecondSectionUnlocked();
     _bestScore = ProgressStorage.bestScore();
     _lastScore = ProgressStorage.lastScore();
-    _skyController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 14),
-    )..repeat();
-    _entranceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 650),
-    )..forward();
     _stagePageController = PageController();
   }
 
@@ -239,8 +229,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _startGame(int startStage) {
-    _skyController.stop();
-    _timer?.cancel();
+    _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.reset();
     _nextId = 0;
@@ -256,14 +245,24 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _rings.clear();
     _bosses.clear();
     _startStage();
-    _timer = Timer.periodic(_tick, _updateGame);
     if (mounted) {
       setState(() {});
     }
   }
 
-  void _returnToMenu() {
+  void _startGameLoop() {
+    _stopGameLoop();
+    if (!mounted || _phase != GamePhase.playing) return;
+    _timer = Timer.periodic(_tick, _updateGame);
+  }
+
+  void _stopGameLoop() {
     _timer?.cancel();
+    _timer = null;
+  }
+
+  void _returnToMenu() {
+    _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
     setState(() {
@@ -277,8 +276,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _rings.clear();
       _bosses.clear();
     });
-    _entranceController.forward(from: 0);
-    if (!_skyController.isAnimating) _skyController.repeat();
   }
 
   void _recordResult() {
@@ -291,6 +288,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _pauseGame() {
     if (_phase != GamePhase.playing) return;
+    _stopGameLoop();
     _stopwatch.stop();
     setState(() {
       _phase = GamePhase.paused;
@@ -303,6 +301,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     setState(() {
       _phase = GamePhase.playing;
     });
+    _startGameLoop();
   }
 
   Future<void> _confirmEndGame() async {
@@ -359,6 +358,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopwatch
       ..reset()
       ..start();
+    _startGameLoop();
   }
 
   void _spawnBalloons(int count) {
@@ -567,6 +567,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _showStageClear() {
+    _stopGameLoop();
     _stopwatch.stop();
     _score += _secondsLeft;
     _phase = GamePhase.stageClear;
@@ -611,6 +612,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _spawnRing(center, const Color(0xFFFF5C8A), 250);
     if (_bosses.isNotEmpty) return;
 
+    _stopGameLoop();
     _stopwatch.stop();
     _score += _secondsLeft;
     _phase = GamePhase.bossClear;
@@ -633,7 +635,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _completeGame() {
-    _timer?.cancel();
+    _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
     _recordResult();
@@ -678,7 +680,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _finishGame() {
-    _timer?.cancel();
+    _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
     _recordResult();
@@ -693,11 +695,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
-    _skyController.dispose();
-    _entranceController.dispose();
     _stagePageController.dispose();
     super.dispose();
   }
@@ -771,133 +771,126 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           const Positioned.fill(child: NatureLeftLayer()),
           const Positioned.fill(child: NatureRightLayer()),
           const Positioned.fill(child: GrassFrontLayer()),
-          AnimatedBuilder(
-            animation: Listenable.merge([_skyController, _entranceController]),
-            builder: (context, _) => CustomPaint(
-              painter: MenuBalloonPainter(progress: _skyController.value),
-              child: SafeArea(
-                minimum: const EdgeInsets.all(4),
-                child: Center(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => FittedBox(
-                      fit: BoxFit.contain,
-                      alignment: Alignment.center,
-                      child: Opacity(
-                        opacity:
-                            Curves.easeOut.transform(_entranceController.value),
-                        child: SizedBox(
-                          width: 520,
-                          height: 950,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Positioned(
-                                top: 5,
-                                right: 8,
-                                child: _currencyHud(),
-                              ),
-                              Positioned(
-                                top: 18,
-                                left: 55,
-                                right: 55,
-                                height: 300,
-                                child: _buildPoppopLogo(),
-                              ),
-                              Positioned(
-                                top: 316,
-                                left: 54,
-                                right: 54,
-                                height: 88,
-                                child: _recordBoard(),
-                              ),
-                              Positioned(
-                                top: 418,
-                                left: 45,
-                                right: 45,
-                                height: 300,
-                                child: PageView(
-                                  controller: _stagePageController,
-                                  onPageChanged: (page) =>
-                                      setState(() => _stagePage = page),
-                                  children: [
-                                    _stagePair(
-                                      leftTitle: '1 ~ 10',
-                                      rightTitle: '11 ~ 20',
-                                      leftColor: const Color(0xFFFF4F7B),
-                                      rightColor: const Color(0xFF7354E8),
-                                      leftTap: () => _startGame(1),
-                                      rightTap: _secondSectionUnlocked
-                                          ? () => _startGame(11)
-                                          : null,
-                                      rightLocked: !_secondSectionUnlocked,
-                                    ),
-                                    _stagePair(
-                                      leftTitle: '21 ~ 30',
-                                      rightTitle: '31 ~ 40',
-                                      leftColor: const Color(0xFF42B883),
-                                      rightColor: const Color(0xFF4D8EF7),
-                                      leftTap: null,
-                                      rightTap: null,
-                                      leftLocked: true,
-                                      rightLocked: true,
-                                    ),
-                                    _stagePair(
-                                      leftTitle: '41 ~ 50',
-                                      rightTitle: '51 ~ 60',
-                                      leftColor: const Color(0xFFFF9F43),
-                                      rightColor: const Color(0xFFE85D9E),
-                                      leftTap: null,
-                                      rightTap: null,
-                                      leftLocked: true,
-                                      rightLocked: true,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Positioned(
-                                top: 727,
-                                left: 0,
-                                right: 0,
-                                child: _pageIndicator(),
-                              ),
-                              Positioned(
-                                top: 750,
-                                left: 164,
-                                right: 164,
-                                height: 50,
-                                child: _resetButton(),
-                              ),
-                              Positioned(
-                                top: 816,
-                                left: 39,
-                                right: 39,
-                                height: 82,
-                                child: _bottomMenu(),
-                              ),
-                              const Positioned(
-                                bottom: 12,
-                                left: 0,
-                                right: 0,
-                                child: Text(
-                                  'v0.6 UI REFRESH',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Color(0xFF214D66),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.6,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.white,
-                                        offset: Offset(0, 1),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
+          CustomPaint(
+            painter: const MenuBalloonPainter(progress: 0.35),
+            child: SafeArea(
+              minimum: const EdgeInsets.all(4),
+              child: Center(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => FittedBox(
+                    fit: BoxFit.contain,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: 520,
+                      height: 950,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned(
+                            top: 5,
+                            right: 8,
+                            child: _currencyHud(),
                           ),
-                        ),
+                          Positioned(
+                            top: 18,
+                            left: 55,
+                            right: 55,
+                            height: 300,
+                            child: _buildPoppopLogo(),
+                          ),
+                          Positioned(
+                            top: 316,
+                            left: 54,
+                            right: 54,
+                            height: 88,
+                            child: _recordBoard(),
+                          ),
+                          Positioned(
+                            top: 418,
+                            left: 45,
+                            right: 45,
+                            height: 300,
+                            child: PageView(
+                              controller: _stagePageController,
+                              onPageChanged: (page) =>
+                                  setState(() => _stagePage = page),
+                              children: [
+                                _stagePair(
+                                  leftTitle: '1 ~ 10',
+                                  rightTitle: '11 ~ 20',
+                                  leftColor: const Color(0xFFFF4F7B),
+                                  rightColor: const Color(0xFF7354E8),
+                                  leftTap: () => _startGame(1),
+                                  rightTap: _secondSectionUnlocked
+                                      ? () => _startGame(11)
+                                      : null,
+                                  rightLocked: !_secondSectionUnlocked,
+                                ),
+                                _stagePair(
+                                  leftTitle: '21 ~ 30',
+                                  rightTitle: '31 ~ 40',
+                                  leftColor: const Color(0xFF42B883),
+                                  rightColor: const Color(0xFF4D8EF7),
+                                  leftTap: null,
+                                  rightTap: null,
+                                  leftLocked: true,
+                                  rightLocked: true,
+                                ),
+                                _stagePair(
+                                  leftTitle: '41 ~ 50',
+                                  rightTitle: '51 ~ 60',
+                                  leftColor: const Color(0xFFFF9F43),
+                                  rightColor: const Color(0xFFE85D9E),
+                                  leftTap: null,
+                                  rightTap: null,
+                                  leftLocked: true,
+                                  rightLocked: true,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Positioned(
+                            top: 727,
+                            left: 0,
+                            right: 0,
+                            child: _pageIndicator(),
+                          ),
+                          Positioned(
+                            top: 750,
+                            left: 164,
+                            right: 164,
+                            height: 50,
+                            child: _resetButton(),
+                          ),
+                          Positioned(
+                            top: 816,
+                            left: 39,
+                            right: 39,
+                            height: 82,
+                            child: _bottomMenu(),
+                          ),
+                          const Positioned(
+                            bottom: 12,
+                            left: 0,
+                            right: 0,
+                            child: Text(
+                              'v0.6 UI REFRESH',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Color(0xFF214D66),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.6,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.white,
+                                    offset: Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1037,7 +1030,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
 
   Widget _buildPoppopLogo() => CustomPaint(
-        painter: LogoFestivalPainter(progress: _skyController.value),
+        painter: const LogoFestivalPainter(progress: 0.35),
         child: Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,
@@ -1672,7 +1665,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Widget _navItem(IconData icon, String label, {bool shop = false}) => InkWell(
         onTap: () {
           if (shop) {
-            _skyController.stop();
             setState(() => _showShop = true);
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -1749,8 +1741,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           backgroundColor: Colors.white,
           leading: IconButton(
             onPressed: () {
-              _skyController.repeat();
-              _entranceController.forward(from: 0);
               setState(() => _showShop = false);
             },
             icon: const Icon(Icons.arrow_back_rounded),
