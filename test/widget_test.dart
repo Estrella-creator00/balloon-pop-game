@@ -77,16 +77,42 @@ void main() {
     expect(find.text('캐릭터'), findsOneWidget);
     expect(find.text('모션'), findsOneWidget);
     expect(find.text('기본 풍선'), findsOneWidget);
+    expect(find.byType(HomeFloatingBalloons), findsNothing);
+    expect(tester.binding.transientCallbackCount, 0);
   });
 
-  testWidgets('idle menu does not schedule continuous animation frames',
+  testWidgets('home balloons animate independently and stop during gameplay',
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump(const Duration(seconds: 2));
     await tester.pump();
 
+    const balloonKey = ValueKey('home-floating-balloon-0');
+    final before = tester.getTopLeft(find.byKey(balloonKey));
+    await tester.pump(const Duration(seconds: 2));
+    final after = tester.getTopLeft(find.byKey(balloonKey));
+    expect((after.dy - before.dy).abs(), inInclusiveRange(0.1, 10));
+
+    await tapSectionStart(tester, 1);
+    expect(find.byType(HomeFloatingBalloons), findsNothing);
     expect(tester.binding.transientCallbackCount, 0);
-    expect(tester.binding.hasScheduledFrame, false);
+  });
+
+  testWidgets('backgrounded home balloons stop until the app resumes',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+
+    const balloonKey = ValueKey('home-floating-balloon-1');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump();
+    final pausedPosition = tester.getTopLeft(find.byKey(balloonKey));
+    await tester.pump(const Duration(seconds: 2));
+    expect(tester.getTopLeft(find.byKey(balloonKey)), pausedPosition);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(tester.getTopLeft(find.byKey(balloonKey)), isNot(pausedPosition));
   });
 
   testWidgets('1 STAGE starts with two balloons and has no pop text',

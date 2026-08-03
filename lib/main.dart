@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'audio/pop_sound.dart';
@@ -771,127 +772,135 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           const Positioned.fill(child: NatureLeftLayer()),
           const Positioned.fill(child: NatureRightLayer()),
           const Positioned.fill(child: GrassFrontLayer()),
-          CustomPaint(
-            painter: const MenuBalloonPainter(progress: 0.35),
-            child: SafeArea(
-              minimum: const EdgeInsets.all(4),
-              child: Center(
-                child: LayoutBuilder(
-                  builder: (context, constraints) => FittedBox(
-                    fit: BoxFit.contain,
-                    alignment: Alignment.center,
-                    child: SizedBox(
-                      width: 520,
-                      height: 950,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Positioned(
-                            top: 5,
-                            right: 8,
-                            child: _currencyHud(),
+          const Positioned.fill(
+            child: RepaintBoundary(
+              child: CustomPaint(
+                painter: MenuBalloonPainter(
+                  progress: 0.35,
+                  indices: [2, 3, 6, 7],
+                ),
+              ),
+            ),
+          ),
+          const Positioned.fill(child: HomeFloatingBalloons()),
+          SafeArea(
+            minimum: const EdgeInsets.all(4),
+            child: Center(
+              child: LayoutBuilder(
+                builder: (context, constraints) => FittedBox(
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: 520,
+                    height: 950,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned(
+                          top: 5,
+                          right: 8,
+                          child: _currencyHud(),
+                        ),
+                        Positioned(
+                          top: 18,
+                          left: 55,
+                          right: 55,
+                          height: 300,
+                          child: _buildPoppopLogo(),
+                        ),
+                        Positioned(
+                          top: 316,
+                          left: 54,
+                          right: 54,
+                          height: 88,
+                          child: _recordBoard(),
+                        ),
+                        Positioned(
+                          top: 418,
+                          left: 45,
+                          right: 45,
+                          height: 300,
+                          child: PageView(
+                            controller: _stagePageController,
+                            onPageChanged: (page) =>
+                                setState(() => _stagePage = page),
+                            children: [
+                              _stagePair(
+                                leftTitle: '1 ~ 10',
+                                rightTitle: '11 ~ 20',
+                                leftColor: const Color(0xFFFF4F7B),
+                                rightColor: const Color(0xFF7354E8),
+                                leftTap: () => _startGame(1),
+                                rightTap: _secondSectionUnlocked
+                                    ? () => _startGame(11)
+                                    : null,
+                                rightLocked: !_secondSectionUnlocked,
+                              ),
+                              _stagePair(
+                                leftTitle: '21 ~ 30',
+                                rightTitle: '31 ~ 40',
+                                leftColor: const Color(0xFF42B883),
+                                rightColor: const Color(0xFF4D8EF7),
+                                leftTap: null,
+                                rightTap: null,
+                                leftLocked: true,
+                                rightLocked: true,
+                              ),
+                              _stagePair(
+                                leftTitle: '41 ~ 50',
+                                rightTitle: '51 ~ 60',
+                                leftColor: const Color(0xFFFF9F43),
+                                rightColor: const Color(0xFFE85D9E),
+                                leftTap: null,
+                                rightTap: null,
+                                leftLocked: true,
+                                rightLocked: true,
+                              ),
+                            ],
                           ),
-                          Positioned(
-                            top: 18,
-                            left: 55,
-                            right: 55,
-                            height: 300,
-                            child: _buildPoppopLogo(),
-                          ),
-                          Positioned(
-                            top: 316,
-                            left: 54,
-                            right: 54,
-                            height: 88,
-                            child: _recordBoard(),
-                          ),
-                          Positioned(
-                            top: 418,
-                            left: 45,
-                            right: 45,
-                            height: 300,
-                            child: PageView(
-                              controller: _stagePageController,
-                              onPageChanged: (page) =>
-                                  setState(() => _stagePage = page),
-                              children: [
-                                _stagePair(
-                                  leftTitle: '1 ~ 10',
-                                  rightTitle: '11 ~ 20',
-                                  leftColor: const Color(0xFFFF4F7B),
-                                  rightColor: const Color(0xFF7354E8),
-                                  leftTap: () => _startGame(1),
-                                  rightTap: _secondSectionUnlocked
-                                      ? () => _startGame(11)
-                                      : null,
-                                  rightLocked: !_secondSectionUnlocked,
-                                ),
-                                _stagePair(
-                                  leftTitle: '21 ~ 30',
-                                  rightTitle: '31 ~ 40',
-                                  leftColor: const Color(0xFF42B883),
-                                  rightColor: const Color(0xFF4D8EF7),
-                                  leftTap: null,
-                                  rightTap: null,
-                                  leftLocked: true,
-                                  rightLocked: true,
-                                ),
-                                _stagePair(
-                                  leftTitle: '41 ~ 50',
-                                  rightTitle: '51 ~ 60',
-                                  leftColor: const Color(0xFFFF9F43),
-                                  rightColor: const Color(0xFFE85D9E),
-                                  leftTap: null,
-                                  rightTap: null,
-                                  leftLocked: true,
-                                  rightLocked: true,
+                        ),
+                        Positioned(
+                          top: 727,
+                          left: 0,
+                          right: 0,
+                          child: _pageIndicator(),
+                        ),
+                        Positioned(
+                          top: 750,
+                          left: 164,
+                          right: 164,
+                          height: 50,
+                          child: _resetButton(),
+                        ),
+                        Positioned(
+                          top: 816,
+                          left: 39,
+                          right: 39,
+                          height: 82,
+                          child: _bottomMenu(),
+                        ),
+                        const Positioned(
+                          bottom: 12,
+                          left: 0,
+                          right: 0,
+                          child: Text(
+                            'v0.6 UI REFRESH',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFF214D66),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.6,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.white,
+                                  offset: Offset(0, 1),
                                 ),
                               ],
                             ),
                           ),
-                          Positioned(
-                            top: 727,
-                            left: 0,
-                            right: 0,
-                            child: _pageIndicator(),
-                          ),
-                          Positioned(
-                            top: 750,
-                            left: 164,
-                            right: 164,
-                            height: 50,
-                            child: _resetButton(),
-                          ),
-                          Positioned(
-                            top: 816,
-                            left: 39,
-                            right: 39,
-                            height: 82,
-                            child: _bottomMenu(),
-                          ),
-                          const Positioned(
-                            bottom: 12,
-                            left: 0,
-                            right: 0,
-                            child: Text(
-                              'v0.6 UI REFRESH',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Color(0xFF214D66),
-                                fontSize: 15,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.6,
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.white,
-                                    offset: Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -3208,10 +3217,149 @@ class GrassFrontObjectData {
   final double width;
 }
 
+class HomeFloatingBalloons extends StatefulWidget {
+  const HomeFloatingBalloons({super.key});
+
+  @override
+  State<HomeFloatingBalloons> createState() => _HomeFloatingBalloonsState();
+}
+
+class _HomeFloatingBalloonsState extends State<HomeFloatingBalloons>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  static const _movingIndices = [0, 1, 4, 5];
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 24),
+    )..repeat();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (!_controller.isAnimating) _controller.repeat();
+      return;
+    }
+    _controller.stop(canceled: false);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final area = Size(constraints.maxWidth, constraints.maxHeight);
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                for (final index in _movingIndices)
+                  _HomeFloatingBalloon(
+                    index: index,
+                    area: area,
+                    animation: _controller,
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeFloatingBalloon extends StatelessWidget {
+  const _HomeFloatingBalloon({
+    required this.index,
+    required this.area,
+    required this.animation,
+  });
+
+  final int index;
+  final Size area;
+  final Animation<double> animation;
+
+  @override
+  Widget build(BuildContext context) {
+    final diameter = MenuBalloonPainter.diameterFor(area, index);
+    final center = MenuBalloonPainter.centerFor(area, index, 0.35);
+    final canvasWidth = diameter * 1.6;
+    final canvasHeight = diameter * 2.45;
+    final amplitudes = <double>[6, 8, 7, 10];
+    final cycles = <double>[2, 3, 2, 3];
+    final phaseOffsets = <double>[0.0, 1.3, 2.6, 4.1];
+    final slot = _HomeFloatingBalloonsState._movingIndices.indexOf(index);
+
+    return Positioned(
+      left: center.dx - canvasWidth / 2,
+      top: center.dy - diameter * 0.65,
+      width: canvasWidth,
+      height: canvasHeight,
+      child: AnimatedBuilder(
+        animation: animation,
+        child: RepaintBoundary(
+          key: ValueKey('home-floating-balloon-$index'),
+          child: CustomPaint(
+            painter: MenuBalloonShapePainter(index: index),
+          ),
+        ),
+        builder: (context, child) {
+          final dy = sin(
+                animation.value * pi * 2 * cycles[slot] + phaseOffsets[slot],
+              ) *
+              amplitudes[slot];
+          return Transform.translate(
+            offset: Offset(0, dy),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class MenuBalloonShapePainter extends CustomPainter {
+  const MenuBalloonShapePainter({required this.index});
+
+  final int index;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final diameter = size.width / 1.6;
+    MenuBalloonPainter.drawBalloon(
+      canvas,
+      Offset(size.width / 2, diameter * 0.65),
+      diameter,
+      MenuBalloonPainter._colors[index],
+      index,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant MenuBalloonShapePainter oldDelegate) =>
+      oldDelegate.index != index;
+}
+
 class MenuBalloonPainter extends CustomPainter {
-  const MenuBalloonPainter({required this.progress});
+  const MenuBalloonPainter({
+    required this.progress,
+    this.indices = const [0, 1, 2, 3, 4, 5, 6, 7],
+  });
 
   final double progress;
+  final List<int> indices;
 
   static const _colors = [
     Color(0xFFFF4F83),
@@ -3226,21 +3374,30 @@ class MenuBalloonPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (var i = 0; i < 8; i++) {
-      final diameter =
-          (42.0 + (i % 3) * 14) * (size.width / 520).clamp(.72, 1.2);
-      final leftSide = i.isEven;
-      final xBase = size.width *
-          (leftSide ? 0.045 + (i % 3) * 0.025 : 0.955 - (i % 3) * 0.025);
-      final wave = sin(progress * pi * 2 + i * 1.7) * size.width * 0.022;
-      final travel = (progress * (0.18 + i * 0.012) + i * 0.121) % 1;
-      final y = size.height * (1.08 - travel * 1.16);
-      final center = Offset(xBase + wave, y);
-      _drawBalloon(canvas, center, diameter, _colors[i], i);
+    for (final i in indices) {
+      drawBalloon(
+        canvas,
+        centerFor(size, i, progress),
+        diameterFor(size, i),
+        _colors[i],
+        i,
+      );
     }
   }
 
-  void _drawBalloon(
+  static double diameterFor(Size size, int index) =>
+      (42.0 + (index % 3) * 14) * (size.width / 520).clamp(.72, 1.2);
+
+  static Offset centerFor(Size size, int index, double progress) {
+    final leftSide = index.isEven;
+    final xBase = size.width *
+        (leftSide ? 0.045 + (index % 3) * 0.025 : 0.955 - (index % 3) * 0.025);
+    final wave = sin(progress * pi * 2 + index * 1.7) * size.width * 0.022;
+    final travel = (progress * (0.18 + index * 0.012) + index * 0.121) % 1;
+    return Offset(xBase + wave, size.height * (1.08 - travel * 1.16));
+  }
+
+  static void drawBalloon(
     Canvas canvas,
     Offset center,
     double diameter,
@@ -3320,7 +3477,8 @@ class MenuBalloonPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant MenuBalloonPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      oldDelegate.progress != progress ||
+      !listEquals(oldDelegate.indices, indices);
 }
 
 class MenuSceneryPainter extends CustomPainter {
