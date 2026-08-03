@@ -40,6 +40,34 @@ enum GamePhase {
   gameOver,
 }
 
+enum MainTab { home, store }
+
+enum StoreCategory { balloon, popEffect, background, soundEffect, music }
+
+enum StorePreviewType { balloon, effect, background, sound, music }
+
+class StoreProduct {
+  const StoreProduct({
+    required this.id,
+    required this.category,
+    required this.name,
+    required this.price,
+    required this.owned,
+    required this.equipped,
+    required this.previewType,
+    required this.previewData,
+  });
+
+  final String id;
+  final StoreCategory category;
+  final String name;
+  final int price;
+  final bool owned;
+  final bool equipped;
+  final StorePreviewType previewType;
+  final Color previewData;
+}
+
 class Balloon {
   Balloon({
     required this.id,
@@ -229,6 +257,143 @@ class BalloonGamePage extends StatefulWidget {
 class _BalloonGamePageState extends State<BalloonGamePage>
     with WidgetsBindingObserver {
   static const _homeCoinBalance = 23450;
+  static const _storeProducts = [
+    StoreProduct(
+        id: 'balloon-default',
+        category: StoreCategory.balloon,
+        name: '기본 풍선',
+        price: 0,
+        owned: true,
+        equipped: true,
+        previewType: StorePreviewType.balloon,
+        previewData: Color(0xFFFF5C8A)),
+    StoreProduct(
+        id: 'balloon-a',
+        category: StoreCategory.balloon,
+        name: '특별 풍선 A',
+        price: 500,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.balloon,
+        previewData: Color(0xFF54A8FF)),
+    StoreProduct(
+        id: 'balloon-b',
+        category: StoreCategory.balloon,
+        name: '특별 풍선 B',
+        price: 700,
+        owned: true,
+        equipped: false,
+        previewType: StorePreviewType.balloon,
+        previewData: Color(0xFF8B7CF6)),
+    StoreProduct(
+        id: 'pop-default',
+        category: StoreCategory.popEffect,
+        name: '기본 효과',
+        price: 0,
+        owned: true,
+        equipped: true,
+        previewType: StorePreviewType.effect,
+        previewData: Color(0xFFFFC857)),
+    StoreProduct(
+        id: 'pop-a',
+        category: StoreCategory.popEffect,
+        name: '특별 효과 A',
+        price: 300,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.effect,
+        previewData: Color(0xFFFF6B9D)),
+    StoreProduct(
+        id: 'pop-b',
+        category: StoreCategory.popEffect,
+        name: '특별 효과 B',
+        price: 700,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.effect,
+        previewData: Color(0xFF7E57C2)),
+    StoreProduct(
+        id: 'background-default',
+        category: StoreCategory.background,
+        name: '기본 배경',
+        price: 0,
+        owned: true,
+        equipped: true,
+        previewType: StorePreviewType.background,
+        previewData: Color(0xFF56CCFF)),
+    StoreProduct(
+        id: 'background-a',
+        category: StoreCategory.background,
+        name: '특별 배경 A',
+        price: 800,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.background,
+        previewData: Color(0xFF85D86A)),
+    StoreProduct(
+        id: 'background-b',
+        category: StoreCategory.background,
+        name: '특별 배경 B',
+        price: 1200,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.background,
+        previewData: Color(0xFFFFA45B)),
+    StoreProduct(
+        id: 'sound-default',
+        category: StoreCategory.soundEffect,
+        name: '기본 POP',
+        price: 0,
+        owned: true,
+        equipped: true,
+        previewType: StorePreviewType.sound,
+        previewData: Color(0xFF42B8E8)),
+    StoreProduct(
+        id: 'sound-a',
+        category: StoreCategory.soundEffect,
+        name: '특별 효과음 A',
+        price: 300,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.sound,
+        previewData: Color(0xFF5CD6C0)),
+    StoreProduct(
+        id: 'sound-b',
+        category: StoreCategory.soundEffect,
+        name: '특별 효과음 B',
+        price: 500,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.sound,
+        previewData: Color(0xFFFF8A5B)),
+    StoreProduct(
+        id: 'music-default',
+        category: StoreCategory.music,
+        name: '기본 음악',
+        price: 0,
+        owned: true,
+        equipped: true,
+        previewType: StorePreviewType.music,
+        previewData: Color(0xFF7354E8)),
+    StoreProduct(
+        id: 'music-a',
+        category: StoreCategory.music,
+        name: '특별 음악 A',
+        price: 700,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.music,
+        previewData: Color(0xFFFF6D9A)),
+    StoreProduct(
+        id: 'music-b',
+        category: StoreCategory.music,
+        name: '특별 음악 B',
+        price: 1000,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.music,
+        previewData: Color(0xFFFFB300)),
+  ];
   static const _stageClearDelay = Duration(milliseconds: 400);
   static const _bossClearDelay = Duration(seconds: 1);
   static const _colors = [
@@ -263,7 +428,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   int _lastScore = 0;
   bool _isNewBest = false;
   bool _resultSaved = false;
-  bool _showShop = false;
+  MainTab _mainTab = MainTab.home;
   late final PageController _stagePageController;
   late final ValueNotifier<GameHeaderData> _headerData;
   late final Widget _gameHeader;
@@ -356,7 +521,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _stage = 1;
       _secondsLeft = 10;
       _phase = GamePhase.menu;
-      _showShop = false;
+      _mainTab = MainTab.home;
       _balloons.clear();
       _pieces.clear();
       _rings.clear();
@@ -974,7 +1139,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           left: 39,
                           right: 39,
                           height: 86,
-                          child: _bottomMenu(),
+                          child: _bottomMenu(selectedTab: MainTab.home),
                         ),
                         const Positioned(
                           bottom: 12,
@@ -1726,29 +1891,41 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
-  Widget _bottomMenu() => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _navItem(
-            key: const ValueKey('home-nav-home'),
-            icon: Icons.home_rounded,
-            label: '홈',
-            selected: true,
-            onTap: _onHomeMenuTap,
+  Widget _bottomMenu({required MainTab selectedTab}) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _navItem(
+                key: const ValueKey('home-nav-home'),
+                icon: Icons.home_rounded,
+                label: '홈',
+                selected: selectedTab == MainTab.home,
+                selectionKey: selectedTab == MainTab.home
+                    ? const ValueKey('home-nav-selected-home')
+                    : null,
+                onTap: _onHomeMenuTap,
+              ),
+              _navItem(
+                key: const ValueKey('home-nav-shop'),
+                icon: Icons.storefront_rounded,
+                label: '상점',
+                selected: selectedTab == MainTab.store,
+                selectionKey: selectedTab == MainTab.store
+                    ? const ValueKey('home-nav-selected-store')
+                    : null,
+                onTap: _onShopMenuTap,
+              ),
+              _navItem(
+                key: const ValueKey('home-nav-ranking'),
+                icon: Icons.emoji_events_rounded,
+                label: '랭킹',
+                onTap: _onRankingMenuTap,
+              ),
+            ],
           ),
-          _navItem(
-            key: const ValueKey('home-nav-shop'),
-            icon: Icons.storefront_rounded,
-            label: '샵',
-            onTap: _onShopMenuTap,
-          ),
-          _navItem(
-            key: const ValueKey('home-nav-ranking'),
-            icon: Icons.emoji_events_rounded,
-            label: '랭킹',
-            onTap: _onRankingMenuTap,
-          ),
-        ],
+        ),
       );
 
   Widget _navItem({
@@ -1757,12 +1934,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     required String label,
     required VoidCallback onTap,
     bool selected = false,
+    Key? selectionKey,
   }) =>
       InkWell(
         key: key,
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
+          key: selectionKey,
           width: 96,
           height: 80,
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1828,9 +2007,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _onHomeMenuTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (_mainTab != MainTab.home) setState(() => _mainTab = MainTab.home);
   }
 
-  void _onShopMenuTap() => _showComingSoon('샵 준비 중');
+  void _onShopMenuTap() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (_mainTab != MainTab.store) setState(() => _mainTab = MainTab.store);
+  }
 
   void _onRankingMenuTap() => _showComingSoon('랭킹 준비 중');
 
@@ -1851,80 +2034,116 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   Widget _buildShopScreen() {
-    const skins = [
-      ('기본 풍선', Color(0xFFFF5C8A), Icons.circle),
-      ('파란 풍선', Color(0xFF54A8FF), Icons.circle),
-      ('노란 풍선', Color(0xFFFFC857), Icons.circle),
-      ('하트 풍선', Color(0xFFFF6B9D), Icons.favorite),
-      ('무지개 풍선', Color(0xFF8B7CF6), Icons.looks),
-      ('별 풍선', Color(0xFFFFB300), Icons.star),
-      ('얼음 풍선', Color(0xFF80DEEA), Icons.ac_unit),
-      ('검은 풍선', Color(0xFF37474F), Icons.circle),
-    ];
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFE8F8FF),
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          leading: IconButton(
-            onPressed: () {
-              setState(() => _showShop = false);
-            },
-            icon: const Icon(Icons.arrow_back_rounded),
-          ),
-          title: const Text('POPPOP SHOP',
-              style: TextStyle(fontWeight: FontWeight.w900)),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: '풍선 스킨'),
-              Tab(text: '캐릭터'),
-              Tab(text: '모션'),
-            ],
-          ),
-        ),
-        body: TabBarView(
+    return Scaffold(
+      backgroundColor: const Color(0xFFE8F8FF),
+      body: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+        child: Column(
           children: [
-            GridView.builder(
-              padding: const EdgeInsets.all(18),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 180,
-                childAspectRatio: 0.95,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
+            SizedBox(
+              height: 54,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  const Center(
+                    child: Text(
+                      '상점',
+                      key: ValueKey('store-title'),
+                      style: TextStyle(
+                        color: Color(0xFFFF4F7B),
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        shadows: [
+                          Shadow(color: Colors.white, offset: Offset(0, 2)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _homeCoinHud(_homeCoinBalance),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _homeSettingsButton(),
+                  ),
+                ],
               ),
-              itemCount: skins.length,
-              itemBuilder: (_, index) {
-                final skin = skins[index];
-                return Card(
-                  elevation: 5,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(skin.$3, color: skin.$2, size: 62),
-                      const SizedBox(height: 10),
-                      Text(skin.$1,
-                          style: const TextStyle(fontWeight: FontWeight.w900)),
-                    ],
-                  ),
-                );
-              },
             ),
-            const Center(child: Text('캐릭터 준비중')),
-            const Center(child: Text('모션 준비중')),
+            const SizedBox(height: 6),
+            Expanded(
+              child: ListView(
+                key: const ValueKey('store-vertical-scroll'),
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 28),
+                children: [
+                  _storeSection(
+                    category: StoreCategory.balloon,
+                    title: '풍선 모양',
+                    icon: Icons.circle_outlined,
+                  ),
+                  _storeSection(
+                    category: StoreCategory.popEffect,
+                    title: '터짐 효과',
+                    icon: Icons.auto_awesome_rounded,
+                  ),
+                  _storeSection(
+                    category: StoreCategory.background,
+                    title: '배경',
+                    icon: Icons.landscape_rounded,
+                  ),
+                  _storeSection(
+                    category: StoreCategory.soundEffect,
+                    title: '효과음',
+                    icon: Icons.volume_up_rounded,
+                  ),
+                  _storeSection(
+                    category: StoreCategory.music,
+                    title: '배경음악',
+                    icon: Icons.music_note_rounded,
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 88,
+              child: _bottomMenu(selectedTab: MainTab.store),
+            ),
           ],
         ),
       ),
     );
   }
 
+  Widget _storeSection({
+    required StoreCategory category,
+    required String title,
+    required IconData icon,
+  }) =>
+      StoreCategorySection(
+        category: category,
+        title: title,
+        icon: icon,
+        products: _storeProducts
+            .where((product) => product.category == category)
+            .toList(growable: false),
+        onProductPressed: _onStoreProductPressed,
+      );
+
+  void _onStoreProductPressed(StoreProduct product) {
+    final message = product.equipped
+        ? '${product.name} 사용 중'
+        : product.owned
+            ? '${product.name} 적용 기능 준비 중'
+            : '${product.name} 구매 기능 준비 중';
+    _showComingSoon(message);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_phase == GamePhase.menu) {
-      return _showShop ? _buildShopScreen() : _buildStartScreen();
+      return _mainTab == MainTab.store
+          ? _buildShopScreen()
+          : _buildStartScreen();
     }
     return Scaffold(
       body: Container(
@@ -2302,6 +2521,266 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ],
       ),
     );
+  }
+}
+
+class StoreCategorySection extends StatelessWidget {
+  const StoreCategorySection({
+    super.key,
+    required this.category,
+    required this.title,
+    required this.icon,
+    required this.products,
+    required this.onProductPressed,
+  });
+
+  final StoreCategory category;
+  final String title;
+  final IconData icon;
+  final List<StoreProduct> products;
+  final ValueChanged<StoreProduct> onProductPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 9),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFE4ED),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(icon, color: const Color(0xFFFF4F7B), size: 21),
+                ),
+                const SizedBox(width: 9),
+                Text(
+                  title,
+                  key: ValueKey('store-category-${category.name}'),
+                  style: const TextStyle(
+                    color: Color(0xFF244F68),
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 218,
+            child: ListView.separated(
+              key: ValueKey('store-products-${category.name}'),
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              itemCount: products.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) => StoreProductCard(
+                product: products[index],
+                onPressed: () => onProductPressed(products[index]),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StoreProductCard extends StatelessWidget {
+  const StoreProductCard({
+    super.key,
+    required this.product,
+    required this.onPressed,
+  });
+
+  final StoreProduct product;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: ValueKey('store-product-${product.id}'),
+      width: 158,
+      padding: const EdgeInsets.fromLTRB(11, 11, 11, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFFFDF8), width: 1.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33204A5F),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Expanded(child: _preview()),
+          const SizedBox(height: 6),
+          Text(
+            product.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF244F68),
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 22,
+            child: product.equipped
+                ? const Text(
+                    '보유 완료',
+                    style: TextStyle(
+                      color: Color(0xFF58A886),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  )
+                : product.owned
+                    ? const Text(
+                        '보유 중',
+                        style: TextStyle(
+                          color: Color(0xFF7354E8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.monetization_on_rounded,
+                            color: Color(0xFFFFB300),
+                            size: 17,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${product.price}',
+                            style: const TextStyle(
+                              color: Color(0xFF6B5A36),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+          ),
+          const SizedBox(height: 5),
+          SizedBox(
+            width: double.infinity,
+            height: 36,
+            child: FilledButton.icon(
+              key: ValueKey('store-action-${product.id}'),
+              onPressed: product.equipped ? null : onPressed,
+              icon: Icon(
+                product.equipped
+                    ? Icons.check_circle_rounded
+                    : product.owned
+                        ? Icons.checkroom_rounded
+                        : Icons.shopping_bag_rounded,
+                size: 17,
+              ),
+              label: Text(
+                product.equipped
+                    ? '사용 중'
+                    : product.owned
+                        ? '사용하기'
+                        : '구매',
+              ),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                backgroundColor: product.owned
+                    ? const Color(0xFF7354E8)
+                    : const Color(0xFFFF5C8A),
+                disabledBackgroundColor: const Color(0xFF66C6A5),
+                disabledForegroundColor: Colors.white,
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _preview() {
+    switch (product.previewType) {
+      case StorePreviewType.balloon:
+        return Center(
+          child: SizedBox(
+            width: 58,
+            height: 76,
+            child: CustomPaint(
+                painter: BalloonPainter(color: product.previewData)),
+          ),
+        );
+      case StorePreviewType.effect:
+        return Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(Icons.auto_awesome_rounded,
+                  color: product.previewData, size: 66),
+              const Positioned(
+                right: 16,
+                top: 11,
+                child: Icon(Icons.bolt_rounded,
+                    color: Color(0xFFFFC857), size: 29),
+              ),
+            ],
+          ),
+        );
+      case StorePreviewType.background:
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [product.previewData, const Color(0xFF85D86A)],
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Center(
+            child: Icon(Icons.landscape_rounded, color: Colors.white, size: 48),
+          ),
+        );
+      case StorePreviewType.sound:
+        return Center(
+          child: Icon(Icons.graphic_eq_rounded,
+              color: product.previewData, size: 70),
+        );
+      case StorePreviewType.music:
+        return Center(
+          child: Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              color: product.previewData.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(Icons.music_note_rounded,
+                color: product.previewData, size: 48),
+          ),
+        );
+    }
   }
 }
 

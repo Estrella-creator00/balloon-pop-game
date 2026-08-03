@@ -150,22 +150,148 @@ void main() {
     expect(find.byKey(const ValueKey('home-nav-shop')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-nav-ranking')), findsOneWidget);
     expect(find.text('홈'), findsOneWidget);
-    expect(find.text('샵'), findsOneWidget);
+    expect(find.text('상점'), findsOneWidget);
+    expect(find.text('샵'), findsNothing);
     expect(find.text('랭킹'), findsOneWidget);
     expect(find.text('업적'), findsNothing);
     expect(find.text('도움말'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
-    await tester.pump();
-    expect(find.text('샵 준비 중'), findsOneWidget);
-    expect(find.text('POPPOP SHOP'), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
-    await tester.pump();
-    expect(find.text('랭킹 준비 중'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('home-settings-button')));
     await tester.pump();
     expect(find.text('설정 준비 중'), findsOneWidget);
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
+  });
+
+  testWidgets('store tab swaps content and keeps fixed main navigation',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 667);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('store-title')), findsOneWidget);
+    expect(find.text('상점'), findsWidgets);
+    expect(find.text('샵'), findsNothing);
+    expect(find.byKey(const ValueKey('home-nav-home')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-nav-shop')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-nav-ranking')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('home-nav-selected-store')), findsOneWidget);
+    expect(find.byType(HomeFloatingBalloons), findsNothing);
+    expect(tester.binding.transientCallbackCount, 0);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('store-action-balloon-default')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('store-action-balloon-a')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('store-action-balloon-b')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+
+    final navBottomBefore =
+        tester.getRect(find.byKey(const ValueKey('home-nav-shop'))).bottom;
+    final firstCard =
+        find.byKey(const ValueKey('store-product-balloon-default'));
+    final firstCardLeft = tester.getTopLeft(firstCard).dx;
+    await tester.drag(
+      find.byKey(const ValueKey('store-products-balloon')),
+      const Offset(-170, 0),
+    );
+    await tester.pump();
+    expect(tester.getTopLeft(firstCard).dx, lessThan(firstCardLeft));
+
+    for (final category in const [
+      ('balloon', '풍선 모양'),
+      ('popEffect', '터짐 효과'),
+      ('background', '배경'),
+      ('soundEffect', '효과음'),
+      ('music', '배경음악'),
+    ]) {
+      final title = find.byKey(ValueKey('store-category-${category.$1}'));
+      await tester.scrollUntilVisible(
+        title,
+        230,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('store-vertical-scroll')),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.down,
+          ),
+        ),
+      );
+      expect(find.text(category.$2), findsOneWidget);
+    }
+    expect(
+      tester.getRect(find.byKey(const ValueKey('home-nav-shop'))).bottom,
+      navBottomBefore,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
+    await tester.pump();
+    expect(find.text('랭킹 준비 중'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-nav-home')));
+    await tester.pump();
+    expect(find.text('BEST SCORE'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('home-nav-selected-home')), findsOneWidget);
+    expect(find.byType(HomeFloatingBalloons), findsOneWidget);
+  });
+
+  testWidgets('store header cards and navigation fit tall mobile and desktop',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    for (final size in const [Size(390, 844), Size(1280, 900)]) {
+      tester.view.physicalSize = size;
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+      await tester.pumpAndSettle();
+
+      final coinRect =
+          tester.getRect(find.byKey(const ValueKey('home-coin-hud')));
+      final titleRect =
+          tester.getRect(find.byKey(const ValueKey('store-title')));
+      final settingsRect = tester.getRect(
+        find.byKey(const ValueKey('home-settings-button')),
+      );
+      final navRect =
+          tester.getRect(find.byKey(const ValueKey('home-nav-shop')));
+      final cardRect = tester.getRect(
+        find.byKey(const ValueKey('store-product-balloon-default')),
+      );
+      expect(titleRect.overlaps(coinRect), false);
+      expect(titleRect.overlaps(settingsRect), false);
+      expect(navRect.bottom, lessThanOrEqualTo(size.height));
+      expect(cardRect.width, lessThanOrEqualTo(160));
+      expect(tester.binding.transientCallbackCount, 0);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
   });
 
   testWidgets('home controls remain inside short and tall mobile viewports',
