@@ -206,6 +206,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   bool _resultSaved = false;
   bool _showShop = false;
   late final PageController _stagePageController;
+  late final ValueNotifier<GameHeaderData> _headerData;
+  late final Widget _gameHeader;
   int _stagePage = 0;
 
   StageConfig get _stageConfig => StageConfig.forStage(_stage);
@@ -218,6 +220,25 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _bestScore = ProgressStorage.bestScore();
     _lastScore = ProgressStorage.lastScore();
     _stagePageController = PageController();
+    _headerData = ValueNotifier(_createHeaderData());
+    _gameHeader = GameHeader(
+      data: _headerData,
+      onPause: _pauseGame,
+      onEnd: _confirmEndGame,
+    );
+  }
+
+  GameHeaderData _createHeaderData() => GameHeaderData(
+        stage: _stage,
+        score: _score,
+        remaining: _bosses.isNotEmpty ? _bosses.length : _balloons.length,
+        secondsLeft: _secondsLeft,
+        controlsEnabled: _phase == GamePhase.playing,
+      );
+
+  void _publishHeader() {
+    final next = _createHeaderData();
+    if (_headerData.value != next) _headerData.value = next;
   }
 
   @override
@@ -246,6 +267,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _rings.clear();
     _bosses.clear();
     _startStage();
+    _publishHeader();
     if (mounted) {
       setState(() {});
     }
@@ -277,6 +299,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _rings.clear();
       _bosses.clear();
     });
+    _publishHeader();
   }
 
   void _recordResult() {
@@ -294,6 +317,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     setState(() {
       _phase = GamePhase.paused;
     });
+    _publishHeader();
   }
 
   void _resumeGame() {
@@ -302,6 +326,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     setState(() {
       _phase = GamePhase.playing;
     });
+    _publishHeader();
     _startGameLoop();
   }
 
@@ -359,6 +384,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopwatch
       ..reset()
       ..start();
+    _publishHeader();
     _startGameLoop();
   }
 
@@ -452,9 +478,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       return;
     }
     final secondsLeft = (remaining.inMilliseconds + 999) ~/ 1000;
-    setState(() {
+    if (secondsLeft != _secondsLeft) {
       _secondsLeft = secondsLeft;
-    });
+      _publishHeader();
+    }
+    setState(() {});
   }
 
   void _updateBalloons(double dt) {
@@ -565,6 +593,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         _showStageClear();
       }
     });
+    _publishHeader();
   }
 
   void _showStageClear() {
@@ -572,6 +601,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopwatch.stop();
     _score += _secondsLeft;
     _phase = GamePhase.stageClear;
+    _publishHeader();
     _stageTimer?.cancel();
     _stageTimer = Timer(_stageClearDelay, () {
       if (!mounted || _phase != GamePhase.stageClear) return;
@@ -601,6 +631,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       final hpRatio = boss.hp / boss.maxHp;
       boss.turnCooldown = min(boss.turnCooldown, 0.18 + hpRatio * 0.28);
     });
+    _publishHeader();
   }
 
   void _clearBoss(BossBalloon boss, Offset center, Color color) {
@@ -611,7 +642,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _spawnPieces(center, color, 280, big: true);
     _spawnRing(center, const Color(0xFFFFD54F), 190);
     _spawnRing(center, const Color(0xFFFF5C8A), 250);
-    if (_bosses.isNotEmpty) return;
+    if (_bosses.isNotEmpty) {
+      _publishHeader();
+      return;
+    }
 
     _stopGameLoop();
     _stopwatch.stop();
@@ -621,6 +655,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondSectionUnlocked = true;
       ProgressStorage.unlockSecondSection();
     }
+    _publishHeader();
     _stageTimer?.cancel();
     _stageTimer = Timer(_bossClearDelay, () {
       if (!mounted || _phase != GamePhase.bossClear) return;
@@ -641,6 +676,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopwatch.stop();
     _recordResult();
     _phase = GamePhase.completed;
+    _pieces.clear();
+    _rings.clear();
+    _publishHeader();
   }
 
   void _spawnPieces(Offset center, Color color, double sourceSize,
@@ -691,6 +729,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _balloons.clear();
       _bosses.clear();
     });
+    _publishHeader();
   }
 
   @override
@@ -699,6 +738,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
+    _headerData.dispose();
     _stagePageController.dispose();
     super.dispose();
   }
@@ -1819,7 +1859,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         child: SafeArea(
           child: Column(
             children: [
-              _buildHeader(),
+              _gameHeader,
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -1847,9 +1887,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        const Positioned.fill(
-                          child: CustomPaint(painter: SkyPainter()),
-                        ),
+                        const Positioned.fill(child: PlaySky()),
                         for (final ring in _rings) _buildRing(ring),
                         for (final piece in _pieces) _buildPiece(piece),
                         for (final balloon in _balloons) _buildBalloon(balloon),
@@ -1874,125 +1912,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      child: Column(
-        children: [
-          const Text(
-            'POPPOP',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              shadows: [
-                Shadow(
-                  color: Color(0x55006699),
-                  offset: Offset(0, 3),
-                  blurRadius: 2,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '$_stage STAGE',
-            style: const TextStyle(
-              color: Color(0xFF5E35B1),
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _infoPill('점수', '$_score', const Color(0xFFFFB300)),
-              const SizedBox(width: 10),
-              _infoPill(
-                '남은 풍선',
-                '${_bosses.isNotEmpty ? _bosses.length : _balloons.length}',
-                const Color(0xFF7E57C2),
-              ),
-              const SizedBox(width: 10),
-              _infoPill(
-                '시간',
-                '$_secondsLeft',
-                _secondsLeft <= 5 ? Colors.redAccent : const Color(0xFF26A69A),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              FilledButton.icon(
-                key: const ValueKey('pause-button'),
-                onPressed: _phase == GamePhase.playing ? _pauseGame : null,
-                icon: const Icon(Icons.pause_rounded, size: 25),
-                label: const Text('일시정지'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(132, 50),
-                  backgroundColor: const Color(0xFF7E57C2),
-                  textStyle: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                key: const ValueKey('end-button'),
-                onPressed: _phase == GamePhase.playing ? _confirmEndGame : null,
-                icon: const Icon(Icons.stop_circle_rounded, size: 25),
-                label: const Text('끝내기'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(120, 50),
-                  backgroundColor: const Color(0xFFFF7043),
-                  textStyle: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoPill(String label, String value, Color color) {
-    return Flexible(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x22004666),
-              blurRadius: 7,
-              offset: Offset(0, 3),
-            ),
-          ],
-        ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            '$label  $value',
-            maxLines: 1,
-            style: TextStyle(
-              color: color,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildBalloon(Balloon balloon) {
     return Positioned(
       key: ValueKey(balloon.id),
@@ -2001,11 +1920,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _popBalloon(balloon),
-        child: SizedBox(
-          width: balloon.size,
-          height: balloon.size + 26,
-          child: CustomPaint(
-            painter: BalloonPainter(color: _balloonColor(balloon)),
+        child: RepaintBoundary(
+          key: ValueKey('balloon-raster-${balloon.id}'),
+          child: SizedBox(
+            width: balloon.size,
+            height: balloon.size + 26,
+            child: CustomPaint(
+              painter: BalloonPainter(color: _balloonColor(balloon)),
+            ),
           ),
         ),
       ),
@@ -2020,14 +1942,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _hitBoss(boss),
-        child: SizedBox(
-          width: boss.size,
-          height: boss.size + 32,
-          child: CustomPaint(
-            painter: BossBalloonPainter(
-              color: _bossColor(boss),
-              hp: boss.hp,
-              maxHp: boss.maxHp,
+        child: RepaintBoundary(
+          key: ValueKey('boss-raster-${boss.id}'),
+          child: SizedBox(
+            width: boss.size,
+            height: boss.size + 32,
+            child: CustomPaint(
+              painter: BossBalloonPainter(
+                color: _bossColor(boss),
+                hp: boss.hp,
+                maxHp: boss.maxHp,
+              ),
             ),
           ),
         ),
@@ -2291,6 +2216,189 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           ),
         ),
       ),
+    );
+  }
+}
+
+class GameHeaderData {
+  const GameHeaderData({
+    required this.stage,
+    required this.score,
+    required this.remaining,
+    required this.secondsLeft,
+    required this.controlsEnabled,
+  });
+
+  final int stage;
+  final int score;
+  final int remaining;
+  final int secondsLeft;
+  final bool controlsEnabled;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is GameHeaderData &&
+          stage == other.stage &&
+          score == other.score &&
+          remaining == other.remaining &&
+          secondsLeft == other.secondsLeft &&
+          controlsEnabled == other.controlsEnabled;
+
+  @override
+  int get hashCode =>
+      Object.hash(stage, score, remaining, secondsLeft, controlsEnabled);
+}
+
+class GameHeader extends StatelessWidget {
+  const GameHeader({
+    super.key,
+    required this.data,
+    required this.onPause,
+    required this.onEnd,
+  });
+
+  final ValueListenable<GameHeaderData> data;
+  final VoidCallback onPause;
+  final VoidCallback onEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      key: const ValueKey('game-header-boundary'),
+      child: ValueListenableBuilder<GameHeaderData>(
+        valueListenable: data,
+        builder: (context, value, _) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+          child: Column(
+            children: [
+              const Text(
+                'POPPOP',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  shadows: [
+                    Shadow(
+                      color: Color(0x55006699),
+                      offset: Offset(0, 3),
+                      blurRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '${value.stage} STAGE',
+                style: const TextStyle(
+                  color: Color(0xFF5E35B1),
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _infoPill('점수', '${value.score}', const Color(0xFFFFB300)),
+                  const SizedBox(width: 10),
+                  _infoPill(
+                    '남은 풍선',
+                    '${value.remaining}',
+                    const Color(0xFF7E57C2),
+                  ),
+                  const SizedBox(width: 10),
+                  _infoPill(
+                    '시간',
+                    '${value.secondsLeft}',
+                    value.secondsLeft <= 5
+                        ? Colors.redAccent
+                        : const Color(0xFF26A69A),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FilledButton.icon(
+                    key: const ValueKey('pause-button'),
+                    onPressed: value.controlsEnabled ? onPause : null,
+                    icon: const Icon(Icons.pause_rounded, size: 25),
+                    label: const Text('일시정지'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(132, 50),
+                      backgroundColor: const Color(0xFF7E57C2),
+                      textStyle: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    key: const ValueKey('end-button'),
+                    onPressed: value.controlsEnabled ? onEnd : null,
+                    icon: const Icon(Icons.stop_circle_rounded, size: 25),
+                    label: const Text('끝내기'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(120, 50),
+                      backgroundColor: const Color(0xFFFF7043),
+                      textStyle: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _infoPill(String label, String value, Color color) {
+    return Flexible(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22004666),
+              blurRadius: 7,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            '$label  $value',
+            maxLines: 1,
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PlaySky extends StatelessWidget {
+  const PlaySky({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const RepaintBoundary(
+      key: ValueKey('play-sky-boundary'),
+      child: CustomPaint(painter: SkyPainter()),
     );
   }
 }

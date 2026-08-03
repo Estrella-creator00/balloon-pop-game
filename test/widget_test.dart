@@ -125,6 +125,10 @@ void main() {
     expect(find.text('팡!'), findsNothing);
     expect(find.byKey(const ValueKey(0)), findsOneWidget);
     expect(find.byKey(const ValueKey(1)), findsOneWidget);
+    expect(find.byKey(const ValueKey('play-sky-boundary')), findsOneWidget);
+    expect(find.byKey(const ValueKey('game-header-boundary')), findsOneWidget);
+    expect(find.byKey(const ValueKey('balloon-raster-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('balloon-raster-1')), findsOneWidget);
   });
 
   testWidgets('only the tapped balloon is removed', (tester) async {
@@ -311,6 +315,8 @@ void main() {
     expect(find.text('시간  10'), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('boss-raster-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('boss-raster-1')), findsOneWidget);
     expect(find.text('남은 풍선  2'), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('boss-balloon-0'))) !=
@@ -356,11 +362,27 @@ void main() {
       await tapGameTarget(tester, 'boss-balloon-1');
     }
     expect(find.text('BOSS CLEAR!'), findsOneWidget);
-    expect(find.text('점수  336'), findsOneWidget);
+    final timeText = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data)
+        .whereType<String>()
+        .singleWhere((text) => text.startsWith('시간  '));
+    final remainingTime = int.parse(timeText.substring('시간  '.length));
+    final expectedFinalScore = 326 + remainingTime;
+    expect(find.text('점수  $expectedFinalScore'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('게임 완료!'), findsOneWidget);
-    expect(find.text('336점'), findsOneWidget);
+    expect(find.text('$expectedFinalScore점'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is CustomPaint &&
+            (widget.painter is PopPiecePainter ||
+                widget.painter is BurstRingPainter),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('progress reset locks the second section again', (tester) async {
