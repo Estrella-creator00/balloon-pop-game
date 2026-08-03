@@ -162,6 +162,63 @@ class BurstRing {
   final double maxLife;
 }
 
+bool advanceEffects(
+  List<PopPiece> pieces,
+  List<BurstRing> rings,
+  double dt,
+) {
+  if (pieces.isEmpty && rings.isEmpty) return false;
+  const gravity = 520.0;
+  for (final piece in pieces) {
+    piece.life -= dt;
+    piece.velocity = Offset(
+      piece.velocity.dx,
+      piece.velocity.dy + gravity * dt,
+    );
+    piece.position += piece.velocity * dt;
+    piece.rotation += piece.spin * dt;
+  }
+  pieces.removeWhere((piece) => piece.life <= 0);
+
+  for (final ring in rings) {
+    ring.life -= dt;
+  }
+  rings.removeWhere((ring) => ring.life <= 0);
+  return true;
+}
+
+const gameLoopInterval = Duration(milliseconds: 33);
+const maxFrameDeltaSeconds = 0.05;
+
+double calculateFrameDelta(Duration elapsed) =>
+    (elapsed.inMicroseconds / Duration.microsecondsPerSecond)
+        .clamp(0.0, maxFrameDeltaSeconds);
+
+typedef PeriodicTimerFactory = Timer Function(
+  Duration interval,
+  void Function(Timer timer) callback,
+);
+
+class SinglePeriodicGameLoop {
+  SinglePeriodicGameLoop({PeriodicTimerFactory? timerFactory})
+      : _timerFactory = timerFactory ?? Timer.periodic;
+
+  final PeriodicTimerFactory _timerFactory;
+  Timer? _timer;
+
+  bool get isRunning => _timer?.isActive ?? false;
+
+  void start(Duration interval, void Function(Timer timer) callback) {
+    stop();
+    _timer = _timerFactory(interval, callback);
+  }
+
+  void stop() {
+    _timer?.cancel();
+    _timer = null;
+  }
+}
+
 class BalloonGamePage extends StatefulWidget {
   const BalloonGamePage({super.key});
 
@@ -171,7 +228,6 @@ class BalloonGamePage extends StatefulWidget {
 
 class _BalloonGamePageState extends State<BalloonGamePage>
     with WidgetsBindingObserver {
-  static const _tick = Duration(milliseconds: 16);
   static const _stageClearDelay = Duration(milliseconds: 400);
   static const _bossClearDelay = Duration(seconds: 1);
   static const _colors = [
@@ -186,10 +242,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   final Random _random = Random();
   final Stopwatch _stopwatch = Stopwatch();
+  final Stopwatch _frameStopwatch = Stopwatch();
   final List<Balloon> _balloons = [];
   final List<PopPiece> _pieces = [];
   final List<BurstRing> _rings = [];
-  Timer? _timer;
+  int _effectsRevision = 0;
+  final SinglePeriodicGameLoop _gameLoop = SinglePeriodicGameLoop();
   Timer? _stageTimer;
   Size _playArea = Size.zero;
   int _nextId = 0;
@@ -265,6 +323,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _balloons.clear();
     _pieces.clear();
     _rings.clear();
+    _effectsRevision++;
     _bosses.clear();
     _startStage();
     _publishHeader();
@@ -276,12 +335,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _startGameLoop() {
     _stopGameLoop();
     if (!mounted || _phase != GamePhase.playing) return;
-    _timer = Timer.periodic(_tick, _updateGame);
+    _frameStopwatch.start();
+    _gameLoop.start(gameLoopInterval, _updateGame);
   }
 
   void _stopGameLoop() {
-    _timer?.cancel();
-    _timer = null;
+    _gameLoop.stop();
+    _frameStopwatch
+      ..stop()
+      ..reset();
   }
 
   void _returnToMenu() {
@@ -460,7 +522,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _updateGame(Timer timer) {
     if (!mounted) return;
 
-    final dt = _tick.inMilliseconds / 1000;
+    final dt = calculateFrameDelta(_frameStopwatch.elapsed);
+    _frameStopwatch
+      ..reset()
+      ..start();
     if (_phase == GamePhase.stageClear || _phase == GamePhase.bossClear) {
       _updateEffects(dt);
       setState(() {});
@@ -551,20 +616,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _updateEffects(double dt) {
-    const gravity = 520.0;
-    for (final piece in _pieces) {
-      piece.life -= dt;
-      piece.velocity =
-          Offset(piece.velocity.dx, piece.velocity.dy + gravity * dt);
-      piece.position += piece.velocity * dt;
-      piece.rotation += piece.spin * dt;
-    }
-    _pieces.removeWhere((piece) => piece.life <= 0);
-
-    for (final ring in _rings) {
-      ring.life -= dt;
-    }
-    _rings.removeWhere((ring) => ring.life <= 0);
+    if (advanceEffects(_pieces, _rings, dt)) _effectsRevision++;
   }
 
   void _popBalloon(Balloon balloon) {
@@ -678,6 +730,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _phase = GamePhase.completed;
     _pieces.clear();
     _rings.clear();
+    _effectsRevision++;
     _publishHeader();
   }
 
@@ -704,6 +757,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
     }
+    _effectsRevision++;
   }
 
   void _spawnRing(Offset center, Color color, double radius) {
@@ -716,12 +770,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         maxLife: 0.38,
       ),
     );
+    _effectsRevision++;
   }
 
   void _finishGame() {
     _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
+    _frameStopwatch.stop();
     _recordResult();
     setState(() {
       _secondsLeft = 0;
@@ -1888,8 +1944,20 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                       clipBehavior: Clip.none,
                       children: [
                         const Positioned.fill(child: PlaySky()),
-                        for (final ring in _rings) _buildRing(ring),
-                        for (final piece in _pieces) _buildPiece(piece),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: RepaintBoundary(
+                              key: const ValueKey('effects-boundary'),
+                              child: CustomPaint(
+                                painter: EffectsPainter(
+                                  pieces: _pieces,
+                                  rings: _rings,
+                                  revision: _effectsRevision,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                         for (final balloon in _balloons) _buildBalloon(balloon),
                         for (final boss in _bosses) _buildBoss(boss),
                         if (_phase == GamePhase.stageClear)
@@ -1975,39 +2043,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             : const Color(0xFFFF3D67),
         (boss.maxHp - boss.hp) / boss.maxHp,
       )!;
-
-  Widget _buildPiece(PopPiece piece) {
-    final opacity = (piece.life / piece.maxLife).clamp(0.0, 1.0);
-    return Positioned(
-      left: piece.position.dx,
-      top: piece.position.dy,
-      child: Transform.rotate(
-        angle: piece.rotation,
-        child: Opacity(
-          opacity: opacity,
-          child: CustomPaint(
-            size: Size(piece.size, piece.size * 1.3),
-            painter: PopPiecePainter(color: piece.color),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRing(BurstRing ring) {
-    final progress = 1 - (ring.life / ring.maxLife).clamp(0.0, 1.0);
-    final size = ring.radius * progress * 2;
-    return Positioned(
-      left: ring.center.dx - size / 2,
-      top: ring.center.dy - size / 2,
-      child: IgnorePointer(
-        child: CustomPaint(
-          size: Size(size, size),
-          painter: BurstRingPainter(color: ring.color, progress: progress),
-        ),
-      ),
-    );
-  }
 
   Widget _buildCenterMessage(String title, String? subtitle) {
     return Positioned.fill(
@@ -2543,55 +2578,67 @@ class BossBalloonPainter extends CustomPainter {
       oldDelegate.maxHp != maxHp;
 }
 
-class PopPiecePainter extends CustomPainter {
-  const PopPiecePainter({required this.color});
+class EffectsPainter extends CustomPainter {
+  const EffectsPainter({
+    required this.pieces,
+    required this.rings,
+    required this.revision,
+  });
 
-  final Color color;
+  final List<PopPiece> pieces;
+  final List<BurstRing> rings;
+  final int revision;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(size.width * 0.50, 0)
-      ..lineTo(size.width, size.height * 0.32)
-      ..lineTo(size.width * 0.72, size.height)
-      ..lineTo(size.width * 0.22, size.height * 0.82)
-      ..lineTo(0, size.height * 0.24)
-      ..close();
-    canvas.drawPath(path, Paint()..color = color);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.28)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant PopPiecePainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-class BurstRingPainter extends CustomPainter {
-  const BurstRingPainter({required this.color, required this.progress});
-
-  final Color color;
-  final double progress;
+  int get pieceCount => pieces.length;
+  int get ringCount => rings.length;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final opacity = (1 - progress).clamp(0.0, 1.0);
-    final paint = Paint()
-      ..color = color.withValues(alpha: opacity * 0.75)
+    final ringPaint = Paint()..style = PaintingStyle.stroke;
+    for (final ring in rings) {
+      final progress = 1 - (ring.life / ring.maxLife).clamp(0.0, 1.0);
+      final opacity = (1 - progress).clamp(0.0, 1.0);
+      ringPaint
+        ..color = ring.color.withValues(alpha: opacity * 0.75)
+        ..strokeWidth = 5 * opacity;
+      canvas.drawCircle(
+        ring.center,
+        ring.radius * progress,
+        ringPaint,
+      );
+    }
+
+    final fillPaint = Paint();
+    final highlightPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5 * opacity;
-    canvas.drawCircle(size.center(Offset.zero), size.shortestSide / 2, paint);
+      ..strokeWidth = 1.2;
+    for (final piece in pieces) {
+      final opacity = (piece.life / piece.maxLife).clamp(0.0, 1.0);
+      final pieceSize = Size(piece.size, piece.size * 1.3);
+      final center = piece.position + pieceSize.center(Offset.zero);
+      final path = Path()
+        ..moveTo(pieceSize.width * 0.50, 0)
+        ..lineTo(pieceSize.width, pieceSize.height * 0.32)
+        ..lineTo(pieceSize.width * 0.72, pieceSize.height)
+        ..lineTo(pieceSize.width * 0.22, pieceSize.height * 0.82)
+        ..lineTo(0, pieceSize.height * 0.24)
+        ..close();
+
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.rotate(piece.rotation);
+      canvas.translate(-pieceSize.width / 2, -pieceSize.height / 2);
+      fillPaint.color = piece.color.withValues(alpha: opacity);
+      highlightPaint.color = Colors.white.withValues(alpha: opacity * 0.28);
+      canvas.drawPath(path, fillPaint);
+      canvas.drawPath(path, highlightPaint);
+      canvas.restore();
+    }
   }
 
   @override
-  bool shouldRepaint(covariant BurstRingPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.progress != progress;
+  bool shouldRepaint(covariant EffectsPainter oldDelegate) =>
+      oldDelegate.revision != revision;
 }
 
 class LogoFestivalPainter extends CustomPainter {

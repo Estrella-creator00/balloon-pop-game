@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flutter/material.dart';
@@ -43,6 +45,76 @@ void main() {
     expect(stage10.bossCount, 1);
     expect(stage20.bossCount, 2);
     expect(stage20.duration, const Duration(seconds: 10));
+  });
+
+  test('30fps elapsed-time integration preserves movement and caps long frames',
+      () {
+    const speed = 120.0;
+    final distanceAt30Fps = List.filled(
+      30,
+      calculateFrameDelta(const Duration(microseconds: 33333)),
+    ).fold<double>(0, (distance, dt) => distance + speed * dt);
+    final distanceAt60Fps = List.filled(
+      60,
+      calculateFrameDelta(const Duration(microseconds: 16667)),
+    ).fold<double>(0, (distance, dt) => distance + speed * dt);
+
+    expect(gameLoopInterval, const Duration(milliseconds: 33));
+    expect((distanceAt30Fps - distanceAt60Fps).abs(), lessThan(0.01));
+    expect(
+      calculateFrameDelta(const Duration(milliseconds: 250)),
+      maxFrameDeltaSeconds,
+    );
+  });
+
+  test('game loop start always cancels the previous timer', () {
+    final timers = <Timer>[];
+    final loop = SinglePeriodicGameLoop(
+      timerFactory: (interval, callback) {
+        final timer = Timer(const Duration(days: 1), () {});
+        timers.add(timer);
+        return timer;
+      },
+    );
+
+    loop.start(gameLoopInterval, (_) {});
+    loop.start(gameLoopInterval, (_) {});
+
+    expect(timers.where((timer) => timer.isActive), hasLength(1));
+    expect(loop.isRunning, true);
+    loop.stop();
+    expect(timers.where((timer) => timer.isActive), isEmpty);
+  });
+
+  test('pieces and rings are removed after their lifetime', () {
+    final pieces = [
+      PopPiece(
+        position: Offset.zero,
+        velocity: const Offset(10, -10),
+        color: Colors.red,
+        size: 8,
+        rotation: 0,
+        spin: 1,
+        life: 0.82,
+        maxLife: 1.15,
+      ),
+    ];
+    final rings = [
+      BurstRing(
+        center: Offset.zero,
+        color: Colors.yellow,
+        radius: 20,
+        life: 0.38,
+        maxLife: 0.38,
+      ),
+    ];
+
+    for (var frame = 0; frame < 30; frame++) {
+      advanceEffects(pieces, rings, 1 / 30);
+    }
+
+    expect(pieces, isEmpty);
+    expect(rings, isEmpty);
   });
 
   test('best and last scores persist independently', () {
@@ -143,6 +215,31 @@ void main() {
     expect(find.byKey(const ValueKey(1)), findsOneWidget);
     expect(find.text('1 STAGE'), findsOneWidget);
     expect(find.text('점수  0'), findsOneWidget);
+  });
+
+  testWidgets('effects use one batched painter instead of particle widgets',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tapSectionStart(tester, 1);
+
+    await tapGameTarget(tester, 0);
+    final painter = tester
+        .widget<CustomPaint>(
+          find.descendant(
+            of: find.byKey(const ValueKey('effects-boundary')),
+            matching: find.byType(CustomPaint),
+          ),
+        )
+        .painter! as EffectsPainter;
+    expect(painter.pieceCount, inInclusiveRange(6, 8));
+    expect(painter.ringCount, 1);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is CustomPaint && widget.painter is EffectsPainter,
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the next stage starts only after every balloon is popped',
@@ -374,15 +471,16 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('게임 완료!'), findsOneWidget);
     expect(find.text('$expectedFinalScore점'), findsOneWidget);
-    expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is CustomPaint &&
-            (widget.painter is PopPiecePainter ||
-                widget.painter is BurstRingPainter),
-      ),
-      findsNothing,
-    );
+    final effects = tester
+        .widget<CustomPaint>(
+          find.descendant(
+            of: find.byKey(const ValueKey('effects-boundary')),
+            matching: find.byType(CustomPaint),
+          ),
+        )
+        .painter! as EffectsPainter;
+    expect(effects.pieceCount, 0);
+    expect(effects.ringCount, 0);
   });
 
   testWidgets('progress reset locks the second section again', (tester) async {
