@@ -126,7 +126,7 @@ void main() {
     expect(ProgressStorage.lastScore(), 40);
   });
 
-  testWidgets('refreshed menu shows POPPOP records and shop tabs',
+  testWidgets('home uses compact top controls and three-item navigation',
       (tester) async {
     ProgressStorage.saveScore(128);
     ProgressStorage.saveScore(94);
@@ -139,18 +139,70 @@ void main() {
     expect(find.text('BEST SCORE'), findsOneWidget);
     expect(find.text('LAST SCORE'), findsOneWidget);
     expect(find.text('v0.6 UI REFRESH'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-coin-hud')), findsOneWidget);
+    expect(find.text('23,450'), findsOneWidget);
+    expect(find.byIcon(Icons.diamond_rounded), findsNothing);
+    expect(find.byIcon(Icons.volume_up_rounded), findsNothing);
+    expect(find.byIcon(Icons.add), findsNothing);
+    expect(find.byKey(const ValueKey('home-settings-button')), findsOneWidget);
+    expect(find.text('진행 초기화'), findsNothing);
+    expect(find.byKey(const ValueKey('home-nav-home')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-nav-shop')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-nav-ranking')), findsOneWidget);
+    expect(find.text('홈'), findsOneWidget);
+    expect(find.text('샵'), findsOneWidget);
+    expect(find.text('랭킹'), findsOneWidget);
+    expect(find.text('업적'), findsNothing);
+    expect(find.text('도움말'), findsNothing);
 
-    await tester.ensureVisible(find.text('샵'));
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pump();
-    await tester.tap(find.text('샵'));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('POPPOP SHOP'), findsOneWidget);
-    expect(find.text('풍선 스킨'), findsOneWidget);
-    expect(find.text('캐릭터'), findsOneWidget);
-    expect(find.text('모션'), findsOneWidget);
-    expect(find.text('기본 풍선'), findsOneWidget);
-    expect(find.byType(HomeFloatingBalloons), findsNothing);
-    expect(tester.binding.transientCallbackCount, 0);
+    expect(find.text('샵 준비 중'), findsOneWidget);
+    expect(find.text('POPPOP SHOP'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
+    await tester.pump();
+    expect(find.text('랭킹 준비 중'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-settings-button')));
+    await tester.pump();
+    expect(find.text('설정 준비 중'), findsOneWidget);
+    expect(find.byType(HomeFloatingBalloons), findsOneWidget);
+  });
+
+  testWidgets('home controls remain inside short and tall mobile viewports',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    for (final size in const [
+      Size(390, 667),
+      Size(390, 844),
+      Size(1280, 900)
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+
+      final coinRect = tester.getRect(
+        find.byKey(const ValueKey('home-coin-hud')),
+      );
+      final settingsRect = tester.getRect(
+        find.byKey(const ValueKey('home-settings-button')),
+      );
+      final homeRect =
+          tester.getRect(find.byKey(const ValueKey('home-nav-home')));
+      final rankingRect = tester.getRect(
+        find.byKey(const ValueKey('home-nav-ranking')),
+      );
+      expect(coinRect.top, greaterThanOrEqualTo(0));
+      expect(settingsRect.top, greaterThanOrEqualTo(0));
+      expect(homeRect.bottom, lessThanOrEqualTo(size.height));
+      expect(rankingRect.bottom, lessThanOrEqualTo(size.height));
+      expect(find.byKey(const ValueKey('start-section-1')), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
   });
 
   testWidgets('home balloons animate independently and stop during gameplay',
@@ -510,22 +562,18 @@ void main() {
     expect(find.text('20 STAGE'), findsNothing);
   });
 
-  testWidgets('progress reset locks the second section again', (tester) async {
+  testWidgets('home hides progress reset and preserves second-section unlock',
+      (tester) async {
     ProgressStorage.unlockSecondSection();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     expect(find.text('11~20 STAGE 시작'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('진행 초기화'));
-    await tester.pump();
-    await tester.tap(find.text('진행 초기화'));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('저장된 진행 상태를 초기화할까요?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, '초기화'));
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(find.text('11~20 STAGE 시작 🔒'), findsOneWidget);
-    expect(ProgressStorage.isSecondSectionUnlocked(), false);
+    expect(find.text('진행 초기화'), findsNothing);
+    expect(ProgressStorage.isSecondSectionUnlocked(), true);
+    final secondSection = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('start-section-2')),
+    );
+    expect(secondSection.onPressed, isNotNull);
   });
 
   testWidgets('pause freezes time movement and balloon input', (tester) async {

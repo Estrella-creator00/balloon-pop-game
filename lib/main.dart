@@ -228,6 +228,7 @@ class BalloonGamePage extends StatefulWidget {
 
 class _BalloonGamePageState extends State<BalloonGamePage>
     with WidgetsBindingObserver {
+  static const _homeCoinBalance = 23450;
   static const _stageClearDelay = Duration(milliseconds: 400);
   static const _bossClearDelay = Duration(seconds: 1);
   static const _colors = [
@@ -799,6 +800,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     super.dispose();
   }
 
+  // Kept for the upcoming settings screen.
+  // ignore: unused_element
   Future<void> _confirmProgressReset() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -894,8 +897,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                       children: [
                         Positioned(
                           top: 5,
-                          right: 8,
-                          child: _currencyHud(),
+                          left: 10,
+                          child: _homeCoinHud(_homeCoinBalance),
+                        ),
+                        Positioned(
+                          top: 5,
+                          right: 10,
+                          child: _homeSettingsButton(),
                         ),
                         Positioned(
                           top: 18,
@@ -962,17 +970,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           child: _pageIndicator(),
                         ),
                         Positioned(
-                          top: 750,
-                          left: 164,
-                          right: 164,
-                          height: 50,
-                          child: _resetButton(),
-                        ),
-                        Positioned(
-                          top: 816,
+                          top: 758,
                           left: 39,
                           right: 39,
-                          height: 82,
+                          height: 86,
                           child: _bottomMenu(),
                         ),
                         const Positioned(
@@ -1031,108 +1032,77 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
-  Widget _resetButton() => DecoratedBox(
+  Widget _homeCoinHud(int coins) => Container(
+        key: const ValueKey('home-coin-hud'),
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x3D194F66),
-              blurRadius: 7,
-              offset: Offset(0, 5),
-            ),
-            BoxShadow(
-              color: Colors.white,
-              blurRadius: 2,
-              offset: Offset(0, -1),
-            ),
-          ],
-        ),
-        child: OutlinedButton.icon(
-          onPressed: _confirmProgressReset,
-          icon: const Icon(Icons.sync_rounded, size: 24),
-          label: const Text('진행 초기화'),
-          style: OutlinedButton.styleFrom(
-            padding: EdgeInsets.zero,
-            backgroundColor: const Color(0xFFFFFBF4),
-            foregroundColor: const Color(0xFF28546C),
-            side: const BorderSide(color: Color(0xFFE9D9C8), width: 1.5),
-            textStyle: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
-            ),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xF23C7CAA), Color(0xF2245D8C)],
           ),
-        ),
-      );
-
-  Widget _currencyHud() => Align(
-        alignment: Alignment.centerRight,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            _currencyChip(
-              Icons.diamond_rounded,
-              '1250',
-              const Color(0xFFCB55FF),
-            ),
-            const SizedBox(height: 5),
-            _currencyChip(
-              Icons.monetization_on_rounded,
-              '23,450',
-              const Color(0xFFFFC107),
-            ),
-            const SizedBox(height: 5),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(0xAA2E6695),
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-              ),
-              child: Padding(
-                padding: EdgeInsets.all(8),
-                child: Icon(
-                  Icons.volume_up_rounded,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-
-  Widget _currencyChip(IconData icon, String value, Color color) => Container(
-        padding: const EdgeInsets.fromLTRB(8, 4, 5, 4),
-        decoration: BoxDecoration(
-          color: const Color(0xCC28618F),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0x88FFFFFF), width: 1.5),
           boxShadow: const [
-            BoxShadow(color: Color(0x44003366), offset: Offset(0, 3)),
+            BoxShadow(
+              color: Color(0x55003366),
+              blurRadius: 5,
+              offset: Offset(0, 3),
+            ),
           ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(width: 5),
+            const Icon(
+              Icons.monetization_on_rounded,
+              color: Color(0xFFFFD43B),
+              size: 25,
+              shadows: [Shadow(color: Color(0x66A35A00), offset: Offset(0, 2))],
+            ),
+            const SizedBox(width: 6),
             Text(
-              value,
+              _formatCoinAmount(coins),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
+                shadows: [
+                  Shadow(color: Color(0x66002D51), offset: Offset(0, 2))
+                ],
               ),
-            ),
-            const SizedBox(width: 5),
-            const CircleAvatar(
-              radius: 10,
-              backgroundColor: Color(0xFF4D7DA4),
-              child: Icon(Icons.add, size: 16, color: Colors.white),
             ),
           ],
         ),
       );
+
+  Widget _homeSettingsButton() => Material(
+        color: const Color(0xF22D70A0),
+        elevation: 4,
+        shadowColor: const Color(0x55003366),
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          key: const ValueKey('home-settings-button'),
+          onTap: _onSettingsPressed,
+          borderRadius: BorderRadius.circular(13),
+          child: const SizedBox(
+            width: 40,
+            height: 38,
+            child: Icon(Icons.settings_rounded, color: Colors.white, size: 26),
+          ),
+        ),
+      );
+
+  String _formatCoinAmount(int coins) {
+    final digits = coins.toString();
+    final result = StringBuffer();
+    for (var index = 0; index < digits.length; index++) {
+      if (index > 0 && (digits.length - index) % 3 == 0) result.write(',');
+      result.write(digits[index]);
+    }
+    return result.toString();
+  }
 
   Widget _buildPoppopLogo() => CustomPaint(
         painter: const LogoFestivalPainter(progress: 0.35),
@@ -1757,44 +1727,66 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
 
   Widget _bottomMenu() => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _navItem(Icons.settings_rounded, '설정'),
-          _navItem(Icons.emoji_events_rounded, '업적'),
-          _navItem(Icons.help_rounded, '도움말'),
-          _navItem(Icons.storefront_rounded, '샵', shop: true),
-          _navItem(Icons.leaderboard_rounded, '랭킹'),
+          _navItem(
+            key: const ValueKey('home-nav-home'),
+            icon: Icons.home_rounded,
+            label: '홈',
+            selected: true,
+            onTap: _onHomeMenuTap,
+          ),
+          _navItem(
+            key: const ValueKey('home-nav-shop'),
+            icon: Icons.storefront_rounded,
+            label: '샵',
+            onTap: _onShopMenuTap,
+          ),
+          _navItem(
+            key: const ValueKey('home-nav-ranking'),
+            icon: Icons.emoji_events_rounded,
+            label: '랭킹',
+            onTap: _onRankingMenuTap,
+          ),
         ],
       );
 
-  Widget _navItem(IconData icon, String label, {bool shop = false}) => InkWell(
-        onTap: () {
-          if (shop) {
-            setState(() => _showShop = true);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('$label 기능은 준비중입니다.')),
-            );
-          }
-        },
+  Widget _navItem({
+    required Key key,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool selected = false,
+  }) =>
+      InkWell(
+        key: key,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          width: 72,
-          height: 78,
+          width: 96,
+          height: 80,
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFFFFFFFF), Color(0xFFFFF5E8)],
+              colors: selected
+                  ? const [Color(0xFFFF91B4), Color(0xFFFF4F7B)]
+                  : const [Color(0xFFFFFFFF), Color(0xFFFFF5E8)],
             ),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFFFFDF8), width: 2),
-            boxShadow: const [
+            border: Border.all(
+              color:
+                  selected ? const Color(0xFFFFD3E1) : const Color(0xFFFFFDF8),
+              width: 2,
+            ),
+            boxShadow: [
               BoxShadow(
-                color: Color(0x4D17485F),
+                color: selected
+                    ? const Color(0x66A92A54)
+                    : const Color(0x4D17485F),
                 blurRadius: 7,
-                offset: Offset(0, 5),
+                offset: const Offset(0, 5),
               ),
             ],
           ),
@@ -1803,7 +1795,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             children: [
               Icon(
                 icon,
-                color: shop ? const Color(0xFFFF6D4A) : const Color(0xFF378BCA),
+                color: selected ? Colors.white : const Color(0xFF378BCA),
                 size: 37,
                 shadows: const [
                   Shadow(
@@ -1816,16 +1808,47 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               const SizedBox(height: 3),
               Text(
                 label,
-                style: const TextStyle(
-                  color: Color(0xFF244B62),
-                  fontSize: 12,
+                style: TextStyle(
+                  color: selected ? Colors.white : const Color(0xFF244B62),
+                  fontSize: 13,
                   fontWeight: FontWeight.w900,
+                  shadows: selected
+                      ? const [
+                          Shadow(color: Color(0x55002C4E), offset: Offset(0, 1))
+                        ]
+                      : null,
                 ),
               ),
             ],
           ),
         ),
       );
+
+  void _onSettingsPressed() => _showComingSoon('설정 준비 중');
+
+  void _onHomeMenuTap() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+  }
+
+  void _onShopMenuTap() => _showComingSoon('샵 준비 중');
+
+  void _onRankingMenuTap() => _showComingSoon('랭킹 준비 중');
+
+  void _showComingSoon(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      );
+  }
 
   Widget _buildShopScreen() {
     const skins = [
