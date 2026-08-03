@@ -2163,93 +2163,120 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     return Positioned.fill(
       child: ColoredBox(
         color: const Color(0x66004D73),
-        child: Center(
-          child: Container(
-            margin: const EdgeInsets.all(24),
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 30),
-            constraints: const BoxConstraints(maxWidth: 430),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(color: const Color(0xFFFFC857), width: 5),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x44000000),
-                  blurRadius: 20,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  completed ? '게임 완료!' : '시간 끝!',
-                  style: const TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFFFF6B9D),
+        child: SafeArea(
+          minimum: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
+              constraints: const BoxConstraints(maxWidth: 360),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: const Color(0xFFFFC857), width: 5),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x44000000),
+                    blurRadius: 20,
+                    offset: Offset(0, 8),
                   ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  '최종 점수',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF456477),
-                  ),
-                ),
-                Text(
-                  '$_score점',
-                  style: const TextStyle(
-                    fontSize: 54,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF7E57C2),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () => _startGame(_sectionStartStage),
-                  icon: const Icon(Icons.refresh_rounded, size: 30),
-                  label: const Text(
-                    '다시 시작',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6B9D),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 30,
-                      vertical: 18,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    completed ? '게임 완료!' : '시간 끝!',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFFFF6B9D),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _returnToMenu,
-                  icon: const Icon(Icons.home_rounded, size: 28),
-                  label: const Text(
-                    '시작 화면으로 돌아가기',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(22),
+                  const SizedBox(height: 10),
+                  const Text(
+                    '최종 점수',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF456477),
                     ),
                   ),
-                ),
-              ],
+                  Text(
+                    '$_score점',
+                    style: const TextStyle(
+                      fontSize: 46,
+                      height: 1.05,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF7E57C2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildResultAction(
+                        key: const ValueKey('result-retry-button'),
+                        icon: Icons.refresh_rounded,
+                        label: '다시',
+                        onTap: () => _startGame(_stage),
+                      ),
+                      const SizedBox(width: 42),
+                      _buildResultAction(
+                        key: const ValueKey('result-home-button'),
+                        icon: Icons.home_rounded,
+                        label: '홈',
+                        onTap: _returnToMenu,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildResultAction({
+    required Key key,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Material(
+            color: const Color(0xFFFF6B9D),
+            elevation: 5,
+            shadowColor: const Color(0x557E57C2),
+            borderRadius: BorderRadius.circular(22),
+            child: InkWell(
+              key: key,
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(22),
+              child: SizedBox(
+                width: 68,
+                height: 68,
+                child: Icon(icon, color: Colors.white, size: 38),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF456477),
+            ),
+          ),
+        ],
       ),
     );
   }

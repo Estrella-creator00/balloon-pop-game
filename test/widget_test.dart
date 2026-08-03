@@ -481,6 +481,33 @@ void main() {
         .painter! as EffectsPainter;
     expect(effects.pieceCount, 0);
     expect(effects.ringCount, 0);
+
+    tester.view.physicalSize = const Size(390, 667);
+    await tester.pump();
+    final retryButton = find.byKey(const ValueKey('result-retry-button'));
+    final homeButton = find.byKey(const ValueKey('result-home-button'));
+    expect(retryButton, findsOneWidget);
+    expect(homeButton, findsOneWidget);
+    expect(tester.getRect(retryButton).bottom, lessThanOrEqualTo(655));
+    expect(tester.getRect(homeButton).bottom, lessThanOrEqualTo(655));
+
+    await tester.tap(retryButton);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('20 STAGE'), findsOneWidget);
+    expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
+
+    for (var hit = 0; hit < 15; hit++) {
+      await tapGameTarget(tester, 'boss-balloon-0');
+      await tapGameTarget(tester, 'boss-balloon-1');
+    }
+    await tester.pump(const Duration(seconds: 1));
+    expect(homeButton, findsOneWidget);
+    await tester.tap(homeButton);
+    await tester.pump();
+    expect(find.text('1~10 STAGE 시작'), findsOneWidget);
+    expect(find.text('20 STAGE'), findsNothing);
   });
 
   testWidgets('progress reset locks the second section again', (tester) async {
