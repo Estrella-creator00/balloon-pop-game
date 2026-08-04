@@ -162,7 +162,7 @@ void main() {
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
   });
 
-  testWidgets('store tab swaps content and keeps fixed main navigation',
+  testWidgets('store tab swaps content and reveals navigation on demand',
       (tester) async {
     tester.view.physicalSize = const Size(390, 667);
     tester.view.devicePixelRatio = 1;
@@ -208,8 +208,51 @@ void main() {
       isNotNull,
     );
 
-    final navBottomBefore =
-        tester.getRect(find.byKey(const ValueKey('home-nav-shop'))).bottom;
+    AnimatedSlide storeNavigationSlide() => tester.widget<AnimatedSlide>(
+          find.byKey(const ValueKey('store-bottom-nav-slide')),
+        );
+    AnimatedOpacity storeNavigationOpacity() => tester.widget<AnimatedOpacity>(
+          find.byKey(const ValueKey('store-bottom-nav-opacity')),
+        );
+    expect(storeNavigationSlide().offset, Offset.zero);
+    expect(storeNavigationOpacity().opacity, 1);
+
+    await tester.drag(
+      find.byKey(const ValueKey('store-vertical-scroll')),
+      const Offset(0, -220),
+    );
+    await tester.pump();
+    expect(storeNavigationSlide().offset.dy, greaterThan(1));
+    expect(storeNavigationOpacity().opacity, 0);
+
+    await tester.drag(
+      find.byKey(const ValueKey('store-vertical-scroll')),
+      const Offset(0, 100),
+    );
+    await tester.pump();
+    expect(storeNavigationSlide().offset, Offset.zero);
+    expect(storeNavigationOpacity().opacity, 1);
+
+    await tester.drag(
+      find.byKey(const ValueKey('store-vertical-scroll')),
+      const Offset(0, -120),
+    );
+    await tester.pump();
+    expect(storeNavigationOpacity().opacity, 0);
+    await tester.pump(const Duration(milliseconds: 951));
+    await tester.pumpAndSettle();
+    expect(storeNavigationSlide().offset, Offset.zero);
+    expect(storeNavigationOpacity().opacity, 1);
+
+    await tester.fling(
+      find.byKey(const ValueKey('store-vertical-scroll')),
+      const Offset(0, 800),
+      1800,
+    );
+    await tester.pumpAndSettle();
+    expect(storeNavigationSlide().offset, Offset.zero);
+    expect(storeNavigationOpacity().opacity, 1);
+
     final firstCard =
         find.byKey(const ValueKey('store-product-balloon-default'));
     final firstCardLeft = tester.getTopLeft(firstCard).dx;
@@ -242,10 +285,10 @@ void main() {
       );
       expect(find.text(category.$2), findsOneWidget);
     }
-    expect(
-      tester.getRect(find.byKey(const ValueKey('home-nav-shop'))).bottom,
-      navBottomBefore,
-    );
+    await tester.pump(const Duration(milliseconds: 951));
+    await tester.pumpAndSettle();
+    expect(storeNavigationSlide().offset, Offset.zero);
+    expect(storeNavigationOpacity().opacity, 1);
 
     await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
     await tester.pump();
@@ -268,6 +311,14 @@ void main() {
       tester.view.physicalSize = size;
       await tester.pumpWidget(const BalloonPopApp());
       await tester.pump();
+
+      final homeCoinSize =
+          tester.getSize(find.byKey(const ValueKey('home-coin-hud')));
+      final homeSettingsSize = tester.getSize(
+        find.byKey(const ValueKey('home-settings-button')),
+      );
+      final homeNavigationSize =
+          tester.getSize(find.byKey(const ValueKey('home-nav-shop')));
       await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
       await tester.pumpAndSettle();
 
@@ -283,8 +334,13 @@ void main() {
       final cardRect = tester.getRect(
         find.byKey(const ValueKey('store-product-balloon-default')),
       );
+      expect(coinRect.size, homeCoinSize);
+      expect(settingsRect.size, homeSettingsSize);
+      expect(navRect.size, homeNavigationSize);
       expect(titleRect.overlaps(coinRect), false);
       expect(titleRect.overlaps(settingsRect), false);
+      expect(titleRect.top, greaterThan(coinRect.bottom));
+      expect(titleRect.top, greaterThan(settingsRect.bottom));
       expect(navRect.bottom, lessThanOrEqualTo(size.height));
       expect(cardRect.width, lessThanOrEqualTo(160));
       expect(tester.binding.transientCallbackCount, 0);

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import 'audio/pop_sound.dart';
 import 'storage/progress_storage.dart';
@@ -429,6 +430,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   bool _isNewBest = false;
   bool _resultSaved = false;
   MainTab _mainTab = MainTab.home;
+  bool _storeNavigationVisible = true;
+  Timer? _storeNavigationRevealTimer;
   late final PageController _stagePageController;
   late final ValueNotifier<GameHeaderData> _headerData;
   late final Widget _gameHeader;
@@ -477,6 +480,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _startGame(int startStage) {
     _stopGameLoop();
     _stageTimer?.cancel();
+    _storeNavigationRevealTimer?.cancel();
     _stopwatch.reset();
     _nextId = 0;
     _score = 0;
@@ -515,6 +519,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _returnToMenu() {
     _stopGameLoop();
     _stageTimer?.cancel();
+    _storeNavigationRevealTimer?.cancel();
     _stopwatch.stop();
     setState(() {
       _score = 0;
@@ -522,6 +527,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondsLeft = 10;
       _phase = GamePhase.menu;
       _mainTab = MainTab.home;
+      _storeNavigationVisible = true;
       _balloons.clear();
       _pieces.clear();
       _rings.clear();
@@ -959,6 +965,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     WidgetsBinding.instance.removeObserver(this);
     _stopGameLoop();
     _stageTimer?.cancel();
+    _storeNavigationRevealTimer?.cancel();
     _stopwatch.stop();
     _headerData.dispose();
     _stagePageController.dispose();
@@ -1063,12 +1070,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                         Positioned(
                           top: 5,
                           left: 10,
-                          child: _homeCoinHud(_homeCoinBalance),
-                        ),
-                        Positioned(
-                          top: 5,
                           right: 10,
-                          child: _homeSettingsButton(),
+                          height: 38,
+                          child: _mainTopOverlay(),
                         ),
                         Positioned(
                           top: 18,
@@ -1195,6 +1199,19 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             ),
           ),
         ),
+      );
+
+  Widget _mainTopOverlay() => Stack(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _homeCoinHud(_homeCoinBalance),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _homeSettingsButton(),
+          ),
+        ],
       );
 
   Widget _homeCoinHud(int coins) => Container(
@@ -2007,12 +2024,66 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _onHomeMenuTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    _storeNavigationRevealTimer?.cancel();
     if (_mainTab != MainTab.home) setState(() => _mainTab = MainTab.home);
   }
 
   void _onShopMenuTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    if (_mainTab != MainTab.store) setState(() => _mainTab = MainTab.store);
+    _storeNavigationRevealTimer?.cancel();
+    if (_mainTab != MainTab.store) {
+      setState(() {
+        _mainTab = MainTab.store;
+        _storeNavigationVisible = true;
+      });
+    }
+  }
+
+  bool _onStoreScrollNotification(ScrollNotification notification) {
+    if (_mainTab != MainTab.store) return false;
+    if (notification.metrics.pixels <= notification.metrics.minScrollExtent) {
+      _storeNavigationRevealTimer?.cancel();
+      _setStoreNavigationVisible(true);
+      return false;
+    }
+    if (notification is ScrollUpdateNotification &&
+        notification.dragDetails != null) {
+      final delta = notification.scrollDelta ?? 0;
+      if (delta > 0) {
+        _storeNavigationRevealTimer?.cancel();
+        _setStoreNavigationVisible(false);
+      } else if (delta < 0) {
+        _storeNavigationRevealTimer?.cancel();
+        _setStoreNavigationVisible(true);
+      }
+    } else if (notification is UserScrollNotification) {
+      if (notification.direction == ScrollDirection.reverse) {
+        _storeNavigationRevealTimer?.cancel();
+        _setStoreNavigationVisible(false);
+      } else if (notification.direction == ScrollDirection.forward) {
+        _storeNavigationRevealTimer?.cancel();
+        _setStoreNavigationVisible(true);
+      } else {
+        _scheduleStoreNavigationReveal();
+      }
+    } else if (notification is ScrollEndNotification) {
+      _scheduleStoreNavigationReveal();
+    }
+    return false;
+  }
+
+  void _setStoreNavigationVisible(bool visible) {
+    if (!mounted || _storeNavigationVisible == visible) return;
+    setState(() => _storeNavigationVisible = visible);
+  }
+
+  void _scheduleStoreNavigationReveal() {
+    _storeNavigationRevealTimer?.cancel();
+    _storeNavigationRevealTimer = Timer(const Duration(milliseconds: 950), () {
+      if (mounted && _mainTab == MainTab.store) {
+        _setStoreNavigationVisible(true);
+      }
+    });
   }
 
   void _onRankingMenuTap() => _showComingSoon('랭킹 준비 중');
@@ -2038,75 +2109,86 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       backgroundColor: const Color(0xFFE8F8FF),
       body: SafeArea(
         minimum: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-        child: Column(
+        child: Stack(
           children: [
-            SizedBox(
-              height: 54,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const Center(
-                    child: Text(
-                      '상점',
-                      key: ValueKey('store-title'),
-                      style: TextStyle(
-                        color: Color(0xFFFF4F7B),
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        shadows: [
-                          Shadow(color: Colors.white, offset: Offset(0, 2)),
-                        ],
-                      ),
+            Column(
+              children: [
+                SizedBox(height: 38, child: _mainTopOverlay()),
+                const SizedBox(height: 10),
+                const Text(
+                  '상점',
+                  key: ValueKey('store-title'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFFFF4F7B),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    shadows: [
+                      Shadow(color: Colors.white, offset: Offset(0, 2)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _onStoreScrollNotification,
+                    child: ListView(
+                      key: const ValueKey('store-vertical-scroll'),
+                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 116),
+                      children: [
+                        _storeSection(
+                          category: StoreCategory.balloon,
+                          title: '풍선 모양',
+                          icon: Icons.circle_outlined,
+                        ),
+                        _storeSection(
+                          category: StoreCategory.popEffect,
+                          title: '터짐 효과',
+                          icon: Icons.auto_awesome_rounded,
+                        ),
+                        _storeSection(
+                          category: StoreCategory.background,
+                          title: '배경',
+                          icon: Icons.landscape_rounded,
+                        ),
+                        _storeSection(
+                          category: StoreCategory.soundEffect,
+                          title: '효과음',
+                          icon: Icons.volume_up_rounded,
+                        ),
+                        _storeSection(
+                          category: StoreCategory.music,
+                          title: '배경음악',
+                          icon: Icons.music_note_rounded,
+                        ),
+                      ],
                     ),
                   ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: _homeCoinHud(_homeCoinBalance),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _homeSettingsButton(),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: ListView(
-                key: const ValueKey('store-vertical-scroll'),
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 28),
-                children: [
-                  _storeSection(
-                    category: StoreCategory.balloon,
-                    title: '풍선 모양',
-                    icon: Icons.circle_outlined,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 86,
+              child: IgnorePointer(
+                ignoring: !_storeNavigationVisible,
+                child: AnimatedSlide(
+                  key: const ValueKey('store-bottom-nav-slide'),
+                  duration: const Duration(milliseconds: 210),
+                  curve: Curves.easeOutCubic,
+                  offset: _storeNavigationVisible
+                      ? Offset.zero
+                      : const Offset(0, 1.18),
+                  child: AnimatedOpacity(
+                    key: const ValueKey('store-bottom-nav-opacity'),
+                    duration: const Duration(milliseconds: 170),
+                    opacity: _storeNavigationVisible ? 1 : 0,
+                    child: _bottomMenu(selectedTab: MainTab.store),
                   ),
-                  _storeSection(
-                    category: StoreCategory.popEffect,
-                    title: '터짐 효과',
-                    icon: Icons.auto_awesome_rounded,
-                  ),
-                  _storeSection(
-                    category: StoreCategory.background,
-                    title: '배경',
-                    icon: Icons.landscape_rounded,
-                  ),
-                  _storeSection(
-                    category: StoreCategory.soundEffect,
-                    title: '효과음',
-                    icon: Icons.volume_up_rounded,
-                  ),
-                  _storeSection(
-                    category: StoreCategory.music,
-                    title: '배경음악',
-                    icon: Icons.music_note_rounded,
-                  ),
-                ],
+                ),
               ),
-            ),
-            SizedBox(
-              height: 88,
-              child: _bottomMenu(selectedTab: MainTab.store),
             ),
           ],
         ),
