@@ -241,8 +241,8 @@ void main() {
     expect(storeNavigationOpacity().opacity, 0);
     await tester.pump(const Duration(milliseconds: 951));
     await tester.pumpAndSettle();
-    expect(storeNavigationSlide().offset, Offset.zero);
-    expect(storeNavigationOpacity().opacity, 1);
+    expect(storeNavigationSlide().offset.dy, greaterThan(1));
+    expect(storeNavigationOpacity().opacity, 0);
 
     await tester.fling(
       find.byKey(const ValueKey('store-vertical-scroll')),
@@ -285,7 +285,30 @@ void main() {
       );
       expect(find.text(category.$2), findsOneWidget);
     }
-    await tester.pump(const Duration(milliseconds: 951));
+    await tester.fling(
+      find.byKey(const ValueKey('store-vertical-scroll')),
+      const Offset(0, 1000),
+      1800,
+    );
+    await tester.pumpAndSettle();
+    expect(storeNavigationSlide().offset, Offset.zero);
+    expect(storeNavigationOpacity().opacity, 1);
+
+    await tester.drag(
+      find.byKey(const ValueKey('store-vertical-scroll')),
+      const Offset(0, -160),
+    );
+    await tester.pump();
+    expect(storeNavigationOpacity().opacity, 0);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(storeNavigationSlide().offset.dy, greaterThan(1));
+    expect(storeNavigationOpacity().opacity, 0);
+
+    await tester.drag(
+      find.byKey(const ValueKey('store-vertical-scroll')),
+      const Offset(0, 80),
+    );
     await tester.pumpAndSettle();
     expect(storeNavigationSlide().offset, Offset.zero);
     expect(storeNavigationOpacity().opacity, 1);
@@ -317,8 +340,18 @@ void main() {
       final homeSettingsSize = tester.getSize(
         find.byKey(const ValueKey('home-settings-button')),
       );
+      final homeSettingsVisualSize = tester.getSize(
+        find.byKey(const ValueKey('home-settings-visual')),
+      );
       final homeNavigationSize =
           tester.getSize(find.byKey(const ValueKey('home-nav-shop')));
+      final homeNavigationBarSize = tester.getSize(
+        find.byKey(const ValueKey('main-bottom-navigation-bar')),
+      );
+      expect(homeCoinSize.height, 34);
+      expect(homeSettingsSize, const Size(44, 44));
+      expect(homeSettingsVisualSize, const Size(36, 36));
+      expect(homeNavigationBarSize.height, 56);
       await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
       await tester.pumpAndSettle();
 
@@ -331,12 +364,29 @@ void main() {
       );
       final navRect =
           tester.getRect(find.byKey(const ValueKey('home-nav-shop')));
+      final settingsVisualRect = tester.getRect(
+        find.byKey(const ValueKey('home-settings-visual')),
+      );
+      final navigationBarRect = tester.getRect(
+        find.byKey(const ValueKey('main-bottom-navigation-bar')),
+      );
       final cardRect = tester.getRect(
         find.byKey(const ValueKey('store-product-balloon-default')),
       );
       expect(coinRect.size, homeCoinSize);
       expect(settingsRect.size, homeSettingsSize);
-      expect(navRect.size, homeNavigationSize);
+      expect(settingsVisualRect.size, homeSettingsVisualSize);
+      expect(navRect.width, closeTo(homeNavigationSize.width, 0.01));
+      expect(navRect.height, closeTo(homeNavigationSize.height, 0.01));
+      expect(
+        navigationBarRect.width,
+        closeTo(homeNavigationBarSize.width, 0.01),
+      );
+      expect(
+        navigationBarRect.height,
+        closeTo(homeNavigationBarSize.height, 0.01),
+      );
+      expect(navigationBarRect.height, 56);
       expect(titleRect.overlaps(coinRect), false);
       expect(titleRect.overlaps(settingsRect), false);
       expect(titleRect.top, greaterThan(coinRect.bottom));
