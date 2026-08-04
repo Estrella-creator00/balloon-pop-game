@@ -1064,10 +1064,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                       clipBehavior: Clip.none,
                       children: [
                         Positioned(
-                          top: 2,
+                          top: 5,
                           left: 10,
                           right: 10,
-                          height: 44,
+                          height: 38,
                           child: _mainTopOverlay(),
                         ),
                         Positioned(
@@ -1135,10 +1135,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           child: _pageIndicator(),
                         ),
                         Positioned(
-                          top: 773,
+                          top: 758,
                           left: 39,
                           right: 39,
-                          height: 56,
+                          height: 86,
                           child: _bottomMenu(selectedTab: MainTab.home),
                         ),
                         const Positioned(
@@ -1212,7 +1212,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   Widget _homeCoinHud(int coins) => Container(
         key: const ValueKey('home-coin-hud'),
-        height: 34,
+        height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -1220,8 +1220,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             end: Alignment.bottomCenter,
             colors: [Color(0xF23C7CAA), Color(0xF2245D8C)],
           ),
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: const Color(0x88FFFFFF)),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0x88FFFFFF), width: 1.5),
           boxShadow: const [
             BoxShadow(
               color: Color(0x55003366),
@@ -1236,15 +1236,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             const Icon(
               Icons.monetization_on_rounded,
               color: Color(0xFFFFD43B),
-              size: 18,
+              size: 25,
               shadows: [Shadow(color: Color(0x66A35A00), offset: Offset(0, 2))],
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
             Text(
               _formatCoinAmount(coins),
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w900,
                 shadows: [
                   Shadow(color: Color(0x66002D51), offset: Offset(0, 2))
@@ -1255,39 +1255,19 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
-  Widget _homeSettingsButton() => SizedBox(
-        key: const ValueKey('home-settings-button'),
-        width: 44,
-        height: 44,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: _onSettingsPressed,
-            borderRadius: BorderRadius.circular(22),
-            child: Center(
-              child: Container(
-                key: const ValueKey('home-settings-visual'),
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xF22D70A0),
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: const Color(0x66FFFFFF)),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x44003366),
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.settings_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
+  Widget _homeSettingsButton() => Material(
+        color: const Color(0xF22D70A0),
+        elevation: 4,
+        shadowColor: const Color(0x55003366),
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          key: const ValueKey('home-settings-button'),
+          onTap: _onSettingsPressed,
+          borderRadius: BorderRadius.circular(13),
+          child: const SizedBox(
+            width: 40,
+            height: 38,
+            child: Icon(Icons.settings_rounded, color: Colors.white, size: 26),
           ),
         ),
       );
@@ -1925,24 +1905,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
 
   Widget _bottomMenu({required MainTab selectedTab}) => Center(
-        child: Container(
+        child: ConstrainedBox(
           key: const ValueKey('main-bottom-navigation-bar'),
-          width: 316,
-          height: 56,
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: const Color(0xF7FFFDF9),
-            borderRadius: BorderRadius.circular(21),
-            border: Border.all(color: const Color(0xCCFFFFFF)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x3D17485F),
-                blurRadius: 7,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
+          constraints: const BoxConstraints(maxWidth: 520),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _navItem(
                 key: const ValueKey('home-nav-home'),
@@ -1983,41 +1950,69 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     bool selected = false,
     Key? selectionKey,
   }) =>
-      Expanded(
-        child: InkWell(
-          key: key,
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            key: selectionKey,
-            height: 50,
-            decoration: BoxDecoration(
-              color: selected ? const Color(0xFFFFE1EA) : Colors.transparent,
-              borderRadius: BorderRadius.circular(18),
+      InkWell(
+        key: key,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          key: selectionKey,
+          width: 96,
+          height: 80,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: selected
+                  ? const [Color(0xFFFF91B4), Color(0xFFFF4F7B)]
+                  : const [Color(0xFFFFFFFF), Color(0xFFFFF5E8)],
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  color: selected
-                      ? const Color(0xFFFF4F7B)
-                      : const Color(0xFF6E8492),
-                  size: 21,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: selected
-                        ? const Color(0xFFFF416C)
-                        : const Color(0xFF506774),
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w900,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color:
+                  selected ? const Color(0xFFFFD3E1) : const Color(0xFFFFFDF8),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: selected
+                    ? const Color(0x66A92A54)
+                    : const Color(0x4D17485F),
+                blurRadius: 7,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: selected ? Colors.white : const Color(0xFF378BCA),
+                size: 37,
+                shadows: const [
+                  Shadow(
+                    color: Color(0x33002C4E),
+                    offset: Offset(0, 3),
+                    blurRadius: 3,
                   ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? Colors.white : const Color(0xFF244B62),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  shadows: selected
+                      ? const [
+                          Shadow(color: Color(0x55002C4E), offset: Offset(0, 1))
+                        ]
+                      : null,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       );
@@ -2086,7 +2081,34 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
   }
 
+  double _homeChromeScale(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final availableWidth = media.size.width -
+        max(media.padding.left, 4) -
+        max(media.padding.right, 4);
+    final availableHeight = media.size.height -
+        max(media.padding.top, 4) -
+        max(media.padding.bottom, 4);
+    return min(1.0, min(availableWidth / 520, availableHeight / 950));
+  }
+
+  Widget _scaledHomeChrome({
+    required double scale,
+    required double width,
+    required double height,
+    required Widget child,
+  }) =>
+      SizedBox(
+        width: width * scale,
+        height: height * scale,
+        child: FittedBox(
+          fit: BoxFit.fill,
+          child: SizedBox(width: width, height: height, child: child),
+        ),
+      );
+
   Widget _buildShopScreen() {
+    final homeChromeScale = _homeChromeScale(context);
     return Scaffold(
       backgroundColor: const Color(0xFFE8F8FF),
       body: SafeArea(
@@ -2095,7 +2117,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           children: [
             Column(
               children: [
-                SizedBox(height: 44, child: _mainTopOverlay()),
+                SizedBox(
+                  height: 44,
+                  child: Center(
+                    child: _scaledHomeChrome(
+                      scale: homeChromeScale,
+                      width: 500,
+                      height: 38,
+                      child: _mainTopOverlay(),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 6),
                 const Text(
                   '상점',
@@ -2116,7 +2148,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     onNotification: _onStoreScrollNotification,
                     child: ListView(
                       key: const ValueKey('store-vertical-scroll'),
-                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 82),
+                      padding: EdgeInsets.fromLTRB(
+                        4,
+                        4,
+                        4,
+                        86 * homeChromeScale + 24,
+                      ),
                       children: [
                         _storeSection(
                           category: StoreCategory.balloon,
@@ -2150,10 +2187,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               ],
             ),
             Positioned(
-              left: 16,
-              right: 16,
+              left: 0,
+              right: 0,
               bottom: 0,
-              height: 56,
+              height: 86 * homeChromeScale,
               child: IgnorePointer(
                 ignoring: !_storeNavigationVisible,
                 child: AnimatedSlide(
@@ -2167,7 +2204,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     key: const ValueKey('store-bottom-nav-opacity'),
                     duration: const Duration(milliseconds: 170),
                     opacity: _storeNavigationVisible ? 1 : 0,
-                    child: _bottomMenu(selectedTab: MainTab.store),
+                    child: Center(
+                      child: _scaledHomeChrome(
+                        scale: homeChromeScale,
+                        width: 442,
+                        height: 86,
+                        child: _bottomMenu(selectedTab: MainTab.store),
+                      ),
+                    ),
                   ),
                 ),
               ),

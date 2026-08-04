@@ -340,18 +340,25 @@ void main() {
       final homeSettingsSize = tester.getSize(
         find.byKey(const ValueKey('home-settings-button')),
       );
-      final homeSettingsVisualSize = tester.getSize(
-        find.byKey(const ValueKey('home-settings-visual')),
-      );
       final homeNavigationSize =
           tester.getSize(find.byKey(const ValueKey('home-nav-shop')));
       final homeNavigationBarSize = tester.getSize(
         find.byKey(const ValueKey('main-bottom-navigation-bar')),
       );
-      expect(homeCoinSize.height, 34);
-      expect(homeSettingsSize, const Size(44, 44));
-      expect(homeSettingsVisualSize, const Size(36, 36));
-      expect(homeNavigationBarSize.height, 56);
+      final homeCoinRect =
+          tester.getRect(find.byKey(const ValueKey('home-coin-hud')));
+      final homeSettingsRect = tester.getRect(
+        find.byKey(const ValueKey('home-settings-button')),
+      );
+      final homeNavigationRect =
+          tester.getRect(find.byKey(const ValueKey('home-nav-shop')));
+      final homeNavigationBarRect = tester.getRect(
+        find.byKey(const ValueKey('main-bottom-navigation-bar')),
+      );
+      expect(homeCoinSize.height, 38);
+      expect(homeSettingsSize, const Size(40, 38));
+      expect(homeNavigationSize, const Size(96, 80));
+      expect(homeNavigationBarSize.height, 80);
       await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
       await tester.pumpAndSettle();
 
@@ -364,29 +371,26 @@ void main() {
       );
       final navRect =
           tester.getRect(find.byKey(const ValueKey('home-nav-shop')));
-      final settingsVisualRect = tester.getRect(
-        find.byKey(const ValueKey('home-settings-visual')),
-      );
       final navigationBarRect = tester.getRect(
         find.byKey(const ValueKey('main-bottom-navigation-bar')),
       );
       final cardRect = tester.getRect(
         find.byKey(const ValueKey('store-product-balloon-default')),
       );
-      expect(coinRect.size, homeCoinSize);
-      expect(settingsRect.size, homeSettingsSize);
-      expect(settingsVisualRect.size, homeSettingsVisualSize);
-      expect(navRect.width, closeTo(homeNavigationSize.width, 0.01));
-      expect(navRect.height, closeTo(homeNavigationSize.height, 0.01));
+      expect(coinRect.width, closeTo(homeCoinRect.width, 0.01));
+      expect(coinRect.height, closeTo(homeCoinRect.height, 0.01));
+      expect(settingsRect.width, closeTo(homeSettingsRect.width, 0.01));
+      expect(settingsRect.height, closeTo(homeSettingsRect.height, 0.01));
+      expect(navRect.width, closeTo(homeNavigationRect.width, 0.01));
+      expect(navRect.height, closeTo(homeNavigationRect.height, 0.01));
       expect(
         navigationBarRect.width,
-        closeTo(homeNavigationBarSize.width, 0.01),
+        closeTo(homeNavigationBarRect.width, 0.01),
       );
       expect(
         navigationBarRect.height,
-        closeTo(homeNavigationBarSize.height, 0.01),
+        closeTo(homeNavigationBarRect.height, 0.01),
       );
-      expect(navigationBarRect.height, 56);
       expect(titleRect.overlaps(coinRect), false);
       expect(titleRect.overlaps(settingsRect), false);
       expect(titleRect.top, greaterThan(coinRect.bottom));
