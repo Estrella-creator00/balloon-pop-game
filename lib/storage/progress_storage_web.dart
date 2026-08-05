@@ -13,6 +13,7 @@ abstract final class ProgressStorage {
   static const _key = 'balloon_pop_game_second_section_unlocked';
   static const _bestKey = 'poppop_best_score';
   static const _lastKey = 'poppop_last_score';
+  static const _coinKey = 'poppop_coin_balance';
 
   static bool isSecondSectionUnlocked() {
     try {
@@ -33,6 +34,19 @@ abstract final class ProgressStorage {
   static int bestScore() => _readInt(_bestKey);
 
   static int lastScore() => _readInt(_lastKey);
+
+  static int coinBalance() => _readInt(_coinKey);
+
+  static int addCoins(int amount) {
+    if (amount <= 0) return coinBalance();
+    try {
+      final updated = coinBalance() + amount;
+      _localStorage.setItem(_coinKey.toJS, '$updated'.toJS);
+      return updated;
+    } catch (_) {
+      return coinBalance();
+    }
+  }
 
   static bool saveScore(int score) {
     try {
@@ -58,6 +72,7 @@ abstract final class ProgressStorage {
       _localStorage.removeItem(_key.toJS);
       _localStorage.removeItem(_bestKey.toJS);
       _localStorage.removeItem(_lastKey.toJS);
+      _localStorage.removeItem(_coinKey.toJS);
     } catch (_) {
       // The menu still resets even if storage is unavailable.
     }

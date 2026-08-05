@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import 'audio/pop_sound.dart';
+import 'services/coin_service.dart';
 import 'storage/progress_storage.dart';
 
 void main() {
@@ -298,7 +299,6 @@ class BalloonGamePage extends StatefulWidget {
 
 class _BalloonGamePageState extends State<BalloonGamePage>
     with WidgetsBindingObserver {
-  static const _homeCoinBalance = 23450;
   static const _storeProducts = [
     StoreProduct(
         id: 'balloon-default',
@@ -456,6 +456,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   final List<BurstRing> _rings = [];
   int _effectsRevision = 0;
   final SinglePeriodicGameLoop _gameLoop = SinglePeriodicGameLoop();
+  final CoinRewardSession _coinRewardSession = CoinRewardSession();
   Timer? _stageTimer;
   Size _playArea = Size.zero;
   int _nextId = 0;
@@ -468,6 +469,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   bool _secondSectionUnlocked = false;
   int _bestScore = 0;
   int _lastScore = 0;
+  int _coinBalance = 0;
+  int _earnedCoins = 0;
   bool _isNewBest = false;
   bool _resultSaved = false;
   MainTab _mainTab = MainTab.home;
@@ -488,6 +491,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _secondSectionUnlocked = ProgressStorage.isSecondSectionUnlocked();
     _bestScore = ProgressStorage.bestScore();
     _lastScore = ProgressStorage.lastScore();
+    _coinBalance = CoinService.balance;
     _stagePageController = PageController();
     _headerData = ValueNotifier(_createHeaderData());
     _gameHeader = GameHeader(
@@ -525,6 +529,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopwatch.reset();
     _nextId = 0;
     _score = 0;
+    _earnedCoins = 0;
+    _coinRewardSession.reset();
     _resultSaved = false;
     _isNewBest = false;
     _sectionStartStage = startStage;
@@ -581,6 +587,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _recordResult() {
     if (_resultSaved) return;
     _resultSaved = true;
+    _earnedCoins = _coinRewardSession.grantForScore(_score);
+    _coinBalance = CoinService.balance;
     _lastScore = _score;
     _isNewBest = ProgressStorage.saveScore(_score);
     _bestScore = ProgressStorage.bestScore();
@@ -1040,6 +1048,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondSectionUnlocked = false;
       _bestScore = 0;
       _lastScore = 0;
+      _coinBalance = 0;
+      _earnedCoins = 0;
       _isNewBest = false;
       _score = 0;
       _stage = 1;
@@ -1247,7 +1257,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: _homeCoinHud(_homeCoinBalance),
+            child: _homeCoinHud(_coinBalance),
           ),
           Align(
             alignment: Alignment.centerRight,
@@ -2876,7 +2886,28 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                       color: Color(0xFF7E57C2),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 6),
+                  Row(
+                    key: const ValueKey('result-earned-coins'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.monetization_on_rounded,
+                        color: Color(0xFFFFB300),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '+$_earnedCoins COINS',
+                        style: const TextStyle(
+                          color: Color(0xFFFFA000),
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

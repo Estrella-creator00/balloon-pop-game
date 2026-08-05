@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:balloon_pop_game/main.dart';
+import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -137,6 +138,52 @@ void main() {
     expect(ProgressStorage.lastScore(), 40);
   });
 
+  test('coin rewards floor score and persist cumulatively', () {
+    expect(CoinService.balance, 0);
+    expect(CoinService.rewardForScore(9), 0);
+    expect(CoinService.rewardForScore(10), 1);
+    expect(CoinService.rewardForScore(27), 2);
+    expect(CoinService.rewardForScore(99), 9);
+    expect(CoinService.rewardForScore(302), 30);
+
+    expect(CoinService.grantScoreReward(302), 30);
+    expect(CoinService.balance, 30);
+    expect(CoinService.grantScoreReward(27), 2);
+    expect(CoinService.balance, 32);
+    expect(ProgressStorage.coinBalance(), 32);
+  });
+
+  test('a game result coin session cannot grant twice', () {
+    final session = CoinRewardSession();
+
+    expect(session.grantForScore(302), 30);
+    expect(session.hasGranted, true);
+    expect(session.grantForScore(999), 30);
+    expect(CoinService.balance, 30);
+
+    session.reset();
+    expect(session.grantForScore(27), 2);
+    expect(CoinService.balance, 32);
+  });
+
+  testWidgets('home and store share the persisted coin balance',
+      (tester) async {
+    ProgressStorage.addCoins(1234);
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    expect(find.text('1,234'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    expect(find.text('1,234'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    expect(find.text('1,234'), findsOneWidget);
+  });
+
   testWidgets('home uses shared top controls and four-item navigation',
       (tester) async {
     ProgressStorage.saveScore(128);
@@ -151,7 +198,13 @@ void main() {
     expect(find.text('LAST SCORE'), findsOneWidget);
     expect(find.text('v0.6 UI REFRESH'), findsOneWidget);
     expect(find.byKey(const ValueKey('home-coin-hud')), findsOneWidget);
-    expect(find.text('23,450'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-coin-hud')),
+        matching: find.text('0'),
+      ),
+      findsOneWidget,
+    );
     expect(find.byIcon(Icons.diamond_rounded), findsNothing);
     expect(find.byIcon(Icons.volume_up_rounded), findsNothing);
     expect(find.byIcon(Icons.add), findsNothing);
@@ -784,6 +837,11 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('게임 완료!'), findsOneWidget);
     expect(find.text('$expectedFinalScore점'), findsOneWidget);
+    final firstReward = expectedFinalScore ~/ 10;
+    expect(find.text('+$firstReward COINS'), findsOneWidget);
+    expect(ProgressStorage.coinBalance(), firstReward);
+    await tester.pump(const Duration(seconds: 2));
+    expect(ProgressStorage.coinBalance(), firstReward);
     final effects = tester
         .widget<CustomPaint>(
           find.descendant(
