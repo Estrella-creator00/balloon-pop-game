@@ -126,7 +126,7 @@ void main() {
     expect(ProgressStorage.lastScore(), 40);
   });
 
-  testWidgets('home uses compact top controls and three-item navigation',
+  testWidgets('home uses shared top controls and four-item navigation',
       (tester) async {
     ProgressStorage.saveScore(128);
     ProgressStorage.saveScore(94);
@@ -148,6 +148,7 @@ void main() {
     expect(find.text('진행 초기화'), findsNothing);
     expect(find.byKey(const ValueKey('home-nav-home')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-nav-shop')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-nav-event')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-nav-ranking')), findsOneWidget);
     expect(find.text('홈'), findsOneWidget);
     expect(find.text('상점'), findsOneWidget);
@@ -162,7 +163,7 @@ void main() {
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
   });
 
-  testWidgets('store tab swaps content and reveals navigation on demand',
+  testWidgets('store root shows a fixed two-column category menu',
       (tester) async {
     tester.view.physicalSize = const Size(390, 667);
     tester.view.devicePixelRatio = 1;
@@ -178,11 +179,58 @@ void main() {
     expect(find.text('샵'), findsNothing);
     expect(find.byKey(const ValueKey('home-nav-home')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-nav-shop')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-nav-event')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-nav-ranking')), findsOneWidget);
     expect(
         find.byKey(const ValueKey('home-nav-selected-store')), findsOneWidget);
     expect(find.byType(HomeFloatingBalloons), findsNothing);
     expect(tester.binding.transientCallbackCount, 0);
+    expect(find.byKey(const ValueKey('store-category-grid')), findsOneWidget);
+    expect(find.byType(StoreCategoryMenuCard), findsNWidgets(6));
+    expect(find.byType(StoreProductCard), findsNothing);
+    expect(find.byKey(const ValueKey('store-vertical-scroll')), findsNothing);
+    expect(find.byKey(const ValueKey('store-detail-scroll')), findsNothing);
+    expect(find.byKey(const ValueKey('store-bottom-nav-slide')), findsNothing);
+
+    const categoryNames = [
+      'balloon',
+      'popEffect',
+      'background',
+      'soundEffect',
+      'music',
+      'limited',
+    ];
+    final categoryRects = categoryNames
+        .map(
+          (name) => tester.getRect(
+            find.byKey(ValueKey('store-category-card-$name')),
+          ),
+        )
+        .toList();
+    for (final name in categoryNames) {
+      expect(
+        find.descendant(
+          of: find.byKey(ValueKey('store-category-card-$name')),
+          matching: find.byType(Icon),
+        ),
+        findsNothing,
+      );
+    }
+    expect(categoryRects[0].top, categoryRects[1].top);
+    expect(categoryRects[2].top, categoryRects[3].top);
+    expect(categoryRects[4].top, categoryRects[5].top);
+    expect(categoryRects[0].left, categoryRects[2].left);
+    expect(categoryRects[1].left, categoryRects[3].left);
+    expect(categoryRects[2].top, greaterThan(categoryRects[0].bottom));
+    expect(categoryRects[4].top, greaterThan(categoryRects[2].bottom));
+
+    await tester.tap(
+      find.byKey(const ValueKey('store-category-card-balloon')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('store-detail-title')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-detail-scroll')), findsOneWidget);
+    expect(find.byType(StoreProductCard), findsNWidgets(3));
     expect(
       tester
           .widget<FilledButton>(
@@ -208,51 +256,6 @@ void main() {
       isNotNull,
     );
 
-    AnimatedSlide storeNavigationSlide() => tester.widget<AnimatedSlide>(
-          find.byKey(const ValueKey('store-bottom-nav-slide')),
-        );
-    AnimatedOpacity storeNavigationOpacity() => tester.widget<AnimatedOpacity>(
-          find.byKey(const ValueKey('store-bottom-nav-opacity')),
-        );
-    expect(storeNavigationSlide().offset, Offset.zero);
-    expect(storeNavigationOpacity().opacity, 1);
-
-    await tester.drag(
-      find.byKey(const ValueKey('store-vertical-scroll')),
-      const Offset(0, -220),
-    );
-    await tester.pump();
-    expect(storeNavigationSlide().offset.dy, greaterThan(1));
-    expect(storeNavigationOpacity().opacity, 0);
-
-    await tester.drag(
-      find.byKey(const ValueKey('store-vertical-scroll')),
-      const Offset(0, 100),
-    );
-    await tester.pump();
-    expect(storeNavigationSlide().offset, Offset.zero);
-    expect(storeNavigationOpacity().opacity, 1);
-
-    await tester.drag(
-      find.byKey(const ValueKey('store-vertical-scroll')),
-      const Offset(0, -120),
-    );
-    await tester.pump();
-    expect(storeNavigationOpacity().opacity, 0);
-    await tester.pump(const Duration(milliseconds: 951));
-    await tester.pumpAndSettle();
-    expect(storeNavigationSlide().offset.dy, greaterThan(1));
-    expect(storeNavigationOpacity().opacity, 0);
-
-    await tester.fling(
-      find.byKey(const ValueKey('store-vertical-scroll')),
-      const Offset(0, 800),
-      1800,
-    );
-    await tester.pumpAndSettle();
-    expect(storeNavigationSlide().offset, Offset.zero);
-    expect(storeNavigationOpacity().opacity, 1);
-
     final firstCard =
         find.byKey(const ValueKey('store-product-balloon-default'));
     final firstCardLeft = tester.getTopLeft(firstCard).dx;
@@ -263,59 +266,25 @@ void main() {
     await tester.pump();
     expect(tester.getTopLeft(firstCard).dx, lessThan(firstCardLeft));
 
-    for (final category in const [
-      ('balloon', '풍선 모양'),
-      ('popEffect', '터짐 효과'),
-      ('background', '배경'),
-      ('soundEffect', '효과음'),
-      ('music', '배경음악'),
-    ]) {
-      final title = find.byKey(ValueKey('store-category-${category.$1}'));
-      await tester.scrollUntilVisible(
-        title,
-        230,
-        scrollable: find.descendant(
-          of: find.byKey(const ValueKey('store-vertical-scroll')),
-          matching: find.byWidgetPredicate(
-            (widget) =>
-                widget is Scrollable &&
-                widget.axisDirection == AxisDirection.down,
-          ),
-        ),
-      );
-      expect(find.text(category.$2), findsOneWidget);
-    }
-    await tester.fling(
-      find.byKey(const ValueKey('store-vertical-scroll')),
-      const Offset(0, 1000),
-      1800,
-    );
+    await tester.tap(find.byKey(const ValueKey('store-detail-back')));
     await tester.pumpAndSettle();
-    expect(storeNavigationSlide().offset, Offset.zero);
-    expect(storeNavigationOpacity().opacity, 1);
+    expect(find.byType(StoreCategoryMenuCard), findsNWidgets(6));
+    expect(find.byType(StoreProductCard), findsNothing);
 
-    await tester.drag(
-      find.byKey(const ValueKey('store-vertical-scroll')),
-      const Offset(0, -160),
-    );
-    await tester.pump();
-    expect(storeNavigationOpacity().opacity, 0);
-    await tester.pump(const Duration(seconds: 2));
+    await tester.tap(find.byKey(const ValueKey('home-nav-event')));
     await tester.pumpAndSettle();
-    expect(storeNavigationSlide().offset.dy, greaterThan(1));
-    expect(storeNavigationOpacity().opacity, 0);
-
-    await tester.drag(
-      find.byKey(const ValueKey('store-vertical-scroll')),
-      const Offset(0, 80),
-    );
-    await tester.pumpAndSettle();
-    expect(storeNavigationSlide().offset, Offset.zero);
-    expect(storeNavigationOpacity().opacity, 1);
+    expect(find.byKey(const ValueKey('event-coming-soon')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('home-nav-selected-event')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
-    await tester.pump();
-    expect(find.text('랭킹 준비 중'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('ranking-coming-soon')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-nav-selected-ranking')),
+      findsOneWidget,
+    );
+
     await tester.tap(find.byKey(const ValueKey('home-nav-home')));
     await tester.pump();
     expect(find.text('BEST SCORE'), findsOneWidget);
@@ -330,7 +299,11 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    for (final size in const [Size(390, 844), Size(1280, 900)]) {
+    for (final size in const [
+      Size(390, 667),
+      Size(390, 844),
+      Size(1280, 900),
+    ]) {
       tester.view.physicalSize = size;
       await tester.pumpWidget(const BalloonPopApp());
       await tester.pump();
@@ -374,8 +347,11 @@ void main() {
       final navigationBarRect = tester.getRect(
         find.byKey(const ValueKey('main-bottom-navigation-bar')),
       );
-      final cardRect = tester.getRect(
-        find.byKey(const ValueKey('store-product-balloon-default')),
+      final firstCategoryRect = tester.getRect(
+        find.byKey(const ValueKey('store-category-card-balloon')),
+      );
+      final lastCategoryRect = tester.getRect(
+        find.byKey(const ValueKey('store-category-card-limited')),
       );
       expect(coinRect.width, closeTo(homeCoinRect.width, 0.01));
       expect(coinRect.height, closeTo(homeCoinRect.height, 0.01));
@@ -396,7 +372,10 @@ void main() {
       expect(titleRect.top, greaterThan(coinRect.bottom));
       expect(titleRect.top, greaterThan(settingsRect.bottom));
       expect(navRect.bottom, lessThanOrEqualTo(size.height));
-      expect(cardRect.width, lessThanOrEqualTo(160));
+      expect(firstCategoryRect.width, lessThanOrEqualTo(248));
+      expect(lastCategoryRect.bottom, lessThan(navigationBarRect.top));
+      expect(find.byType(StoreCategoryMenuCard), findsNWidgets(6));
+      expect(find.byType(StoreProductCard), findsNothing);
       expect(tester.binding.transientCallbackCount, 0);
 
       await tester.pumpWidget(const SizedBox.shrink());

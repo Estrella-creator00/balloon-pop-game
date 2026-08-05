@@ -41,9 +41,16 @@ enum GamePhase {
   gameOver,
 }
 
-enum MainTab { home, store }
+enum MainTab { home, store, event, ranking }
 
-enum StoreCategory { balloon, popEffect, background, soundEffect, music }
+enum StoreCategory {
+  balloon,
+  popEffect,
+  background,
+  soundEffect,
+  music,
+  limited,
+}
 
 enum StorePreviewType { balloon, effect, background, sound, music }
 
@@ -431,6 +438,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   bool _resultSaved = false;
   MainTab _mainTab = MainTab.home;
   bool _storeNavigationVisible = true;
+  StoreCategory? _selectedStoreCategory;
   late final PageController _stagePageController;
   late final ValueNotifier<GameHeaderData> _headerData;
   late final Widget _gameHeader;
@@ -524,6 +532,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondsLeft = 10;
       _phase = GamePhase.menu;
       _mainTab = MainTab.home;
+      _selectedStoreCategory = null;
       _storeNavigationVisible = true;
       _balloons.clear();
       _pieces.clear();
@@ -1932,9 +1941,23 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 onTap: _onShopMenuTap,
               ),
               _navItem(
+                key: const ValueKey('home-nav-event'),
+                icon: Icons.celebration_rounded,
+                label: '이벤트',
+                selected: selectedTab == MainTab.event,
+                selectionKey: selectedTab == MainTab.event
+                    ? const ValueKey('home-nav-selected-event')
+                    : null,
+                onTap: _onEventMenuTap,
+              ),
+              _navItem(
                 key: const ValueKey('home-nav-ranking'),
                 icon: Icons.emoji_events_rounded,
                 label: '랭킹',
+                selected: selectedTab == MainTab.ranking,
+                selectionKey: selectedTab == MainTab.ranking
+                    ? const ValueKey('home-nav-selected-ranking')
+                    : null,
                 onTap: _onRankingMenuTap,
               ),
             ],
@@ -2021,15 +2044,31 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _onHomeMenuTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    if (_mainTab != MainTab.home) setState(() => _mainTab = MainTab.home);
+    if (_mainTab != MainTab.home) {
+      setState(() {
+        _mainTab = MainTab.home;
+        _selectedStoreCategory = null;
+      });
+    }
   }
 
   void _onShopMenuTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    if (_mainTab != MainTab.store) {
+    if (_mainTab != MainTab.store || _selectedStoreCategory != null) {
       setState(() {
         _mainTab = MainTab.store;
+        _selectedStoreCategory = null;
         _storeNavigationVisible = true;
+      });
+    }
+  }
+
+  void _onEventMenuTap() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (_mainTab != MainTab.event) {
+      setState(() {
+        _mainTab = MainTab.event;
+        _selectedStoreCategory = null;
       });
     }
   }
@@ -2063,7 +2102,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     setState(() => _storeNavigationVisible = visible);
   }
 
-  void _onRankingMenuTap() => _showComingSoon('랭킹 준비 중');
+  void _onRankingMenuTap() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (_mainTab != MainTab.ranking) {
+      setState(() {
+        _mainTab = MainTab.ranking;
+        _selectedStoreCategory = null;
+      });
+    }
+  }
 
   void _showComingSoon(String message) {
     final messenger = ScaffoldMessenger.of(context);
@@ -2108,6 +2155,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
 
   Widget _buildShopScreen() {
+    final selectedCategory = _selectedStoreCategory;
+    if (selectedCategory != null) {
+      return _buildStoreCategoryDetail(selectedCategory);
+    }
     final homeChromeScale = _homeChromeScale(context);
     return Scaffold(
       backgroundColor: const Color(0xFFE8F8FF),
@@ -2144,42 +2195,183 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 ),
                 const SizedBox(height: 8),
                 Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: 520,
+                        maxHeight: 360,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: _buildStoreCategoryGrid(),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 86 * homeChromeScale + 8),
+              ],
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 86 * homeChromeScale,
+              child: Center(
+                child: _scaledHomeChrome(
+                  scale: homeChromeScale,
+                  width: 442,
+                  height: 86,
+                  child: _bottomMenu(selectedTab: MainTab.store),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoreCategoryGrid() {
+    const categories = [
+      (StoreCategory.balloon, '풍선 모양'),
+      (StoreCategory.popEffect, '터짐 효과'),
+      (StoreCategory.background, '배경'),
+      (StoreCategory.soundEffect, '효과음'),
+      (StoreCategory.music, '배경음악'),
+      (StoreCategory.limited, '한정 상품'),
+    ];
+    return Column(
+      key: const ValueKey('store-category-grid'),
+      children: [
+        for (var row = 0; row < 3; row++) ...[
+          Expanded(
+            child: Row(
+              children: [
+                for (var column = 0; column < 2; column++) ...[
+                  if (column > 0) const SizedBox(width: 12),
+                  Expanded(
+                    child: StoreCategoryMenuCard(
+                      category: categories[row * 2 + column].$1,
+                      title: categories[row * 2 + column].$2,
+                      onTap: _openStoreCategory,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (row < 2) const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
+  void _openStoreCategory(StoreCategory category) {
+    setState(() {
+      _selectedStoreCategory = category;
+      _storeNavigationVisible = true;
+    });
+  }
+
+  String _storeCategoryTitle(StoreCategory category) => switch (category) {
+        StoreCategory.balloon => '풍선 모양',
+        StoreCategory.popEffect => '터짐 효과',
+        StoreCategory.background => '배경',
+        StoreCategory.soundEffect => '효과음',
+        StoreCategory.music => '배경음악',
+        StoreCategory.limited => '한정 상품',
+      };
+
+  IconData _storeCategoryIcon(StoreCategory category) => switch (category) {
+        StoreCategory.balloon => Icons.circle_outlined,
+        StoreCategory.popEffect => Icons.auto_awesome_rounded,
+        StoreCategory.background => Icons.landscape_rounded,
+        StoreCategory.soundEffect => Icons.volume_up_rounded,
+        StoreCategory.music => Icons.music_note_rounded,
+        StoreCategory.limited => Icons.inventory_2_outlined,
+      };
+
+  Widget _buildStoreCategoryDetail(StoreCategory category) {
+    final homeChromeScale = _homeChromeScale(context);
+    final title = _storeCategoryTitle(category);
+    return Scaffold(
+      backgroundColor: const Color(0xFFE8F8FF),
+      body: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                SizedBox(
+                  height: 44,
+                  child: Center(
+                    child: _scaledHomeChrome(
+                      scale: homeChromeScale,
+                      width: 500,
+                      height: 38,
+                      child: _mainTopOverlay(),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 44,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        key: const ValueKey('store-detail-back'),
+                        onPressed: () => setState(() {
+                          _selectedStoreCategory = null;
+                          _storeNavigationVisible = true;
+                        }),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                      ),
+                      Expanded(
+                        child: Text(
+                          title,
+                          key: const ValueKey('store-detail-title'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFFF4F7B),
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 48),
+                    ],
+                  ),
+                ),
+                Expanded(
                   child: NotificationListener<ScrollNotification>(
                     onNotification: _onStoreScrollNotification,
                     child: ListView(
-                      key: const ValueKey('store-vertical-scroll'),
+                      key: const ValueKey('store-detail-scroll'),
                       padding: EdgeInsets.fromLTRB(
                         4,
-                        4,
+                        8,
                         4,
                         86 * homeChromeScale + 24,
                       ),
                       children: [
-                        _storeSection(
-                          category: StoreCategory.balloon,
-                          title: '풍선 모양',
-                          icon: Icons.circle_outlined,
-                        ),
-                        _storeSection(
-                          category: StoreCategory.popEffect,
-                          title: '터짐 효과',
-                          icon: Icons.auto_awesome_rounded,
-                        ),
-                        _storeSection(
-                          category: StoreCategory.background,
-                          title: '배경',
-                          icon: Icons.landscape_rounded,
-                        ),
-                        _storeSection(
-                          category: StoreCategory.soundEffect,
-                          title: '효과음',
-                          icon: Icons.volume_up_rounded,
-                        ),
-                        _storeSection(
-                          category: StoreCategory.music,
-                          title: '배경음악',
-                          icon: Icons.music_note_rounded,
-                        ),
+                        if (category == StoreCategory.limited)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 80),
+                            child: Text(
+                              '한정 상품 준비 중',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Color(0xFF47677A),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          )
+                        else
+                          _storeSection(
+                            category: category,
+                            title: title,
+                            icon: _storeCategoryIcon(category),
+                          ),
                       ],
                     ),
                   ),
@@ -2246,12 +2438,81 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _showComingSoon(message);
   }
 
+  Widget _buildMainPlaceholder({
+    required MainTab tab,
+    required String message,
+  }) {
+    final homeChromeScale = _homeChromeScale(context);
+    return Scaffold(
+      backgroundColor: const Color(0xFFE8F8FF),
+      body: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                SizedBox(
+                  height: 44,
+                  child: Center(
+                    child: _scaledHomeChrome(
+                      scale: homeChromeScale,
+                      width: 500,
+                      height: 38,
+                      child: _mainTopOverlay(),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      message,
+                      key: ValueKey('${tab.name}-coming-soon'),
+                      style: const TextStyle(
+                        color: Color(0xFF47677A),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 86 * homeChromeScale + 8),
+              ],
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 86 * homeChromeScale,
+              child: Center(
+                child: _scaledHomeChrome(
+                  scale: homeChromeScale,
+                  width: 442,
+                  height: 86,
+                  child: _bottomMenu(selectedTab: tab),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_phase == GamePhase.menu) {
-      return _mainTab == MainTab.store
-          ? _buildShopScreen()
-          : _buildStartScreen();
+      return switch (_mainTab) {
+        MainTab.home => _buildStartScreen(),
+        MainTab.store => _buildShopScreen(),
+        MainTab.event => _buildMainPlaceholder(
+            tab: MainTab.event,
+            message: '이벤트 준비 중',
+          ),
+        MainTab.ranking => _buildMainPlaceholder(
+            tab: MainTab.ranking,
+            message: '랭킹 준비 중',
+          ),
+      };
     }
     return Scaffold(
       body: Container(
@@ -2630,6 +2891,48 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       ),
     );
   }
+}
+
+class StoreCategoryMenuCard extends StatelessWidget {
+  const StoreCategoryMenuCard({
+    super.key,
+    required this.category,
+    required this.title,
+    required this.onTap,
+  });
+
+  final StoreCategory category;
+  final String title;
+  final ValueChanged<StoreCategory> onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        key: ValueKey('store-category-card-${category.name}'),
+        color: Colors.white,
+        elevation: 2,
+        shadowColor: const Color(0x3317485F),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: () => onTap(category),
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE4EDF2)),
+            ),
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF294F65),
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class StoreCategorySection extends StatelessWidget {
