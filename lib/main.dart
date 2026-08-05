@@ -79,7 +79,16 @@ enum StoreCategory {
   limited,
 }
 
-enum StorePreviewType { balloon, effect, background, sound, music }
+enum StorePreviewType {
+  balloon,
+  heartBalloon,
+  effect,
+  background,
+  sound,
+  music
+}
+
+enum StoreRarity { common, rare, epic, legendary }
 
 enum StoreProductFilter { all, owned, unowned, limited }
 
@@ -96,6 +105,7 @@ class StoreProduct {
     this.shortName,
     this.locked = false,
     this.limited = false,
+    this.rarity = StoreRarity.common,
   });
 
   final String id;
@@ -109,6 +119,7 @@ class StoreProduct {
   final String? shortName;
   final bool locked;
   final bool limited;
+  final StoreRarity rarity;
 
   String get displayName => shortName ?? name;
 
@@ -124,6 +135,7 @@ class StoreProduct {
         shortName: shortName,
         locked: locked,
         limited: limited,
+        rarity: rarity,
       );
 }
 
@@ -213,6 +225,8 @@ class StageConfig {
   }
 }
 
+enum EffectPieceShape { shard, heart }
+
 class PopPiece {
   PopPiece({
     required this.position,
@@ -223,6 +237,7 @@ class PopPiece {
     required this.spin,
     required this.life,
     required this.maxLife,
+    this.shape = EffectPieceShape.shard,
   });
 
   Offset position;
@@ -233,6 +248,7 @@ class PopPiece {
   final double spin;
   double life;
   final double maxLife;
+  final EffectPieceShape shape;
 }
 
 class BurstRing {
@@ -326,6 +342,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         owned: true,
         equipped: true,
         previewType: StorePreviewType.balloon,
+        previewData: Color(0xFFFF5C8A)),
+    StoreProduct(
+        id: 'balloon-heart',
+        category: StoreCategory.balloon,
+        name: '하트',
+        price: 100,
+        owned: false,
+        equipped: false,
+        previewType: StorePreviewType.heartBalloon,
         previewData: Color(0xFFFF5C8A)),
     StoreProduct(
         id: 'balloon-a',
@@ -465,6 +490,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     Color(0xFF54A8FF),
     Color(0xFFFF7FDB),
   ];
+  static const _heartColors = [
+    Color(0xFFFF5C8A),
+    Color(0xFFF4435D),
+    Color(0xFF9B6EF3),
+    Color(0xFF56D6B1),
+    Color(0xFF55B9F3),
+    Color(0xFFFFC94D),
+  ];
 
   final Random _random = Random();
   final Stopwatch _stopwatch = Stopwatch();
@@ -478,6 +511,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Timer? _stageTimer;
   Size _playArea = Size.zero;
   int _nextId = 0;
+  int _lastHeartColorIndex = -1;
   int _score = 0;
   int _stage = 1;
   int _secondsLeft = 15;
@@ -574,6 +608,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stageTimer?.cancel();
     _stopwatch.reset();
     _nextId = 0;
+    _lastHeartColorIndex = -1;
     _score = 0;
     _earnedCoins = 0;
     _coinRewardSession.reset();
@@ -719,6 +754,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _spawnBalloons(int count) {
+    final skinId =
+        _equippedProductIds[StoreCategory.balloon] ?? 'balloon-default';
     for (var i = 0; i < count; i++) {
       final angle = _random.nextDouble() * pi * 2;
       final speed = 48 + (_stage * 4.2) + _random.nextDouble() * 32;
@@ -728,19 +765,27 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           id: _nextId++,
           position: _randomPosition(size),
           velocity: Offset(cos(angle) * speed, sin(angle) * speed),
-          color: _colors[_random.nextInt(_colors.length)],
+          color: skinId == 'balloon-heart'
+              ? _nextHeartColor()
+              : _colors[_random.nextInt(_colors.length)],
           size: size,
           floatPhase: _random.nextDouble() * pi * 2,
           floatPower: 10 + _random.nextDouble() * 10,
           hp: _stageConfig.balloonHp,
           maxHp: _stageConfig.balloonHp,
-          // Selection is connected here; temporary skins still use the
-          // existing painter until final art assets are available.
-          skinId:
-              _equippedProductIds[StoreCategory.balloon] ?? 'balloon-default',
+          skinId: skinId,
         ),
       );
     }
+  }
+
+  Color _nextHeartColor() {
+    var next = _lastHeartColorIndex < 0
+        ? _random.nextInt(_heartColors.length)
+        : _random.nextInt(_heartColors.length - 1);
+    if (_lastHeartColorIndex >= 0 && next >= _lastHeartColorIndex) next++;
+    _lastHeartColorIndex = next;
+    return _heartColors[next];
   }
 
   void _spawnBoss() {
@@ -903,10 +948,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       return;
     }
 
-    PopSound.play();
     final center =
         balloon.position + Offset(balloon.size / 2, balloon.size / 2);
-    _spawnPieces(center, balloon.color, balloon.size, big: false);
+    if (balloon.skinId == 'balloon-heart') {
+      PopSound.playHeart();
+      _spawnHeartPieces(center, balloon.color, balloon.size);
+    } else {
+      PopSound.play();
+      _spawnPieces(center, balloon.color, balloon.size, big: false);
+    }
     _spawnRing(center, balloon.color, balloon.size * 0.72);
 
     setState(() {
@@ -1026,6 +1076,28 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               ? 1.4 + _random.nextDouble() * 0.7
               : 0.82 + _random.nextDouble() * 0.35,
           maxLife: big ? 2.1 : 1.15,
+        ),
+      );
+    }
+    _effectsRevision++;
+  }
+
+  void _spawnHeartPieces(Offset center, Color color, double sourceSize) {
+    const count = 5;
+    for (var i = 0; i < count; i++) {
+      final angle = (pi * 2 / count) * i - pi * 0.82;
+      final speed = 125 + _random.nextDouble() * 85;
+      _pieces.add(
+        PopPiece(
+          position: center,
+          velocity: Offset(cos(angle) * speed, sin(angle) * speed - 55),
+          color: Color.lerp(color, Colors.white, 0.12)!,
+          size: sourceSize * (0.105 + _random.nextDouble() * 0.035),
+          rotation: _random.nextDouble() * pi,
+          spin: (_random.nextDouble() - 0.5) * 8,
+          life: 0.72 + _random.nextDouble() * 0.18,
+          maxLife: 0.9,
+          shape: EffectPieceShape.heart,
         ),
       );
     }
@@ -2536,7 +2608,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                   }),
                 ),
                 Expanded(
-                  child: products.isEmpty
+                  child: products.isEmpty && category != StoreCategory.balloon
                       ? const Center(
                           child: Text(
                             '표시할 상품이 없습니다',
@@ -2551,30 +2623,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                       : NotificationListener<ScrollNotification>(
                           key: const ValueKey('store-detail-scroll'),
                           onNotification: _onStoreScrollNotification,
-                          child: GridView.builder(
-                            key: const ValueKey('store-product-grid'),
-                            padding: EdgeInsets.fromLTRB(
-                              6,
-                              8,
-                              6,
-                              86 * homeChromeScale + 24,
-                            ),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 4,
-                              crossAxisSpacing: 6,
-                              mainAxisSpacing: 8,
-                              childAspectRatio: 0.78,
-                            ),
-                            itemCount: products.length,
-                            itemBuilder: (context, index) {
-                              final product = products[index];
-                              return StoreProductCard(
-                                product: product,
-                                onPressed: () =>
-                                    _onStoreProductPressed(product),
-                              );
-                            },
+                          child: _buildStoreProductList(
+                            category,
+                            products,
+                            homeChromeScale,
                           ),
                         ),
                 ),
@@ -2613,6 +2665,74 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildStoreProductList(
+    StoreCategory category,
+    List<StoreProduct> products,
+    double homeChromeScale,
+  ) {
+    final bottomPadding = 86 * homeChromeScale + 24;
+    if (category != StoreCategory.balloon) {
+      return GridView.builder(
+        key: const ValueKey('store-product-grid'),
+        padding: EdgeInsets.fromLTRB(6, 8, 6, bottomPadding),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          crossAxisSpacing: 6,
+          mainAxisSpacing: 8,
+          childAspectRatio: 0.78,
+        ),
+        itemCount: products.length,
+        itemBuilder: (context, index) {
+          final product = products[index];
+          return StoreProductCard(
+            product: product,
+            onPressed: () => _onStoreProductPressed(product),
+          );
+        },
+      );
+    }
+
+    final productsByRarity = <StoreRarity, List<StoreProduct>>{
+      for (final rarity in StoreRarity.values)
+        rarity: products
+            .where((product) => product.rarity == rarity)
+            .toList(growable: false),
+    };
+    return ListView(
+      key: const ValueKey('store-product-grid'),
+      padding: EdgeInsets.fromLTRB(6, 6, 6, bottomPadding),
+      children: [
+        for (final rarity in StoreRarity.values) ...[
+          StoreRaritySectionHeader(rarity: rarity),
+          GridView.builder(
+            key: ValueKey('store-rarity-grid-${rarity.name}'),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              crossAxisSpacing: 6,
+              mainAxisSpacing: 8,
+              childAspectRatio: 0.78,
+            ),
+            itemCount: 8,
+            itemBuilder: (context, index) {
+              final rarityProducts = productsByRarity[rarity]!;
+              if (index < rarityProducts.length) {
+                final product = rarityProducts[index];
+                return StoreProductCard(
+                  product: product,
+                  onPressed: () => _onStoreProductPressed(product),
+                );
+              }
+              return StoreComingSoonCard(rarity: rarity, slot: index);
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
+      ],
     );
   }
 
@@ -2827,9 +2947,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           child: SizedBox(
             width: balloon.size,
             height: balloon.size + 26,
-            child: CustomPaint(
-              painter: BalloonPainter(color: _balloonColor(balloon)),
-            ),
+            child: balloon.skinId == 'balloon-heart'
+                ? HeartBalloonSprite(
+                    key: ValueKey('heart-balloon-${balloon.id}'),
+                    color: _balloonColor(balloon),
+                  )
+                : CustomPaint(
+                    painter: BalloonPainter(color: _balloonColor(balloon)),
+                  ),
           ),
         ),
       ),
@@ -3318,6 +3443,116 @@ class StoreCategorySection extends StatelessWidget {
   }
 }
 
+extension StoreRarityStyle on StoreRarity {
+  String get label => switch (this) {
+        StoreRarity.common => 'Common',
+        StoreRarity.rare => 'Rare',
+        StoreRarity.epic => 'Epic',
+        StoreRarity.legendary => 'Legendary',
+      };
+
+  String get symbol => switch (this) {
+        StoreRarity.common => '⭐',
+        StoreRarity.rare => '🔵',
+        StoreRarity.epic => '🟣',
+        StoreRarity.legendary => '🟠',
+      };
+
+  Color get color => switch (this) {
+        StoreRarity.common => const Color(0xFF49A969),
+        StoreRarity.rare => const Color(0xFF378DE5),
+        StoreRarity.epic => const Color(0xFF8A55D8),
+        StoreRarity.legendary => const Color(0xFFF09136),
+      };
+}
+
+class StoreRaritySectionHeader extends StatelessWidget {
+  const StoreRaritySectionHeader({super.key, required this.rarity});
+
+  final StoreRarity rarity;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        key: ValueKey('store-rarity-header-${rarity.name}'),
+        padding: const EdgeInsets.fromLTRB(3, 8, 3, 7),
+        child: Row(
+          children: [
+            Text(rarity.symbol, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 5),
+            Text(
+              rarity.label,
+              style: TextStyle(
+                color: rarity.color,
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class StoreRarityBadge extends StatelessWidget {
+  const StoreRarityBadge({super.key, required this.rarity});
+
+  final StoreRarity rarity;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        key: ValueKey('store-rarity-badge-${rarity.name}'),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: BoxDecoration(
+          color: rarity.color,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          rarity.label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 6.5,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
+}
+
+class StoreComingSoonCard extends StatelessWidget {
+  const StoreComingSoonCard({
+    super.key,
+    required this.rarity,
+    required this.slot,
+  });
+
+  final StoreRarity rarity;
+  final int slot;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        key: ValueKey('store-placeholder-${rarity.name}-$slot'),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE7EDF1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFD6E0E5)),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_clock_rounded, color: Color(0xFF9BAAB2), size: 22),
+            SizedBox(height: 5),
+            Text(
+              'Coming Soon',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF83939C),
+                fontSize: 8,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
 class StoreProductCard extends StatelessWidget {
   const StoreProductCard({
     super.key,
@@ -3351,24 +3586,38 @@ class StoreProductCard extends StatelessWidget {
               width: product.equipped ? 1.5 : 1,
             ),
           ),
-          child: Column(
+          child: Stack(
             children: [
-              Expanded(child: product.locked ? _lockedPreview() : _preview()),
-              const SizedBox(height: 3),
-              Text(
-                product.locked ? '???' : product.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: product.locked
-                      ? const Color(0xFF87949C)
-                      : const Color(0xFF244F68),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
+              Positioned.fill(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: product.locked ? _lockedPreview() : _preview(),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      product.locked ? '???' : product.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: product.locked
+                            ? const Color(0xFF87949C)
+                            : const Color(0xFF244F68),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    SizedBox(height: 15, child: _status()),
+                  ],
                 ),
               ),
-              const SizedBox(height: 2),
-              SizedBox(height: 15, child: _status()),
+              if (product.category == StoreCategory.balloon)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  child: StoreRarityBadge(rarity: product.rarity),
+                ),
             ],
           ),
         ),
@@ -3466,6 +3715,16 @@ class StoreProductCard extends StatelessWidget {
             height: 45,
             child: CustomPaint(
                 painter: BalloonPainter(color: product.previewData)),
+          ),
+        );
+      case StorePreviewType.heartBalloon:
+        return Center(
+          child: Image.asset(
+            'assets/images/heart_balloon.png',
+            width: 48,
+            height: 56,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
           ),
         );
       case StorePreviewType.effect:
@@ -3704,6 +3963,22 @@ class PlaySky extends StatelessWidget {
   }
 }
 
+class HeartBalloonSprite extends StatelessWidget {
+  const HeartBalloonSprite({super.key, required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+        'assets/images/heart_balloon.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        gaplessPlayback: true,
+        color: color,
+        colorBlendMode: BlendMode.hue,
+      );
+}
+
 class BalloonPainter extends CustomPainter {
   const BalloonPainter({required this.color});
 
@@ -3856,6 +4131,8 @@ class EffectsPainter extends CustomPainter {
   final int revision;
 
   int get pieceCount => pieces.length;
+  int get heartPieceCount =>
+      pieces.where((piece) => piece.shape == EffectPieceShape.heart).length;
   int get ringCount => rings.length;
 
   @override
@@ -3882,13 +4159,15 @@ class EffectsPainter extends CustomPainter {
       final opacity = (piece.life / piece.maxLife).clamp(0.0, 1.0);
       final pieceSize = Size(piece.size, piece.size * 1.3);
       final center = piece.position + pieceSize.center(Offset.zero);
-      final path = Path()
-        ..moveTo(pieceSize.width * 0.50, 0)
-        ..lineTo(pieceSize.width, pieceSize.height * 0.32)
-        ..lineTo(pieceSize.width * 0.72, pieceSize.height)
-        ..lineTo(pieceSize.width * 0.22, pieceSize.height * 0.82)
-        ..lineTo(0, pieceSize.height * 0.24)
-        ..close();
+      final path = piece.shape == EffectPieceShape.heart
+          ? _heartPath(pieceSize)
+          : (Path()
+            ..moveTo(pieceSize.width * 0.50, 0)
+            ..lineTo(pieceSize.width, pieceSize.height * 0.32)
+            ..lineTo(pieceSize.width * 0.72, pieceSize.height)
+            ..lineTo(pieceSize.width * 0.22, pieceSize.height * 0.82)
+            ..lineTo(0, pieceSize.height * 0.24)
+            ..close());
 
       canvas.save();
       canvas.translate(center.dx, center.dy);
@@ -3901,6 +4180,29 @@ class EffectsPainter extends CustomPainter {
       canvas.restore();
     }
   }
+
+  Path _heartPath(Size size) => Path()
+    ..moveTo(size.width * 0.5, size.height)
+    ..cubicTo(
+      size.width * 0.38,
+      size.height * 0.82,
+      0,
+      size.height * 0.58,
+      0,
+      size.height * 0.28,
+    )
+    ..cubicTo(0, 0, size.width * 0.36, 0, size.width * 0.5, size.height * 0.2)
+    ..cubicTo(
+        size.width * 0.64, 0, size.width, 0, size.width, size.height * 0.28)
+    ..cubicTo(
+      size.width,
+      size.height * 0.58,
+      size.width * 0.62,
+      size.height * 0.82,
+      size.width * 0.5,
+      size.height,
+    )
+    ..close();
 
   @override
   bool shouldRepaint(covariant EffectsPainter oldDelegate) =>

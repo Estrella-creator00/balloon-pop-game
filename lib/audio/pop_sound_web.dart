@@ -63,6 +63,49 @@ abstract final class PopSound {
     }
   }
 
+  /// Default heart skin sound: a soft 0.23 second pop with a small chime.
+  /// Keeping this entry point separate lets a future sound pack replace it.
+  static void playHeart() {
+    try {
+      final context = _context ??= _AudioContext();
+      context.resume();
+      final now = context.currentTime;
+
+      final pop = context.createOscillator();
+      final popGain = context.createGain();
+      pop
+        ..type = 'sine'
+        ..frequency.setValueAtTime(390, now)
+        ..frequency.exponentialRampToValueAtTime(145, now + 0.18)
+        ..connect(popGain);
+      popGain
+        ..gain.setValueAtTime(0.22, now)
+        ..gain.exponentialRampToValueAtTime(0.001, now + 0.2)
+        ..connect(context.destination);
+      pop
+        ..start(now)
+        ..stop(now + 0.205);
+
+      final chime = context.createOscillator();
+      final chimeGain = context.createGain();
+      final chimeStart = now + 0.095;
+      chime
+        ..type = 'sine'
+        ..frequency.setValueAtTime(900, chimeStart)
+        ..frequency.exponentialRampToValueAtTime(1180, now + 0.21)
+        ..connect(chimeGain);
+      chimeGain
+        ..gain.setValueAtTime(0.07, chimeStart)
+        ..gain.exponentialRampToValueAtTime(0.001, now + 0.23)
+        ..connect(context.destination);
+      chime
+        ..start(chimeStart)
+        ..stop(now + 0.235);
+    } catch (_) {
+      // Audio support must never affect balloon removal or stage progress.
+    }
+  }
+
   static void playLightTap() {
     try {
       final context = _context ??= _AudioContext();
@@ -114,4 +157,6 @@ abstract final class PopSound {
       // Sound failure must never block the boss-clear flow.
     }
   }
+
+  static void resetDebug() {}
 }

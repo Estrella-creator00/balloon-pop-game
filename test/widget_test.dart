@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:balloon_pop_game/dev/dev_coin_tool.dart';
+import 'package:balloon_pop_game/audio/pop_sound.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
@@ -38,7 +39,10 @@ void main() {
     expect(ScreenIds.names[ScreenIds.gameResult], '게임 완료 및 게임오버 화면');
   });
 
-  setUp(ProgressStorage.clear);
+  setUp(() {
+    ProgressStorage.clear();
+    PopSound.resetDebug();
+  });
 
   test('stage rules are generated for normal and boss tiers', () {
     final stage10 = StageConfig.forStage(10);
@@ -494,15 +498,30 @@ void main() {
     expect(find.byKey(const ValueKey('store-filter-owned')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-unowned')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-limited')), findsOneWidget);
-    expect(find.byType(StoreProductCard), findsNWidgets(3));
-
-    final grid = tester.widget<GridView>(
-      find.byKey(const ValueKey('store-product-grid')),
+    expect(find.byType(StoreProductCard), findsNWidgets(4));
+    for (final rarity in StoreRarity.values) {
+      await tester.scrollUntilVisible(
+        find.byKey(ValueKey('store-rarity-header-${rarity.name}')),
+        180,
+        scrollable: find.byKey(const ValueKey('store-product-grid')),
+      );
+      expect(
+        find.byKey(ValueKey('store-rarity-header-${rarity.name}')),
+        findsOneWidget,
+      );
+      final grid = tester.widget<GridView>(
+        find.byKey(ValueKey('store-rarity-grid-${rarity.name}')),
+      );
+      final gridDelegate =
+          grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+      expect(gridDelegate.crossAxisCount, 4);
+      expect(grid.childrenDelegate.estimatedChildCount, 8);
+    }
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('store-product-balloon-default')),
+      -220,
+      scrollable: find.byKey(const ValueKey('store-product-grid')),
     );
-    expect(grid.scrollDirection, Axis.vertical);
-    final gridDelegate =
-        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-    expect(gridDelegate.crossAxisCount, 4);
 
     expect(
       tester
@@ -529,16 +548,28 @@ void main() {
       isNotNull,
     );
 
-    final cardRects = ['balloon-default', 'balloon-a', 'balloon-b']
+    final cardRects = [
+      'balloon-default',
+      'balloon-heart',
+      'balloon-a',
+      'balloon-b',
+    ]
         .map((id) => tester.getRect(find.byKey(ValueKey('store-product-$id'))))
         .toList();
     expect(cardRects[0].top, cardRects[1].top);
     expect(cardRects[1].top, cardRects[2].top);
+    expect(cardRects[2].top, cardRects[3].top);
     expect(cardRects[0].left, lessThan(cardRects[1].left));
     expect(cardRects[1].left, lessThan(cardRects[2].left));
+    expect(cardRects[2].left, lessThan(cardRects[3].left));
 
     await tester.tap(find.byKey(const ValueKey('store-filter-owned')));
     await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('store-product-balloon-default')),
+      -220,
+      scrollable: find.byKey(const ValueKey('store-product-grid')),
+    );
     expect(find.byType(StoreProductCard), findsNWidgets(2));
     expect(find.byKey(const ValueKey('store-product-balloon-default')),
         findsOneWidget);
@@ -547,18 +578,33 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('store-filter-unowned')));
     await tester.pump();
-    expect(find.byType(StoreProductCard), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('store-product-balloon-heart')),
+      -220,
+      scrollable: find.byKey(const ValueKey('store-product-grid')),
+    );
+    expect(find.byType(StoreProductCard), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('store-product-balloon-heart')),
+        findsOneWidget);
     expect(
         find.byKey(const ValueKey('store-product-balloon-a')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('store-filter-limited')));
     await tester.pump();
     expect(find.byType(StoreProductCard), findsNothing);
-    expect(find.byKey(const ValueKey('store-products-empty')), findsOneWidget);
+    final commonPlaceholderGrid = tester.widget<GridView>(
+      find.byKey(const ValueKey('store-rarity-grid-common')),
+    );
+    expect(commonPlaceholderGrid.childrenDelegate.estimatedChildCount, 8);
 
     await tester.tap(find.byKey(const ValueKey('store-filter-all')));
     await tester.pump();
-    expect(find.byType(StoreProductCard), findsNWidgets(3));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('store-product-balloon-default')),
+      -220,
+      scrollable: find.byKey(const ValueKey('store-product-grid')),
+    );
+    expect(find.byType(StoreProductCard), findsNWidgets(4));
 
     await tester.tap(find.byKey(const ValueKey('store-detail-back')));
     await tester.pumpAndSettle();
@@ -689,6 +735,77 @@ void main() {
       find.descendant(of: productCard, matching: find.text('사용하기')),
       findsNothing,
     );
+  });
+
+  testWidgets(
+      'heart balloon can be bought, equipped, rendered, and popped with hearts',
+      (tester) async {
+    ProgressStorage.addCoins(100);
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('store-category-card-balloon')),
+    );
+    await tester.pumpAndSettle();
+
+    final heartCard = find.byKey(
+      const ValueKey('store-product-balloon-heart'),
+    );
+    expect(
+      find.descendant(of: heartCard, matching: find.text('Common')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: heartCard, matching: find.text('100')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('store-action-balloon-heart')),
+    );
+    await tester.pump();
+    expect(CoinService.balance, 0);
+    expect(
+      find.descendant(of: heartCard, matching: find.text('사용하기')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('store-action-balloon-heart')),
+    );
+    await tester.pump();
+    expect(
+      PurchaseService.equippedProductId(
+        StoreCategory.balloon.name,
+        defaultProductId: 'balloon-default',
+      ),
+      'balloon-heart',
+    );
+    expect(
+      find.descendant(of: heartCard, matching: find.text('사용 중')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('home-nav-home')));
+    await tester.pump();
+    await tapSectionStart(tester, 1);
+
+    final heartSprites = tester.widgetList<HeartBalloonSprite>(
+      find.byType(HeartBalloonSprite),
+    );
+    expect(heartSprites, hasLength(2));
+    expect(heartSprites.first.color, isNot(heartSprites.last.color));
+
+    await tapGameTarget(tester, 0);
+    final effectsPainter = tester
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .map((paint) => paint.painter)
+        .whereType<EffectsPainter>()
+        .single;
+    expect(effectsPainter.heartPieceCount, 5);
+    expect(PopSound.heartPlayCount, 1);
   });
 
   testWidgets('store header cards and navigation fit tall mobile and desktop',
