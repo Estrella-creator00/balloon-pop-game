@@ -3,6 +3,8 @@ import 'coin_service.dart';
 
 enum PurchaseResult { success, insufficientCoins, alreadyOwned, unavailable }
 
+enum EquipResult { success, alreadyEquipped, notOwned }
+
 /// Coordinates persistent product ownership and coin payment.
 abstract final class PurchaseService {
   static Set<String> get ownedProductIds => ProgressStorage.ownedProductIds();
@@ -24,5 +26,26 @@ abstract final class PurchaseService {
     return ProgressStorage.tryPurchaseProduct(productId, price)
         ? PurchaseResult.success
         : PurchaseResult.unavailable;
+  }
+
+  static String equippedProductId(
+    String category, {
+    required String defaultProductId,
+  }) =>
+      ProgressStorage.equippedProductId(category) ?? defaultProductId;
+
+  static EquipResult equip({
+    required String category,
+    required String productId,
+    required bool initiallyOwned,
+  }) {
+    if (!isOwned(productId, initiallyOwned: initiallyOwned)) {
+      return EquipResult.notOwned;
+    }
+    if (ProgressStorage.equippedProductId(category) == productId) {
+      return EquipResult.alreadyEquipped;
+    }
+    ProgressStorage.setEquippedProductId(category, productId);
+    return EquipResult.success;
   }
 }

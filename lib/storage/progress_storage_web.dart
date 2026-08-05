@@ -15,6 +15,7 @@ abstract final class ProgressStorage {
   static const _lastKey = 'poppop_last_score';
   static const _coinKey = 'poppop_coin_balance';
   static const _ownedProductsKey = 'poppop_owned_product_ids';
+  static const _equippedProductsKey = 'poppop_equipped_product_ids';
 
   static bool isSecondSectionUnlocked() {
     try {
@@ -82,6 +83,39 @@ abstract final class ProgressStorage {
     }
   }
 
+  static String? equippedProductId(String category) {
+    try {
+      final entries = _readEquippedProducts();
+      return entries[category];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void setEquippedProductId(String category, String productId) {
+    try {
+      final entries = _readEquippedProducts()..[category] = productId;
+      final encoded = entries.entries
+          .map((entry) => '${entry.key}=${entry.value}')
+          .join('|');
+      _localStorage.setItem(_equippedProductsKey.toJS, encoded.toJS);
+    } catch (_) {
+      // Storage failure must not interrupt the store UI.
+    }
+  }
+
+  static Map<String, String> _readEquippedProducts() {
+    final stored = _localStorage.getItem(_equippedProductsKey.toJS)?.toDart;
+    if (stored == null || stored.isEmpty) return <String, String>{};
+    final result = <String, String>{};
+    for (final item in stored.split('|')) {
+      final separator = item.indexOf('=');
+      if (separator <= 0 || separator == item.length - 1) continue;
+      result[item.substring(0, separator)] = item.substring(separator + 1);
+    }
+    return result;
+  }
+
   static bool saveScore(int score) {
     try {
       final isNew = score > bestScore();
@@ -108,6 +142,7 @@ abstract final class ProgressStorage {
       _localStorage.removeItem(_lastKey.toJS);
       _localStorage.removeItem(_coinKey.toJS);
       _localStorage.removeItem(_ownedProductsKey.toJS);
+      _localStorage.removeItem(_equippedProductsKey.toJS);
     } catch (_) {
       // The menu still resets even if storage is unavailable.
     }

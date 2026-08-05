@@ -11,6 +11,8 @@ abstract final class CoinService {
     ProgressStorage.addCoins(reward);
     return reward;
   }
+
+  static int addCoins(int amount) => ProgressStorage.addCoins(amount);
 }
 
 /// Prevents the same game session from granting its result reward twice.

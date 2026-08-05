@@ -4,6 +4,7 @@ abstract final class ProgressStorage {
   static int _lastScore = 0;
   static int _coinBalance = 0;
   static final Set<String> _ownedProductIds = <String>{};
+  static final Map<String, String> _equippedProductIds = <String, String>{};
 
   static bool isSecondSectionUnlocked() => _secondSectionUnlocked;
 
@@ -36,6 +37,13 @@ abstract final class ProgressStorage {
     return true;
   }
 
+  static String? equippedProductId(String category) =>
+      _equippedProductIds[category];
+
+  static void setEquippedProductId(String category, String productId) {
+    _equippedProductIds[category] = productId;
+  }
+
   static bool saveScore(int score) {
     _lastScore = score;
     if (score <= _bestScore) return false;
@@ -49,5 +57,6 @@ abstract final class ProgressStorage {
     _lastScore = 0;
     _coinBalance = 0;
     _ownedProductIds.clear();
+    _equippedProductIds.clear();
   }
 }

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import 'audio/pop_sound.dart';
+import 'dev/dev_coin_tool.dart';
 import 'services/coin_service.dart';
 import 'services/purchase_service.dart';
 import 'storage/progress_storage.dart';
@@ -111,13 +112,13 @@ class StoreProduct {
 
   String get displayName => shortName ?? name;
 
-  StoreProduct copyWith({bool? owned}) => StoreProduct(
+  StoreProduct copyWith({bool? owned, bool? equipped}) => StoreProduct(
         id: id,
         category: category,
         name: name,
         price: price,
         owned: owned ?? this.owned,
-        equipped: equipped,
+        equipped: equipped ?? this.equipped,
         previewType: previewType,
         previewData: previewData,
         shortName: shortName,
@@ -137,6 +138,7 @@ class Balloon {
     required this.floatPower,
     required this.hp,
     required this.maxHp,
+    this.skinId = 'balloon-default',
   });
 
   final int id;
@@ -148,6 +150,7 @@ class Balloon {
   final double floatPower;
   int hp;
   final int maxHp;
+  final String skinId;
 }
 
 class BossBalloon {
@@ -487,6 +490,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   int _coinBalance = 0;
   int _earnedCoins = 0;
   Set<String> _ownedProductIds = <String>{};
+  Map<StoreCategory, String> _equippedProductIds = <StoreCategory, String>{};
+  final DevCoinTapGate _devCoinTapGate = DevCoinTapGate();
+  bool _devCoinDialogOpen = false;
   bool _isNewBest = false;
   bool _resultSaved = false;
   MainTab _mainTab = MainTab.home;
@@ -509,6 +515,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _lastScore = ProgressStorage.lastScore();
     _coinBalance = CoinService.balance;
     _ownedProductIds = PurchaseService.ownedProductIds;
+    _equippedProductIds = _loadEquippedProductIds();
     _stagePageController = PageController();
     _headerData = ValueNotifier(_createHeaderData());
     _gameHeader = GameHeader(
@@ -516,6 +523,28 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       onPause: _pauseGame,
       onEnd: _confirmEndGame,
     );
+  }
+
+  Map<StoreCategory, String> _loadEquippedProductIds() {
+    final result = <StoreCategory, String>{};
+    for (final category in StoreCategory.values) {
+      final defaults = _storeProducts.where(
+        (product) => product.category == category && product.equipped,
+      );
+      if (defaults.isEmpty) continue;
+      final defaultProduct = defaults.first;
+      final selectedId = PurchaseService.equippedProductId(
+        category.name,
+        defaultProductId: defaultProduct.id,
+      );
+      final matches = _storeProducts.where(
+        (product) => product.category == category && product.id == selectedId,
+      );
+      final selected = matches.isEmpty ? defaultProduct : matches.first;
+      final isOwned = selected.owned || _ownedProductIds.contains(selected.id);
+      result[category] = isOwned ? selected.id : defaultProduct.id;
+    }
+    return result;
   }
 
   GameHeaderData _createHeaderData() => GameHeaderData(
@@ -705,6 +734,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           floatPower: 10 + _random.nextDouble() * 10,
           hp: _stageConfig.balloonHp,
           maxHp: _stageConfig.balloonHp,
+          // Selection is connected here; temporary skins still use the
+          // existing painter until final art assets are available.
+          skinId:
+              _equippedProductIds[StoreCategory.balloon] ?? 'balloon-default',
         ),
       );
     }
@@ -1068,6 +1101,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _coinBalance = 0;
       _earnedCoins = 0;
       _ownedProductIds = <String>{};
+      _equippedProductIds = _loadEquippedProductIds();
       _isNewBest = false;
       _score = 0;
       _stage = 1;
@@ -1142,7 +1176,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           left: 10,
                           right: 10,
                           height: 38,
-                          child: _mainTopOverlay(),
+                          child: _mainTopOverlay(enableDevCoinTap: true),
                         ),
                         Positioned(
                           top: 18,
@@ -1271,11 +1305,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
-  Widget _mainTopOverlay() => Stack(
+  Widget _mainTopOverlay({bool enableDevCoinTap = false}) => Stack(
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: _homeCoinHud(_coinBalance),
+            child: GestureDetector(
+              key: const ValueKey('home-coin-dev-tap-target'),
+              behavior: HitTestBehavior.opaque,
+              onTap: enableDevCoinTap ? _onDevCoinTap : null,
+              child: _homeCoinHud(_coinBalance),
+            ),
           ),
           Align(
             alignment: Alignment.centerRight,
@@ -1283,6 +1322,69 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           ),
         ],
       );
+
+  // TEMP DEV TOOL - remove before production release.
+  void _onDevCoinTap() {
+    if (_devCoinDialogOpen || _mainTab != MainTab.home) return;
+    if (_devCoinTapGate.registerTap(DateTime.now())) {
+      _showDevCoinPasswordDialog();
+    }
+  }
+
+  // TEMP DEV TOOL - remove before production release.
+  Future<void> _showDevCoinPasswordDialog() async {
+    if (_devCoinDialogOpen || !mounted) return;
+    _devCoinDialogOpen = true;
+    final controller = TextEditingController();
+    var submitted = false;
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('개발자 테스트'),
+        content: TextField(
+          key: const ValueKey('dev-coin-password-input'),
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          keyboardType: TextInputType.number,
+          maxLength: 4,
+          decoration: const InputDecoration(
+            labelText: '비밀번호',
+            counterText: '',
+          ),
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('dev-coin-cancel'),
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            key: const ValueKey('dev-coin-confirm'),
+            onPressed: () {
+              if (submitted) return;
+              submitted = true;
+              Navigator.pop(dialogContext, controller.text);
+            },
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    _devCoinDialogOpen = false;
+    _devCoinTapGate.reset();
+    if (!mounted || password == null) return;
+    if (password != tempDevCoinPassword) {
+      _showComingSoon('비밀번호가 올바르지 않습니다.');
+      return;
+    }
+    setState(() {
+      _coinBalance = CoinService.addCoins(tempDevCoinGrantAmount);
+    });
+    _showComingSoon('테스트 코인 10,000개가 추가되었습니다.');
+  }
 
   Widget _homeCoinHud(int coins) => Container(
         key: const ValueKey('home-coin-hud'),
@@ -2358,7 +2460,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   List<StoreProduct> _filteredStoreProducts(StoreCategory category) {
     return _storeProducts.map((product) {
       final owned = product.owned || _ownedProductIds.contains(product.id);
-      return owned == product.owned ? product : product.copyWith(owned: owned);
+      final equipped = _equippedProductIds[product.category] == product.id;
+      return owned == product.owned && equipped == product.equipped
+          ? product
+          : product.copyWith(owned: owned, equipped: equipped);
     }).where((product) {
       if (product.category != category) return false;
       return switch (_storeProductFilter) {
@@ -2512,6 +2617,26 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _onStoreProductPressed(StoreProduct product) {
+    if (product.owned) {
+      final result = PurchaseService.equip(
+        category: product.category.name,
+        productId: product.id,
+        initiallyOwned: product.owned,
+      );
+      switch (result) {
+        case EquipResult.success:
+          setState(() {
+            _equippedProductIds[product.category] = product.id;
+          });
+          _showComingSoon('${product.name} 사용 중');
+        case EquipResult.alreadyEquipped:
+          return;
+        case EquipResult.notOwned:
+          _showComingSoon('보유하지 않은 상품입니다.');
+      }
+      return;
+    }
+
     final result = PurchaseService.purchase(
       productId: product.id,
       price: product.price,
@@ -3281,7 +3406,7 @@ class StoreProductCard extends StatelessWidget {
     }
     if (product.owned) {
       return const Text(
-        '보유',
+        '사용하기',
         style: TextStyle(
           color: Color(0xFF7354E8),
           fontSize: 9,

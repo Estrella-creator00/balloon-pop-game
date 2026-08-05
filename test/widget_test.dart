@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:balloon_pop_game/dev/dev_coin_tool.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
@@ -202,6 +203,91 @@ void main() {
     expect(CoinService.balance, 70);
   });
 
+  test('equipped products persist independently by category', () {
+    ProgressStorage.addCoins(1000);
+    expect(
+      PurchaseService.purchase(
+        productId: 'balloon-a',
+        price: 500,
+        initiallyOwned: false,
+      ),
+      PurchaseResult.success,
+    );
+    expect(
+      PurchaseService.purchase(
+        productId: 'sound-a',
+        price: 300,
+        initiallyOwned: false,
+      ),
+      PurchaseResult.success,
+    );
+
+    expect(
+      PurchaseService.equip(
+        category: 'balloon',
+        productId: 'balloon-a',
+        initiallyOwned: false,
+      ),
+      EquipResult.success,
+    );
+    expect(
+      PurchaseService.equip(
+        category: 'soundEffect',
+        productId: 'sound-a',
+        initiallyOwned: false,
+      ),
+      EquipResult.success,
+    );
+    expect(
+      PurchaseService.equippedProductId(
+        'balloon',
+        defaultProductId: 'balloon-default',
+      ),
+      'balloon-a',
+    );
+    expect(
+      PurchaseService.equippedProductId(
+        'soundEffect',
+        defaultProductId: 'sound-default',
+      ),
+      'sound-a',
+    );
+  });
+
+  test('developer coin tap gate requires seven taps inside its window', () {
+    final gate = DevCoinTapGate();
+    final startedAt = DateTime(2026, 8, 5);
+    for (var tap = 0; tap < 6; tap++) {
+      expect(
+        gate.registerTap(startedAt.add(Duration(milliseconds: tap * 100))),
+        false,
+      );
+    }
+    expect(
+      gate.registerTap(startedAt.add(const Duration(milliseconds: 600))),
+      true,
+    );
+
+    final expiredGate = DevCoinTapGate();
+    expect(expiredGate.registerTap(startedAt), false);
+    expect(
+      expiredGate.registerTap(
+        startedAt.add(tempDevCoinTapWindow + const Duration(milliseconds: 1)),
+      ),
+      false,
+    );
+    for (var tap = 1; tap < 6; tap++) {
+      expect(
+        expiredGate.registerTap(
+          startedAt.add(
+            tempDevCoinTapWindow + Duration(milliseconds: 1 + tap * 100),
+          ),
+        ),
+        false,
+      );
+    }
+  });
+
   testWidgets('home and store share the persisted coin balance',
       (tester) async {
     ProgressStorage.addCoins(1234);
@@ -261,6 +347,79 @@ void main() {
     await tester.pump();
     expect(find.text('설정 준비 중'), findsOneWidget);
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
+  });
+
+  testWidgets('hidden developer coin flow rejects a wrong password',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    final coinTarget = find.byKey(const ValueKey('home-coin-dev-tap-target'));
+
+    for (var tap = 0; tap < 6; tap++) {
+      await tester.tap(coinTarget);
+    }
+    await tester.pump();
+    expect(find.byKey(const ValueKey('dev-coin-password-input')), findsNothing);
+
+    await tester.tap(coinTarget);
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(
+      find.byKey(const ValueKey('dev-coin-password-input')),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('dev-coin-password-input')),
+      '0000',
+    );
+    await tester.tap(find.byKey(const ValueKey('dev-coin-confirm')));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('비밀번호가 올바르지 않습니다.'), findsOneWidget);
+    expect(CoinService.balance, 0);
+  });
+
+  testWidgets('hidden developer coin flow grants once and updates shared HUD',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    final coinTarget = find.byKey(const ValueKey('home-coin-dev-tap-target'));
+
+    for (var tap = 0; tap < 7; tap++) {
+      await tester.tap(coinTarget);
+    }
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.enterText(
+      find.byKey(const ValueKey('dev-coin-password-input')),
+      tempDevCoinPassword,
+    );
+    final confirm = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('dev-coin-confirm')),
+    );
+    confirm.onPressed!.call();
+    confirm.onPressed!.call();
+    await tester.pump(const Duration(milliseconds: 800));
+
+    expect(CoinService.balance, tempDevCoinGrantAmount);
+    expect(
+      find.text('테스트 코인 10,000개가 추가되었습니다.'),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-coin-hud')),
+        matching: find.text('10,000'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-coin-hud')),
+        matching: find.text('10,000'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('store root shows a fixed two-column category menu',
@@ -453,7 +612,7 @@ void main() {
     expect(find.text('특별 풍선 A 구매 완료!'), findsOneWidget);
     expect(CoinService.balance, 100);
     expect(
-      find.descendant(of: productCard, matching: find.text('보유')),
+      find.descendant(of: productCard, matching: find.text('사용하기')),
       findsOneWidget,
     );
     expect(
@@ -473,6 +632,17 @@ void main() {
     );
     await tester.pump();
     expect(CoinService.balance, 100);
+    expect(
+      find.descendant(of: productCard, matching: find.text('사용 중')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('store-product-balloon-default')),
+        matching: find.text('사용하기'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -486,7 +656,7 @@ void main() {
     await tester.pumpAndSettle();
     final reloadedCard = find.byKey(const ValueKey('store-product-balloon-a'));
     expect(
-      find.descendant(of: reloadedCard, matching: find.text('보유')),
+      find.descendant(of: reloadedCard, matching: find.text('사용 중')),
       findsOneWidget,
     );
     expect(CoinService.balance, 100);
@@ -516,7 +686,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(of: productCard, matching: find.text('보유')),
+      find.descendant(of: productCard, matching: find.text('사용하기')),
       findsNothing,
     );
   });
