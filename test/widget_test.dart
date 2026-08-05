@@ -24,6 +24,17 @@ Future<void> tapGameTarget(WidgetTester tester, Object key) async {
 }
 
 void main() {
+  test('screen identifiers stay stable', () {
+    expect(ScreenIds.names[ScreenIds.home], '홈 화면');
+    expect(ScreenIds.names[ScreenIds.shopCategories], '상점 카테고리 화면');
+    expect(ScreenIds.names[ScreenIds.shopProductList], '상점 상품 목록 화면');
+    expect(ScreenIds.names[ScreenIds.event], '이벤트 화면');
+    expect(ScreenIds.names[ScreenIds.ranking], '랭킹 화면');
+    expect(ScreenIds.names[ScreenIds.settings], '설정 화면');
+    expect(ScreenIds.names[ScreenIds.gameplay], '게임 플레이 화면');
+    expect(ScreenIds.names[ScreenIds.gameResult], '게임 완료 및 게임오버 화면');
+  });
+
   setUp(ProgressStorage.clear);
 
   test('stage rules are generated for normal and boss tiers', () {
@@ -230,41 +241,76 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('store-detail-title')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-detail-scroll')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-filter-all')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-filter-owned')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-filter-unowned')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-filter-limited')), findsOneWidget);
     expect(find.byType(StoreProductCard), findsNWidgets(3));
+
+    final grid = tester.widget<GridView>(
+      find.byKey(const ValueKey('store-product-grid')),
+    );
+    expect(grid.scrollDirection, Axis.vertical);
+    final gridDelegate =
+        grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(gridDelegate.crossAxisCount, 4);
+
     expect(
       tester
-          .widget<FilledButton>(
+          .widget<InkWell>(
             find.byKey(const ValueKey('store-action-balloon-default')),
           )
-          .onPressed,
+          .onTap,
       isNull,
     );
     expect(
       tester
-          .widget<FilledButton>(
+          .widget<InkWell>(
             find.byKey(const ValueKey('store-action-balloon-a')),
           )
-          .onPressed,
+          .onTap,
       isNotNull,
     );
     expect(
       tester
-          .widget<FilledButton>(
+          .widget<InkWell>(
             find.byKey(const ValueKey('store-action-balloon-b')),
           )
-          .onPressed,
+          .onTap,
       isNotNull,
     );
 
-    final firstCard =
-        find.byKey(const ValueKey('store-product-balloon-default'));
-    final firstCardLeft = tester.getTopLeft(firstCard).dx;
-    await tester.drag(
-      find.byKey(const ValueKey('store-products-balloon')),
-      const Offset(-170, 0),
-    );
+    final cardRects = ['balloon-default', 'balloon-a', 'balloon-b']
+        .map((id) => tester.getRect(find.byKey(ValueKey('store-product-$id'))))
+        .toList();
+    expect(cardRects[0].top, cardRects[1].top);
+    expect(cardRects[1].top, cardRects[2].top);
+    expect(cardRects[0].left, lessThan(cardRects[1].left));
+    expect(cardRects[1].left, lessThan(cardRects[2].left));
+
+    await tester.tap(find.byKey(const ValueKey('store-filter-owned')));
     await tester.pump();
-    expect(tester.getTopLeft(firstCard).dx, lessThan(firstCardLeft));
+    expect(find.byType(StoreProductCard), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('store-product-balloon-default')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('store-product-balloon-b')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('store-filter-unowned')));
+    await tester.pump();
+    expect(find.byType(StoreProductCard), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('store-product-balloon-a')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('store-filter-limited')));
+    await tester.pump();
+    expect(find.byType(StoreProductCard), findsNothing);
+    expect(find.byKey(const ValueKey('store-products-empty')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('store-filter-all')));
+    await tester.pump();
+    expect(find.byType(StoreProductCard), findsNWidgets(3));
 
     await tester.tap(find.byKey(const ValueKey('store-detail-back')));
     await tester.pumpAndSettle();
@@ -884,5 +930,47 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(find.text('일시정지'), findsWidgets);
     expect(find.text('시간  10'), findsOneWidget);
+  });
+
+  testWidgets('locked store product uses a compact disabled placeholder',
+      (tester) async {
+    const lockedProduct = StoreProduct(
+      id: 'locked-balloon',
+      category: StoreCategory.balloon,
+      name: '아주 긴 잠금 풍선 상품 이름',
+      price: 1200,
+      owned: false,
+      equipped: false,
+      previewType: StorePreviewType.balloon,
+      previewData: Colors.grey,
+      locked: true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 82,
+            height: 104,
+            child: StoreProductCard(
+              product: lockedProduct,
+              onPressed: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('???'), findsOneWidget);
+    expect(find.text('잠김'), findsOneWidget);
+    expect(
+      tester
+          .widget<InkWell>(
+            find.byKey(const ValueKey('store-action-locked-balloon')),
+          )
+          .onTap,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
   });
 }

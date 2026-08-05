@@ -43,6 +43,30 @@ enum GamePhase {
 
 enum MainTab { home, store, event, ranking }
 
+/// Internal screen identifiers used by development requests and documentation.
+/// These values are not rendered in the user interface.
+abstract final class ScreenIds {
+  static const String home = 'H-01';
+  static const String shopCategories = 'S-01';
+  static const String shopProductList = 'S-02';
+  static const String event = 'E-01';
+  static const String ranking = 'R-01';
+  static const String settings = 'SET-01';
+  static const String gameplay = 'G-01';
+  static const String gameResult = 'G-02';
+
+  static const Map<String, String> names = {
+    home: '홈 화면',
+    shopCategories: '상점 카테고리 화면',
+    shopProductList: '상점 상품 목록 화면',
+    event: '이벤트 화면',
+    ranking: '랭킹 화면',
+    settings: '설정 화면',
+    gameplay: '게임 플레이 화면',
+    gameResult: '게임 완료 및 게임오버 화면',
+  };
+}
+
 enum StoreCategory {
   balloon,
   popEffect,
@@ -54,6 +78,8 @@ enum StoreCategory {
 
 enum StorePreviewType { balloon, effect, background, sound, music }
 
+enum StoreProductFilter { all, owned, unowned, limited }
+
 class StoreProduct {
   const StoreProduct({
     required this.id,
@@ -64,6 +90,9 @@ class StoreProduct {
     required this.equipped,
     required this.previewType,
     required this.previewData,
+    this.shortName,
+    this.locked = false,
+    this.limited = false,
   });
 
   final String id;
@@ -74,6 +103,11 @@ class StoreProduct {
   final bool equipped;
   final StorePreviewType previewType;
   final Color previewData;
+  final String? shortName;
+  final bool locked;
+  final bool limited;
+
+  String get displayName => shortName ?? name;
 }
 
 class Balloon {
@@ -439,6 +473,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   MainTab _mainTab = MainTab.home;
   bool _storeNavigationVisible = true;
   StoreCategory? _selectedStoreCategory;
+  StoreProductFilter _storeProductFilter = StoreProductFilter.all;
   late final PageController _stagePageController;
   late final ValueNotifier<GameHeaderData> _headerData;
   late final Widget _gameHeader;
@@ -533,6 +568,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _phase = GamePhase.menu;
       _mainTab = MainTab.home;
       _selectedStoreCategory = null;
+      _storeProductFilter = StoreProductFilter.all;
       _storeNavigationVisible = true;
       _balloons.clear();
       _pieces.clear();
@@ -1013,6 +1049,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     });
   }
 
+  // H-01 홈 화면
   Widget _buildStartScreen() {
     return Scaffold(
       body: Stack(
@@ -2040,6 +2077,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
+  // SET-01 설정 화면 진입점 (현재는 준비 중 안내)
   void _onSettingsPressed() => _showComingSoon('설정 준비 중');
 
   void _onHomeMenuTap() {
@@ -2048,6 +2086,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       setState(() {
         _mainTab = MainTab.home;
         _selectedStoreCategory = null;
+        _storeProductFilter = StoreProductFilter.all;
       });
     }
   }
@@ -2058,6 +2097,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       setState(() {
         _mainTab = MainTab.store;
         _selectedStoreCategory = null;
+        _storeProductFilter = StoreProductFilter.all;
         _storeNavigationVisible = true;
       });
     }
@@ -2069,6 +2109,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       setState(() {
         _mainTab = MainTab.event;
         _selectedStoreCategory = null;
+        _storeProductFilter = StoreProductFilter.all;
       });
     }
   }
@@ -2108,6 +2149,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       setState(() {
         _mainTab = MainTab.ranking;
         _selectedStoreCategory = null;
+        _storeProductFilter = StoreProductFilter.all;
       });
     }
   }
@@ -2154,6 +2196,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
+  // S-01 상점 카테고리 화면 / S-02 상점 상품 목록 화면 분기
   Widget _buildShopScreen() {
     final selectedCategory = _selectedStoreCategory;
     if (selectedCategory != null) {
@@ -2231,6 +2274,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
+  // S-01 상점 카테고리 화면
   Widget _buildStoreCategoryGrid() {
     const categories = [
       (StoreCategory.balloon, '풍선 모양'),
@@ -2270,6 +2314,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     setState(() {
       _selectedStoreCategory = category;
       _storeNavigationVisible = true;
+      _storeProductFilter = StoreProductFilter.all;
     });
   }
 
@@ -2282,18 +2327,23 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         StoreCategory.limited => '한정 상품',
       };
 
-  IconData _storeCategoryIcon(StoreCategory category) => switch (category) {
-        StoreCategory.balloon => Icons.circle_outlined,
-        StoreCategory.popEffect => Icons.auto_awesome_rounded,
-        StoreCategory.background => Icons.landscape_rounded,
-        StoreCategory.soundEffect => Icons.volume_up_rounded,
-        StoreCategory.music => Icons.music_note_rounded,
-        StoreCategory.limited => Icons.inventory_2_outlined,
+  List<StoreProduct> _filteredStoreProducts(StoreCategory category) {
+    return _storeProducts.where((product) {
+      if (product.category != category) return false;
+      return switch (_storeProductFilter) {
+        StoreProductFilter.all => true,
+        StoreProductFilter.owned => product.owned,
+        StoreProductFilter.unowned => !product.owned,
+        StoreProductFilter.limited => product.limited,
       };
+    }).toList(growable: false);
+  }
 
+  // S-02 상점 상품 목록 화면
   Widget _buildStoreCategoryDetail(StoreCategory category) {
     final homeChromeScale = _homeChromeScale(context);
     final title = _storeCategoryTitle(category);
+    final products = _filteredStoreProducts(category);
     return Scaffold(
       backgroundColor: const Color(0xFFE8F8FF),
       body: SafeArea(
@@ -2322,6 +2372,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                         onPressed: () => setState(() {
                           _selectedStoreCategory = null;
                           _storeNavigationVisible = true;
+                          _storeProductFilter = StoreProductFilter.all;
                         }),
                         icon: const Icon(Icons.arrow_back_rounded),
                       ),
@@ -2341,40 +2392,55 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     ],
                   ),
                 ),
+                StoreProductFilterBar(
+                  selected: _storeProductFilter,
+                  onSelected: (filter) => setState(() {
+                    _storeProductFilter = filter;
+                    _storeNavigationVisible = true;
+                  }),
+                ),
                 Expanded(
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: _onStoreScrollNotification,
-                    child: ListView(
-                      key: const ValueKey('store-detail-scroll'),
-                      padding: EdgeInsets.fromLTRB(
-                        4,
-                        8,
-                        4,
-                        86 * homeChromeScale + 24,
-                      ),
-                      children: [
-                        if (category == StoreCategory.limited)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 80),
-                            child: Text(
-                              '한정 상품 준비 중',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Color(0xFF47677A),
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                              ),
+                  child: products.isEmpty
+                      ? const Center(
+                          child: Text(
+                            '표시할 상품이 없습니다',
+                            key: ValueKey('store-products-empty'),
+                            style: TextStyle(
+                              color: Color(0xFF6E8492),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
                             ),
-                          )
-                        else
-                          _storeSection(
-                            category: category,
-                            title: title,
-                            icon: _storeCategoryIcon(category),
                           ),
-                      ],
-                    ),
-                  ),
+                        )
+                      : NotificationListener<ScrollNotification>(
+                          key: const ValueKey('store-detail-scroll'),
+                          onNotification: _onStoreScrollNotification,
+                          child: GridView.builder(
+                            key: const ValueKey('store-product-grid'),
+                            padding: EdgeInsets.fromLTRB(
+                              6,
+                              8,
+                              6,
+                              86 * homeChromeScale + 24,
+                            ),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 4,
+                              crossAxisSpacing: 6,
+                              mainAxisSpacing: 8,
+                              childAspectRatio: 0.78,
+                            ),
+                            itemCount: products.length,
+                            itemBuilder: (context, index) {
+                              final product = products[index];
+                              return StoreProductCard(
+                                product: product,
+                                onPressed: () =>
+                                    _onStoreProductPressed(product),
+                              );
+                            },
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -2414,21 +2480,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
-  Widget _storeSection({
-    required StoreCategory category,
-    required String title,
-    required IconData icon,
-  }) =>
-      StoreCategorySection(
-        category: category,
-        title: title,
-        icon: icon,
-        products: _storeProducts
-            .where((product) => product.category == category)
-            .toList(growable: false),
-        onProductPressed: _onStoreProductPressed,
-      );
-
   void _onStoreProductPressed(StoreProduct product) {
     final message = product.equipped
         ? '${product.name} 사용 중'
@@ -2438,6 +2489,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _showComingSoon(message);
   }
 
+  // E-01 이벤트 화면 / R-01 랭킹 화면
   Widget _buildMainPlaceholder({
     required MainTab tab,
     required String message,
@@ -2514,6 +2566,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           ),
       };
     }
+    // G-01 게임 플레이 화면
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -2770,6 +2823,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
+  // G-02 게임 완료 및 게임오버 화면
   Widget _buildGameOver({bool completed = false}) {
     return Positioned.fill(
       child: ColoredBox(
@@ -2935,6 +2989,75 @@ class StoreCategoryMenuCard extends StatelessWidget {
       );
 }
 
+class StoreProductFilterBar extends StatelessWidget {
+  const StoreProductFilterBar({
+    super.key,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final StoreProductFilter selected;
+  final ValueChanged<StoreProductFilter> onSelected;
+
+  static const _items = <(StoreProductFilter, String)>[
+    (StoreProductFilter.all, '전체'),
+    (StoreProductFilter.owned, '보유'),
+    (StoreProductFilter.unowned, '미보유'),
+    (StoreProductFilter.limited, '한정'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 36,
+      margin: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x18204A5F),
+            blurRadius: 5,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          for (final item in _items)
+            Expanded(
+              child: InkWell(
+                key: ValueKey('store-filter-${item.$1.name}'),
+                onTap: () => onSelected(item.$1),
+                borderRadius: BorderRadius.circular(15),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected == item.$1
+                        ? const Color(0xFFFFD8E5)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Text(
+                    item.$2,
+                    style: TextStyle(
+                      color: selected == item.$1
+                          ? const Color(0xFFFF4F7B)
+                          : const Color(0xFF526B79),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class StoreCategorySection extends StatelessWidget {
   const StoreCategorySection({
     super.key,
@@ -3016,128 +3139,140 @@ class StoreProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Material(
       key: ValueKey('store-product-${product.id}'),
-      width: 158,
-      padding: const EdgeInsets.fromLTRB(11, 11, 11, 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFFFFDF8), width: 1.5),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33204A5F),
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Expanded(child: _preview()),
-          const SizedBox(height: 6),
-          Text(
-            product.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF244F68),
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
+      color: Colors.white,
+      elevation: product.equipped ? 3 : 1.5,
+      shadowColor: const Color(0x33204A5F),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        key: ValueKey('store-action-${product.id}'),
+        onTap: product.equipped || product.locked ? null : onPressed,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(5, 5, 5, 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: product.equipped
+                  ? const Color(0xFF8EDCB7)
+                  : const Color(0xFFE8EEF2),
+              width: product.equipped ? 1.5 : 1,
             ),
           ),
-          const SizedBox(height: 4),
-          SizedBox(
-            height: 22,
-            child: product.equipped
-                ? const Text(
-                    '보유 완료',
-                    style: TextStyle(
-                      color: Color(0xFF58A886),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  )
-                : product.owned
-                    ? const Text(
-                        '보유 중',
-                        style: TextStyle(
-                          color: Color(0xFF7354E8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.monetization_on_rounded,
-                            color: Color(0xFFFFB300),
-                            size: 17,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${product.price}',
-                            style: const TextStyle(
-                              color: Color(0xFF6B5A36),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-          ),
-          const SizedBox(height: 5),
-          SizedBox(
-            width: double.infinity,
-            height: 36,
-            child: FilledButton.icon(
-              key: ValueKey('store-action-${product.id}'),
-              onPressed: product.equipped ? null : onPressed,
-              icon: Icon(
-                product.equipped
-                    ? Icons.check_circle_rounded
-                    : product.owned
-                        ? Icons.checkroom_rounded
-                        : Icons.shopping_bag_rounded,
-                size: 17,
-              ),
-              label: Text(
-                product.equipped
-                    ? '사용 중'
-                    : product.owned
-                        ? '사용하기'
-                        : '구매',
-              ),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                backgroundColor: product.owned
-                    ? const Color(0xFF7354E8)
-                    : const Color(0xFFFF5C8A),
-                disabledBackgroundColor: const Color(0xFF66C6A5),
-                disabledForegroundColor: Colors.white,
-                textStyle: const TextStyle(
-                  fontSize: 12,
+          child: Column(
+            children: [
+              Expanded(child: product.locked ? _lockedPreview() : _preview()),
+              const SizedBox(height: 3),
+              Text(
+                product.locked ? '???' : product.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: product.locked
+                      ? const Color(0xFF87949C)
+                      : const Color(0xFF244F68),
+                  fontSize: 10,
                   fontWeight: FontWeight.w900,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
               ),
-            ),
+              const SizedBox(height: 2),
+              SizedBox(height: 15, child: _status()),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _status() {
+    if (product.locked) {
+      return const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.lock_rounded, color: Color(0xFF98A3AA), size: 10),
+          SizedBox(width: 2),
+          Text(
+            '잠김',
+            style: TextStyle(
+              color: Color(0xFF87949C),
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      );
+    }
+    if (product.equipped) {
+      return const Text(
+        '사용 중',
+        style: TextStyle(
+          color: Color(0xFF35A978),
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+        ),
+      );
+    }
+    if (product.owned) {
+      return const Text(
+        '보유',
+        style: TextStyle(
+          color: Color(0xFF7354E8),
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+        ),
+      );
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(
+          Icons.monetization_on_rounded,
+          color: Color(0xFFFFB300),
+          size: 11,
+        ),
+        const SizedBox(width: 2),
+        Flexible(
+          child: Text(
+            '${product.price}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF6B5A36),
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _lockedPreview() => const Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Color(0xFFE1E5E8),
+            shape: BoxShape.circle,
+          ),
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: Icon(
+              Icons.question_mark_rounded,
+              color: Color(0xFF98A3AA),
+              size: 22,
+            ),
+          ),
+        ),
+      );
 
   Widget _preview() {
     switch (product.previewType) {
       case StorePreviewType.balloon:
         return Center(
           child: SizedBox(
-            width: 58,
-            height: 76,
+            width: 34,
+            height: 45,
             child: CustomPaint(
                 painter: BalloonPainter(color: product.previewData)),
           ),
@@ -3148,47 +3283,47 @@ class StoreProductCard extends StatelessWidget {
             alignment: Alignment.center,
             children: [
               Icon(Icons.auto_awesome_rounded,
-                  color: product.previewData, size: 66),
+                  color: product.previewData, size: 34),
               const Positioned(
-                right: 16,
-                top: 11,
+                right: 5,
+                top: 2,
                 child: Icon(Icons.bolt_rounded,
-                    color: Color(0xFFFFC857), size: 29),
+                    color: Color(0xFFFFC857), size: 17),
               ),
             ],
           ),
         );
       case StorePreviewType.background:
         return Container(
-          margin: const EdgeInsets.symmetric(vertical: 12),
+          margin: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [product.previewData, const Color(0xFF85D86A)],
             ),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: const Center(
-            child: Icon(Icons.landscape_rounded, color: Colors.white, size: 48),
+            child: Icon(Icons.landscape_rounded, color: Colors.white, size: 28),
           ),
         );
       case StorePreviewType.sound:
         return Center(
           child: Icon(Icons.graphic_eq_rounded,
-              color: product.previewData, size: 70),
+              color: product.previewData, size: 36),
         );
       case StorePreviewType.music:
         return Center(
           child: Container(
-            width: 70,
-            height: 70,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: product.previewData.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(Icons.music_note_rounded,
-                color: product.previewData, size: 48),
+                color: product.previewData, size: 25),
           ),
         );
     }
