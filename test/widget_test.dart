@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/dev/dev_coin_tool.dart';
 import 'package:balloon_pop_game/audio/pop_sound.dart';
@@ -7,6 +8,7 @@ import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
 import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<void> tapSectionStart(WidgetTester tester, int section) async {
@@ -63,6 +65,92 @@ void main() {
     expect(stage10.bossCount, 1);
     expect(stage20.bossCount, 2);
     expect(stage20.duration, const Duration(seconds: 10));
+  });
+
+  testWidgets('heart balloon asset has a fully transparent surrounding area',
+      (tester) async {
+    await tester.runAsync(() async {
+      final asset = await rootBundle.load('assets/images/heart_balloon.png');
+      final codec = await ui.instantiateImageCodec(
+        asset.buffer.asUint8List(asset.offsetInBytes, asset.lengthInBytes),
+      );
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      expect(image.width, 256);
+      expect(image.height, 256);
+      expect(rgba, isNotNull);
+
+      int alphaAt(int x, int y) =>
+          rgba!.getUint8(((y * image.width) + x) * 4 + 3);
+
+      for (final point in const [
+        Offset(0, 0),
+        Offset(255, 0),
+        Offset(0, 255),
+        Offset(255, 255),
+        Offset(10, 128),
+        Offset(128, 10),
+        Offset(245, 128),
+        Offset(30, 30),
+        Offset(225, 225),
+      ]) {
+        expect(alphaAt(point.dx.toInt(), point.dy.toInt()), 0);
+      }
+      for (var x = 0; x < image.width; x++) {
+        expect(alphaAt(x, 0), 0);
+        expect(alphaAt(x, image.height - 1), 0);
+      }
+      for (var y = 0; y < image.height; y++) {
+        expect(alphaAt(0, y), 0);
+        expect(alphaAt(image.width - 1, y), 0);
+      }
+
+      image.dispose();
+      codec.dispose();
+    });
+  });
+
+  testWidgets('all six heart colors preserve the asset alpha mask',
+      (tester) async {
+    const colors = [
+      Color(0xFFFF5C8A),
+      Color(0xFFF4435D),
+      Color(0xFF9B6EF3),
+      Color(0xFF56D6B1),
+      Color(0xFF55B9F3),
+      Color(0xFFFFC94D),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Row(
+          children: [
+            for (var index = 0; index < colors.length; index++)
+              SizedBox(
+                width: 40,
+                height: 50,
+                child: HeartBalloonSprite(
+                  key: ValueKey('heart-color-$index'),
+                  color: colors[index],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    for (var index = 0; index < colors.length; index++) {
+      final sprite = find.byKey(ValueKey('heart-color-$index'));
+      final image = tester.widget<Image>(
+        find.descendant(of: sprite, matching: find.byType(Image)),
+      );
+      expect(image.color, colors[index]);
+      expect(image.colorBlendMode, BlendMode.srcIn);
+      expect(
+        find.descendant(of: sprite, matching: find.byType(ColorFiltered)),
+        findsNothing,
+      );
+    }
   });
 
   test('30fps elapsed-time integration preserves movement and caps long frames',
@@ -499,11 +587,17 @@ void main() {
     expect(find.byKey(const ValueKey('store-filter-unowned')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-limited')), findsOneWidget);
     expect(find.byType(StoreProductCard), findsNWidgets(4));
+    final storeScrollable = find
+        .descendant(
+          of: find.byKey(const ValueKey('store-product-grid')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
     for (final rarity in StoreRarity.values) {
       await tester.scrollUntilVisible(
         find.byKey(ValueKey('store-rarity-header-${rarity.name}')),
         180,
-        scrollable: find.byKey(const ValueKey('store-product-grid')),
+        scrollable: storeScrollable,
       );
       expect(
         find.byKey(ValueKey('store-rarity-header-${rarity.name}')),
@@ -520,7 +614,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('store-product-balloon-default')),
       -220,
-      scrollable: find.byKey(const ValueKey('store-product-grid')),
+      scrollable: storeScrollable,
     );
 
     expect(
@@ -568,7 +662,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('store-product-balloon-default')),
       -220,
-      scrollable: find.byKey(const ValueKey('store-product-grid')),
+      scrollable: storeScrollable,
     );
     expect(find.byType(StoreProductCard), findsNWidgets(2));
     expect(find.byKey(const ValueKey('store-product-balloon-default')),
@@ -581,7 +675,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('store-product-balloon-heart')),
       -220,
-      scrollable: find.byKey(const ValueKey('store-product-grid')),
+      scrollable: storeScrollable,
     );
     expect(find.byType(StoreProductCard), findsNWidgets(2));
     expect(find.byKey(const ValueKey('store-product-balloon-heart')),
@@ -602,7 +696,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('store-product-balloon-default')),
       -220,
-      scrollable: find.byKey(const ValueKey('store-product-grid')),
+      scrollable: storeScrollable,
     );
     expect(find.byType(StoreProductCard), findsNWidgets(4));
 
@@ -752,6 +846,15 @@ void main() {
 
     final heartCard = find.byKey(
       const ValueKey('store-product-balloon-heart'),
+    );
+    final storeHeartImage = tester.widget<Image>(
+      find.descendant(of: heartCard, matching: find.byType(Image)),
+    );
+    expect(storeHeartImage.color, isNull);
+    expect(storeHeartImage.colorBlendMode, isNull);
+    expect(
+      find.descendant(of: heartCard, matching: find.byType(ColorFiltered)),
+      findsNothing,
     );
     expect(
       find.descendant(of: heartCard, matching: find.text('Common')),
@@ -1109,6 +1212,14 @@ void main() {
     expect(find.text('10 STAGE'), findsOneWidget);
     expect(find.text('시간  8'), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
+    expect(find.byType(HeartBossBalloonSprite), findsNothing);
+    final defaultBossPaint = tester.widget<CustomPaint>(
+      find.descendant(
+        of: find.byKey(const ValueKey('boss-raster-0')),
+        matching: find.byType(CustomPaint),
+      ),
+    );
+    expect(defaultBossPaint.painter, isA<BossBalloonPainter>());
 
     for (var hit = 0; hit < 10; hit++) {
       await tapGameTarget(tester, 'boss-balloon-0');
@@ -1162,6 +1273,23 @@ void main() {
 
   testWidgets('stage twenty has two independent bosses and scores once each',
       (tester) async {
+    ProgressStorage.addCoins(100);
+    expect(
+      PurchaseService.purchase(
+        productId: 'balloon-heart',
+        price: 100,
+        initiallyOwned: false,
+      ),
+      PurchaseResult.success,
+    );
+    expect(
+      PurchaseService.equip(
+        category: StoreCategory.balloon.name,
+        productId: 'balloon-heart',
+        initiallyOwned: false,
+      ),
+      EquipResult.success,
+    );
     tester.view.physicalSize = const Size(800, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -1173,6 +1301,11 @@ void main() {
     var nextBalloonId = 0;
     for (var stage = 1; stage <= 19; stage++) {
       if (stage == 10) {
+        expect(find.byType(HeartBossBalloonSprite), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('heart-boss-sprite-0')),
+          findsOneWidget,
+        );
         for (var hit = 0; hit < 10; hit++) {
           await tapGameTarget(tester, 'boss-balloon-0');
         }
@@ -1196,6 +1329,22 @@ void main() {
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-raster-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-raster-1')), findsOneWidget);
+    expect(find.byType(HeartBossBalloonSprite), findsNWidgets(2));
+    final heartBosses = tester
+        .widgetList<HeartBossBalloonSprite>(
+          find.byType(HeartBossBalloonSprite),
+        )
+        .toList(growable: false);
+    expect(heartBosses[0].color, isNot(heartBosses[1].color));
+    for (final heartBoss in heartBosses) {
+      final image = tester.widget<Image>(
+        find.descendant(
+          of: find.byWidget(heartBoss),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(image.colorBlendMode, BlendMode.srcIn);
+    }
     expect(find.text('남은 풍선  2'), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('boss-balloon-0'))) !=
@@ -1206,6 +1355,11 @@ void main() {
     final bossBSize = tester.getSize(
       find.byKey(const ValueKey('boss-balloon-1')),
     );
+    final bossAColorBeforeHit = tester
+        .widget<HeartBossBalloonSprite>(
+          find.byKey(const ValueKey('heart-boss-sprite-0')),
+        )
+        .color;
     await tapGameTarget(tester, 'boss-balloon-0');
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(
@@ -1214,13 +1368,44 @@ void main() {
       true,
     );
     expect(
+      tester
+          .widget<HeartBossBalloonSprite>(
+            find.byKey(const ValueKey('heart-boss-sprite-0')),
+          )
+          .color,
+      isNot(bossAColorBeforeHit),
+    );
+    expect(
       tester.getSize(find.byKey(const ValueKey('boss-balloon-1'))),
       bossBSize,
     );
 
-    for (var hit = 1; hit < 15; hit++) {
+    for (var hit = 1; hit < 14; hit++) {
       await tapGameTarget(tester, 'boss-balloon-0');
     }
+    final heartPiecesBeforeFinalHit = tester
+        .widget<CustomPaint>(
+          find.descendant(
+            of: find.byKey(const ValueKey('effects-boundary')),
+            matching: find.byType(CustomPaint),
+          ),
+        )
+        .painter! as EffectsPainter;
+    final heartPieceCountBeforeFinalHit =
+        heartPiecesBeforeFinalHit.heartPieceCount;
+    await tapGameTarget(tester, 'boss-balloon-0');
+    final heartPiecesAfterFinalHit = tester
+        .widget<CustomPaint>(
+          find.descendant(
+            of: find.byKey(const ValueKey('effects-boundary')),
+            matching: find.byType(CustomPaint),
+          ),
+        )
+        .painter! as EffectsPainter;
+    expect(
+      heartPiecesAfterFinalHit.heartPieceCount,
+      heartPieceCountBeforeFinalHit + 28,
+    );
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
     expect(find.text('BOSS CLEAR!'), findsNothing);

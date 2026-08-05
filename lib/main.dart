@@ -172,6 +172,8 @@ class BossBalloon {
     required this.velocity,
     required this.size,
     required this.maxHp,
+    this.skinId = 'balloon-default',
+    this.skinColor,
   });
 
   final int id;
@@ -179,6 +181,8 @@ class BossBalloon {
   Offset velocity;
   double size;
   final int maxHp;
+  final String skinId;
+  final Color? skinColor;
   late int hp = maxHp;
   double turnCooldown = 0.65;
 }
@@ -512,6 +516,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Size _playArea = Size.zero;
   int _nextId = 0;
   int _lastHeartColorIndex = -1;
+  int _lastHeartBossColorIndex = -1;
   int _score = 0;
   int _stage = 1;
   int _secondsLeft = 15;
@@ -609,6 +614,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopwatch.reset();
     _nextId = 0;
     _lastHeartColorIndex = -1;
+    _lastHeartBossColorIndex = -1;
     _score = 0;
     _earnedCoins = 0;
     _coinRewardSession.reset();
@@ -788,8 +794,21 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     return _heartColors[next];
   }
 
+  Color _nextHeartBossColor() {
+    var next = _lastHeartBossColorIndex < 0
+        ? _random.nextInt(_heartColors.length)
+        : _random.nextInt(_heartColors.length - 1);
+    if (_lastHeartBossColorIndex >= 0 && next >= _lastHeartBossColorIndex) {
+      next++;
+    }
+    _lastHeartBossColorIndex = next;
+    return _heartColors[next];
+  }
+
   void _spawnBoss() {
     final config = _stageConfig;
+    final skinId =
+        _equippedProductIds[StoreCategory.balloon] ?? 'balloon-default';
     final maxSize = _stage >= 20 ? 300.0 : 270.0;
     final minSize = _stage >= 20 ? 225.0 : 210.0;
     final size =
@@ -804,6 +823,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           velocity: Offset(cos(angle) * speed, sin(angle) * speed),
           size: size,
           maxHp: config.bossHp,
+          skinId: skinId,
+          skinColor: skinId == 'balloon-heart' ? _nextHeartBossColor() : null,
         ),
       );
     }
@@ -1012,8 +1033,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final removed = _bosses.remove(boss);
     if (!removed) return;
     _score += 10;
-    PopSound.playBossExplosion();
-    _spawnPieces(center, color, 280, big: true);
+    if (boss.skinId == 'balloon-heart') {
+      PopSound.playHeart();
+      PopSound.playBossExplosion();
+      _spawnHeartPieces(center, color, boss.size, big: true);
+    } else {
+      PopSound.playBossExplosion();
+      _spawnPieces(center, color, 280, big: true);
+    }
     _spawnRing(center, const Color(0xFFFFD54F), 190);
     _spawnRing(center, const Color(0xFFFF5C8A), 250);
     if (_bosses.isNotEmpty) {
@@ -1082,21 +1109,36 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _effectsRevision++;
   }
 
-  void _spawnHeartPieces(Offset center, Color color, double sourceSize) {
-    const count = 5;
+  void _spawnHeartPieces(
+    Offset center,
+    Color color,
+    double sourceSize, {
+    bool big = false,
+  }) {
+    final count = big ? 28 : 5;
+    final speedBase = big ? 250.0 : 125.0;
     for (var i = 0; i < count; i++) {
-      final angle = (pi * 2 / count) * i - pi * 0.82;
-      final speed = 125 + _random.nextDouble() * 85;
+      final angle = (pi * 2 / count) * i -
+          pi * 0.82 +
+          (_random.nextDouble() - 0.5) * (big ? 0.35 : 0.12);
+      final speed = speedBase + _random.nextDouble() * (big ? 280.0 : 85.0);
       _pieces.add(
         PopPiece(
           position: center,
-          velocity: Offset(cos(angle) * speed, sin(angle) * speed - 55),
+          velocity: Offset(
+            cos(angle) * speed,
+            sin(angle) * speed - (big ? 120 : 55),
+          ),
           color: Color.lerp(color, Colors.white, 0.12)!,
-          size: sourceSize * (0.105 + _random.nextDouble() * 0.035),
+          size: big
+              ? 12 + _random.nextDouble() * 16
+              : sourceSize * (0.105 + _random.nextDouble() * 0.035),
           rotation: _random.nextDouble() * pi,
-          spin: (_random.nextDouble() - 0.5) * 8,
-          life: 0.72 + _random.nextDouble() * 0.18,
-          maxLife: 0.9,
+          spin: (_random.nextDouble() - 0.5) * (big ? 12 : 8),
+          life: big
+              ? 1.4 + _random.nextDouble() * 0.7
+              : 0.72 + _random.nextDouble() * 0.18,
+          maxLife: big ? 2.1 : 0.9,
           shape: EffectPieceShape.heart,
         ),
       );
@@ -2974,13 +3016,20 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           child: SizedBox(
             width: boss.size,
             height: boss.size + 32,
-            child: CustomPaint(
-              painter: BossBalloonPainter(
-                color: _bossColor(boss),
-                hp: boss.hp,
-                maxHp: boss.maxHp,
-              ),
-            ),
+            child: boss.skinId == 'balloon-heart'
+                ? HeartBossBalloonSprite(
+                    key: ValueKey('heart-boss-sprite-${boss.id}'),
+                    color: _bossColor(boss),
+                    hp: boss.hp,
+                    maxHp: boss.maxHp,
+                  )
+                : CustomPaint(
+                    painter: BossBalloonPainter(
+                      color: _bossColor(boss),
+                      hp: boss.hp,
+                      maxHp: boss.maxHp,
+                    ),
+                  ),
           ),
         ),
       ),
@@ -2993,15 +3042,23 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         (balloon.maxHp - balloon.hp) / balloon.maxHp * 0.38,
       )!;
 
-  Color _bossColor(BossBalloon boss) => Color.lerp(
-        _stage >= 20
-            ? (boss.id == 0 ? const Color(0xFFFF6B6B) : const Color(0xFF64B5F6))
-            : const Color(0xFF7E57C2),
-        _stage >= 20
-            ? (boss.id == 0 ? const Color(0xFFB71C1C) : const Color(0xFF0D47A1))
-            : const Color(0xFFFF3D67),
-        (boss.maxHp - boss.hp) / boss.maxHp,
-      )!;
+  Color _bossColor(BossBalloon boss) {
+    final progress = (boss.maxHp - boss.hp) / boss.maxHp;
+    if (boss.skinId == 'balloon-heart') {
+      final base = boss.skinColor ?? const Color(0xFFFF5C8A);
+      final finalColor = Color.lerp(base, const Color(0xFF3B246B), 0.62)!;
+      return Color.lerp(base, finalColor, progress)!;
+    }
+    return Color.lerp(
+      _stage >= 20
+          ? (boss.id == 0 ? const Color(0xFFFF6B6B) : const Color(0xFF64B5F6))
+          : const Color(0xFF7E57C2),
+      _stage >= 20
+          ? (boss.id == 0 ? const Color(0xFFB71C1C) : const Color(0xFF0D47A1))
+          : const Color(0xFFFF3D67),
+      progress,
+    )!;
+  }
 
   Widget _buildCenterMessage(String title, String? subtitle) {
     return Positioned.fill(
@@ -3975,7 +4032,62 @@ class HeartBalloonSprite extends StatelessWidget {
         filterQuality: FilterQuality.medium,
         gaplessPlayback: true,
         color: color,
-        colorBlendMode: BlendMode.hue,
+        // Apply the random color only where the source asset has alpha.
+        // BlendMode.hue can color the transparent image bounds on web.
+        colorBlendMode: BlendMode.srcIn,
+      );
+}
+
+class HeartBossBalloonSprite extends StatelessWidget {
+  const HeartBossBalloonSprite({
+    super.key,
+    required this.color,
+    required this.hp,
+    required this.maxHp,
+  });
+
+  final Color color;
+  final int hp;
+  final int maxHp;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 32,
+            child: HeartBalloonSprite(color: color),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 5,
+            child: Center(
+              child: FractionallySizedBox(
+                widthFactor: 0.62,
+                child: Container(
+                  height: 11,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: hp / maxHp,
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Color(0xFFFFD54F),
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       );
 }
 
