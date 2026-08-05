@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import 'audio/pop_sound.dart';
 import 'services/coin_service.dart';
+import 'services/purchase_service.dart';
 import 'storage/progress_storage.dart';
 
 void main() {
@@ -109,6 +110,20 @@ class StoreProduct {
   final bool limited;
 
   String get displayName => shortName ?? name;
+
+  StoreProduct copyWith({bool? owned}) => StoreProduct(
+        id: id,
+        category: category,
+        name: name,
+        price: price,
+        owned: owned ?? this.owned,
+        equipped: equipped,
+        previewType: previewType,
+        previewData: previewData,
+        shortName: shortName,
+        locked: locked,
+        limited: limited,
+      );
 }
 
 class Balloon {
@@ -471,6 +486,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   int _lastScore = 0;
   int _coinBalance = 0;
   int _earnedCoins = 0;
+  Set<String> _ownedProductIds = <String>{};
   bool _isNewBest = false;
   bool _resultSaved = false;
   MainTab _mainTab = MainTab.home;
@@ -492,6 +508,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _bestScore = ProgressStorage.bestScore();
     _lastScore = ProgressStorage.lastScore();
     _coinBalance = CoinService.balance;
+    _ownedProductIds = PurchaseService.ownedProductIds;
     _stagePageController = PageController();
     _headerData = ValueNotifier(_createHeaderData());
     _gameHeader = GameHeader(
@@ -1050,6 +1067,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _lastScore = 0;
       _coinBalance = 0;
       _earnedCoins = 0;
+      _ownedProductIds = <String>{};
       _isNewBest = false;
       _score = 0;
       _stage = 1;
@@ -2338,7 +2356,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       };
 
   List<StoreProduct> _filteredStoreProducts(StoreCategory category) {
-    return _storeProducts.where((product) {
+    return _storeProducts.map((product) {
+      final owned = product.owned || _ownedProductIds.contains(product.id);
+      return owned == product.owned ? product : product.copyWith(owned: owned);
+    }).where((product) {
       if (product.category != category) return false;
       return switch (_storeProductFilter) {
         StoreProductFilter.all => true,
@@ -2491,12 +2512,26 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _onStoreProductPressed(StoreProduct product) {
-    final message = product.equipped
-        ? '${product.name} 사용 중'
-        : product.owned
-            ? '${product.name} 적용 기능 준비 중'
-            : '${product.name} 구매 기능 준비 중';
-    _showComingSoon(message);
+    final result = PurchaseService.purchase(
+      productId: product.id,
+      price: product.price,
+      initiallyOwned: product.owned,
+      locked: product.locked,
+    );
+    switch (result) {
+      case PurchaseResult.success:
+        setState(() {
+          _coinBalance = CoinService.balance;
+          _ownedProductIds = PurchaseService.ownedProductIds;
+        });
+        _showComingSoon('${product.name} 구매 완료!');
+      case PurchaseResult.insufficientCoins:
+        _showComingSoon('코인이 부족해요!');
+      case PurchaseResult.alreadyOwned:
+        _showComingSoon('이미 보유한 상품입니다.');
+      case PurchaseResult.unavailable:
+        _showComingSoon('현재 구매할 수 없는 상품입니다.');
+    }
   }
 
   // E-01 이벤트 화면 / R-01 랭킹 화면

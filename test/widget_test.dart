@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
+import 'package:balloon_pop_game/services/purchase_service.dart';
 import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -164,6 +165,41 @@ void main() {
     session.reset();
     expect(session.grantForScore(27), 2);
     expect(CoinService.balance, 32);
+  });
+
+  test('purchase service charges once and persists ownership', () {
+    ProgressStorage.addCoins(320);
+
+    expect(
+      PurchaseService.purchase(
+        productId: 'test-product',
+        price: 250,
+        initiallyOwned: false,
+      ),
+      PurchaseResult.success,
+    );
+    expect(CoinService.balance, 70);
+    expect(PurchaseService.ownedProductIds, contains('test-product'));
+
+    expect(
+      PurchaseService.purchase(
+        productId: 'test-product',
+        price: 250,
+        initiallyOwned: false,
+      ),
+      PurchaseResult.alreadyOwned,
+    );
+    expect(CoinService.balance, 70);
+
+    expect(
+      PurchaseService.purchase(
+        productId: 'expensive-product',
+        price: 100,
+        initiallyOwned: false,
+      ),
+      PurchaseResult.insufficientCoins,
+    );
+    expect(CoinService.balance, 70);
   });
 
   testWidgets('home and store share the persisted coin balance',
@@ -390,6 +426,99 @@ void main() {
     expect(
         find.byKey(const ValueKey('home-nav-selected-home')), findsOneWidget);
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
+  });
+
+  testWidgets('buying a store product updates coins and survives reload',
+      (tester) async {
+    ProgressStorage.addCoins(600);
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('store-category-card-balloon')),
+    );
+    await tester.pumpAndSettle();
+
+    final productCard = find.byKey(const ValueKey('store-product-balloon-a'));
+    expect(
+      find.descendant(of: productCard, matching: find.text('500')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('store-action-balloon-a')),
+    );
+    await tester.pump();
+    expect(find.text('특별 풍선 A 구매 완료!'), findsOneWidget);
+    expect(CoinService.balance, 100);
+    expect(
+      find.descendant(of: productCard, matching: find.text('보유')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: productCard, matching: find.text('500')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-coin-hud')),
+        matching: find.text('100'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('store-action-balloon-a')),
+    );
+    await tester.pump();
+    expect(CoinService.balance, 100);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('store-category-card-balloon')),
+    );
+    await tester.pumpAndSettle();
+    final reloadedCard = find.byKey(const ValueKey('store-product-balloon-a'));
+    expect(
+      find.descendant(of: reloadedCard, matching: find.text('보유')),
+      findsOneWidget,
+    );
+    expect(CoinService.balance, 100);
+  });
+
+  testWidgets('insufficient coins do not purchase or charge a product',
+      (tester) async {
+    ProgressStorage.addCoins(100);
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('store-category-card-balloon')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('store-action-balloon-a')),
+    );
+    await tester.pump();
+    expect(find.text('코인이 부족해요!'), findsOneWidget);
+    expect(CoinService.balance, 100);
+    final productCard = find.byKey(const ValueKey('store-product-balloon-a'));
+    expect(
+      find.descendant(of: productCard, matching: find.text('500')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: productCard, matching: find.text('보유')),
+      findsNothing,
+    );
   });
 
   testWidgets('store header cards and navigation fit tall mobile and desktop',
