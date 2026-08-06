@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/dev/dev_coin_tool.dart';
 import 'package:balloon_pop_game/audio/pop_sound.dart';
+import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
@@ -67,6 +68,35 @@ void main() {
     expect(stage20.duration, const Duration(seconds: 10));
   });
 
+  test('balloon catalog is unique, ordered, and defines basic and heart', () {
+    expect(BalloonSkinCatalog.hasUniqueIds, isTrue);
+    expect(
+      BalloonSkinCatalog.definitions.map((skin) => skin.id).toSet().length,
+      BalloonSkinCatalog.definitions.length,
+    );
+    expect(
+      BalloonSkinCatalog.shopDefinitions.map((skin) => skin.shopOrder),
+      orderedEquals([0, 1, 2, 3]),
+    );
+
+    final basic = BalloonSkinCatalog.byIdOrDefault('balloon-default');
+    expect(basic.isDefault, isTrue);
+    expect(basic.rendererType, BalloonRendererType.painted);
+    expect(basic.popEffectType, BalloonPopEffectType.shards);
+    expect(basic.popSoundType, BalloonPopSoundType.basic);
+    expect(basic.supportsBossSkin, isTrue);
+
+    final heart = BalloonSkinCatalog.byIdOrDefault('balloon-heart');
+    expect(heart.price, 100);
+    expect(heart.rarity, BalloonRarity.common);
+    expect(heart.assetPath, 'assets/images/heart_balloon.png');
+    expect(heart.colorPalette, hasLength(6));
+    expect(heart.popEffectType, BalloonPopEffectType.hearts);
+    expect(heart.popSoundType, BalloonPopSoundType.heart);
+    expect(heart.supportsBossSkin, isTrue);
+    expect(heart.badge, BalloonBadge.newItem);
+  });
+
   testWidgets('heart balloon asset has a fully transparent surrounding area',
       (tester) async {
     await tester.runAsync(() async {
@@ -129,8 +159,11 @@ void main() {
               SizedBox(
                 width: 40,
                 height: 50,
-                child: HeartBalloonSprite(
+                child: BalloonSkinRenderer(
                   key: ValueKey('heart-color-$index'),
+                  definition: BalloonSkinCatalog.byIdOrDefault(
+                    'balloon-heart',
+                  ),
                   color: colors[index],
                 ),
               ),
@@ -144,12 +177,18 @@ void main() {
       final image = tester.widget<Image>(
         find.descendant(of: sprite, matching: find.byType(Image)),
       );
-      expect(image.color, colors[index]);
-      expect(image.colorBlendMode, BlendMode.srcIn);
+      expect(image.color, isNull);
+      expect(image.colorBlendMode, isNull);
       expect(
         find.descendant(of: sprite, matching: find.byType(ColorFiltered)),
-        findsNothing,
+        findsOneWidget,
       );
+      final artwork = tester.widget<BalloonSkinArtwork>(
+        find.descendant(of: sprite, matching: find.byType(BalloonSkinArtwork)),
+      );
+      expect(artwork.color, colors[index]);
+      final matrix = BalloonSkinArtwork.tintMatrix(colors[index]);
+      expect(matrix.sublist(15), <double>[0, 0, 0, 1, 0]);
     }
   });
 
@@ -593,7 +632,7 @@ void main() {
           matching: find.byType(Scrollable),
         )
         .first;
-    for (final rarity in StoreRarity.values) {
+    for (final rarity in BalloonRarity.values) {
       await tester.scrollUntilVisible(
         find.byKey(ValueKey('store-rarity-header-${rarity.name}')),
         180,
@@ -854,7 +893,11 @@ void main() {
     expect(storeHeartImage.colorBlendMode, isNull);
     expect(
       find.descendant(of: heartCard, matching: find.byType(ColorFiltered)),
-      findsNothing,
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: heartCard, matching: find.byType(BalloonSkinArtwork)),
+      findsOneWidget,
     );
     expect(
       find.descendant(of: heartCard, matching: find.text('Common')),
@@ -891,15 +934,41 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('home-nav-home')));
+    // Existing persisted IDs remain valid after the catalog migration.
+    await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    expect(PurchaseService.ownedProductIds, contains('balloon-heart'));
+    expect(
+      PurchaseService.equippedProductId(
+        StoreCategory.balloon.name,
+        defaultProductId: BalloonSkinCatalog.defaultId,
+      ),
+      'balloon-heart',
+    );
     await tapSectionStart(tester, 1);
 
-    final heartSprites = tester.widgetList<HeartBalloonSprite>(
-      find.byType(HeartBalloonSprite),
-    );
+    final heartSprites = tester
+        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+        .where((renderer) => renderer.definition.id == 'balloon-heart');
     expect(heartSprites, hasLength(2));
     expect(heartSprites.first.color, isNot(heartSprites.last.color));
+    for (final heartSprite in heartSprites) {
+      final spriteFinder = find.byWidget(heartSprite);
+      expect(
+        find.descendant(
+          of: spriteFinder,
+          matching: find.byType(BalloonSkinArtwork),
+        ),
+        findsOneWidget,
+      );
+      final gameImage = tester.widget<Image>(
+        find.descendant(of: spriteFinder, matching: find.byType(Image)),
+      );
+      expect(gameImage.color, isNull);
+      expect(gameImage.colorBlendMode, isNull);
+    }
 
     await tapGameTarget(tester, 0);
     final effectsPainter = tester
@@ -1086,6 +1155,26 @@ void main() {
     expect(find.byKey(const ValueKey('game-header-boundary')), findsOneWidget);
     expect(find.byKey(const ValueKey('balloon-raster-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('balloon-raster-1')), findsOneWidget);
+    final basicRenderers = tester
+        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer));
+    expect(basicRenderers, hasLength(2));
+    expect(
+      basicRenderers.every(
+        (renderer) =>
+            renderer.definition.id == BalloonSkinCatalog.defaultId &&
+            !renderer.isBoss,
+      ),
+      isTrue,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('balloon-raster-0')),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is CustomPaint && widget.painter is BalloonPainter,
+        ),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('only the tapped balloon is removed', (tester) async {
@@ -1119,6 +1208,8 @@ void main() {
         .painter! as EffectsPainter;
     expect(painter.pieceCount, inInclusiveRange(6, 8));
     expect(painter.ringCount, 1);
+    expect(PopSound.basicPlayCount, 1);
+    expect(PopSound.heartPlayCount, 0);
     expect(
       find.byWidgetPredicate(
         (widget) => widget is CustomPaint && widget.painter is EffectsPainter,
@@ -1212,7 +1303,12 @@ void main() {
     expect(find.text('10 STAGE'), findsOneWidget);
     expect(find.text('시간  8'), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
-    expect(find.byType(HeartBossBalloonSprite), findsNothing);
+    expect(
+      tester
+          .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+          .where((renderer) => renderer.isBoss),
+      hasLength(1),
+    );
     final defaultBossPaint = tester.widget<CustomPaint>(
       find.descendant(
         of: find.byKey(const ValueKey('boss-raster-0')),
@@ -1301,9 +1397,20 @@ void main() {
     var nextBalloonId = 0;
     for (var stage = 1; stage <= 19; stage++) {
       if (stage == 10) {
-        expect(find.byType(HeartBossBalloonSprite), findsOneWidget);
         expect(
-          find.byKey(const ValueKey('heart-boss-sprite-0')),
+          tester
+              .widgetList<BalloonSkinRenderer>(
+                find.byType(BalloonSkinRenderer),
+              )
+              .where(
+                (renderer) =>
+                    renderer.isBoss &&
+                    renderer.definition.id == 'balloon-heart',
+              ),
+          hasLength(1),
+        );
+        expect(
+          find.byKey(const ValueKey('boss-skin-0')),
           findsOneWidget,
         );
         for (var hit = 0; hit < 10; hit++) {
@@ -1329,10 +1436,14 @@ void main() {
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-raster-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-raster-1')), findsOneWidget);
-    expect(find.byType(HeartBossBalloonSprite), findsNWidgets(2));
+    expect(find.byType(BalloonSkinRenderer), findsNWidgets(2));
     final heartBosses = tester
-        .widgetList<HeartBossBalloonSprite>(
-          find.byType(HeartBossBalloonSprite),
+        .widgetList<BalloonSkinRenderer>(
+          find.byType(BalloonSkinRenderer),
+        )
+        .where(
+          (renderer) =>
+              renderer.isBoss && renderer.definition.id == 'balloon-heart',
         )
         .toList(growable: false);
     expect(heartBosses[0].color, isNot(heartBosses[1].color));
@@ -1343,7 +1454,15 @@ void main() {
           matching: find.byType(Image),
         ),
       );
-      expect(image.colorBlendMode, BlendMode.srcIn);
+      expect(image.color, isNull);
+      expect(image.colorBlendMode, isNull);
+      expect(
+        find.descendant(
+          of: find.byWidget(heartBoss),
+          matching: find.byType(BalloonSkinArtwork),
+        ),
+        findsOneWidget,
+      );
     }
     expect(find.text('남은 풍선  2'), findsOneWidget);
     expect(
@@ -1356,8 +1475,8 @@ void main() {
       find.byKey(const ValueKey('boss-balloon-1')),
     );
     final bossAColorBeforeHit = tester
-        .widget<HeartBossBalloonSprite>(
-          find.byKey(const ValueKey('heart-boss-sprite-0')),
+        .widget<BalloonSkinRenderer>(
+          find.byKey(const ValueKey('boss-skin-0')),
         )
         .color;
     await tapGameTarget(tester, 'boss-balloon-0');
@@ -1369,8 +1488,8 @@ void main() {
     );
     expect(
       tester
-          .widget<HeartBossBalloonSprite>(
-            find.byKey(const ValueKey('heart-boss-sprite-0')),
+          .widget<BalloonSkinRenderer>(
+            find.byKey(const ValueKey('boss-skin-0')),
           )
           .color,
       isNot(bossAColorBeforeHit),

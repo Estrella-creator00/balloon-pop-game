@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import 'audio/pop_sound.dart';
+import 'balloon_skin_catalog.dart';
 import 'dev/dev_coin_tool.dart';
 import 'services/coin_service.dart';
 import 'services/purchase_service.dart';
@@ -79,16 +80,7 @@ enum StoreCategory {
   limited,
 }
 
-enum StorePreviewType {
-  balloon,
-  heartBalloon,
-  effect,
-  background,
-  sound,
-  music
-}
-
-enum StoreRarity { common, rare, epic, legendary }
+enum StorePreviewType { balloon, effect, background, sound, music }
 
 enum StoreProductFilter { all, owned, unowned, limited }
 
@@ -105,8 +97,23 @@ class StoreProduct {
     this.shortName,
     this.locked = false,
     this.limited = false,
-    this.rarity = StoreRarity.common,
+    this.rarity = BalloonRarity.common,
+    this.badge = BalloonBadge.none,
   });
+
+  factory StoreProduct.fromBalloonSkin(BalloonSkinDefinition definition) =>
+      StoreProduct(
+        id: definition.id,
+        category: StoreCategory.balloon,
+        name: definition.displayName,
+        price: definition.price,
+        owned: definition.initiallyOwned,
+        equipped: definition.isDefault,
+        previewType: StorePreviewType.balloon,
+        previewData: definition.previewColor,
+        rarity: definition.rarity,
+        badge: definition.badge,
+      );
 
   final String id;
   final StoreCategory category;
@@ -119,7 +126,8 @@ class StoreProduct {
   final String? shortName;
   final bool locked;
   final bool limited;
-  final StoreRarity rarity;
+  final BalloonRarity rarity;
+  final BalloonBadge badge;
 
   String get displayName => shortName ?? name;
 
@@ -136,6 +144,7 @@ class StoreProduct {
         locked: locked,
         limited: limited,
         rarity: rarity,
+        badge: badge,
       );
 }
 
@@ -337,43 +346,8 @@ class BalloonGamePage extends StatefulWidget {
 
 class _BalloonGamePageState extends State<BalloonGamePage>
     with WidgetsBindingObserver {
-  static const _storeProducts = [
-    StoreProduct(
-        id: 'balloon-default',
-        category: StoreCategory.balloon,
-        name: '기본 풍선',
-        price: 0,
-        owned: true,
-        equipped: true,
-        previewType: StorePreviewType.balloon,
-        previewData: Color(0xFFFF5C8A)),
-    StoreProduct(
-        id: 'balloon-heart',
-        category: StoreCategory.balloon,
-        name: '하트',
-        price: 100,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.heartBalloon,
-        previewData: Color(0xFFFF5C8A)),
-    StoreProduct(
-        id: 'balloon-a',
-        category: StoreCategory.balloon,
-        name: '특별 풍선 A',
-        price: 500,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.balloon,
-        previewData: Color(0xFF54A8FF)),
-    StoreProduct(
-        id: 'balloon-b',
-        category: StoreCategory.balloon,
-        name: '특별 풍선 B',
-        price: 700,
-        owned: true,
-        equipped: false,
-        previewType: StorePreviewType.balloon,
-        previewData: Color(0xFF8B7CF6)),
+  static final List<StoreProduct> _storeProducts = [
+    ...BalloonSkinCatalog.shopDefinitions.map(StoreProduct.fromBalloonSkin),
     StoreProduct(
         id: 'pop-default',
         category: StoreCategory.popEffect,
@@ -485,24 +459,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   ];
   static const _stageClearDelay = Duration(milliseconds: 400);
   static const _bossClearDelay = Duration(seconds: 1);
-  static const _colors = [
-    Color(0xFFFF5C8A),
-    Color(0xFFFFC857),
-    Color(0xFF5CD6C0),
-    Color(0xFF8B7CF6),
-    Color(0xFFFF8A5B),
-    Color(0xFF54A8FF),
-    Color(0xFFFF7FDB),
-  ];
-  static const _heartColors = [
-    Color(0xFFFF5C8A),
-    Color(0xFFF4435D),
-    Color(0xFF9B6EF3),
-    Color(0xFF56D6B1),
-    Color(0xFF55B9F3),
-    Color(0xFFFFC94D),
-  ];
-
   final Random _random = Random();
   final Stopwatch _stopwatch = Stopwatch();
   final Stopwatch _frameStopwatch = Stopwatch();
@@ -515,8 +471,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Timer? _stageTimer;
   Size _playArea = Size.zero;
   int _nextId = 0;
-  int _lastHeartColorIndex = -1;
-  int _lastHeartBossColorIndex = -1;
+  final Map<String, int> _lastBalloonColorIndexes = <String, int>{};
+  final Map<String, int> _lastBossColorIndexes = <String, int>{};
   int _score = 0;
   int _stage = 1;
   int _secondsLeft = 15;
@@ -613,8 +569,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stageTimer?.cancel();
     _stopwatch.reset();
     _nextId = 0;
-    _lastHeartColorIndex = -1;
-    _lastHeartBossColorIndex = -1;
+    _lastBalloonColorIndexes.clear();
+    _lastBossColorIndexes.clear();
     _score = 0;
     _earnedCoins = 0;
     _coinRewardSession.reset();
@@ -760,8 +716,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _spawnBalloons(int count) {
-    final skinId =
-        _equippedProductIds[StoreCategory.balloon] ?? 'balloon-default';
+    final skin = _equippedBalloonSkin;
     for (var i = 0; i < count; i++) {
       final angle = _random.nextDouble() * pi * 2;
       final speed = 48 + (_stage * 4.2) + _random.nextDouble() * 32;
@@ -771,44 +726,44 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           id: _nextId++,
           position: _randomPosition(size),
           velocity: Offset(cos(angle) * speed, sin(angle) * speed),
-          color: skinId == 'balloon-heart'
-              ? _nextHeartColor()
-              : _colors[_random.nextInt(_colors.length)],
+          color: _nextSkinColor(skin, boss: false),
           size: size,
           floatPhase: _random.nextDouble() * pi * 2,
           floatPower: 10 + _random.nextDouble() * 10,
           hp: _stageConfig.balloonHp,
           maxHp: _stageConfig.balloonHp,
-          skinId: skinId,
+          skinId: skin.id,
         ),
       );
     }
   }
 
-  Color _nextHeartColor() {
-    var next = _lastHeartColorIndex < 0
-        ? _random.nextInt(_heartColors.length)
-        : _random.nextInt(_heartColors.length - 1);
-    if (_lastHeartColorIndex >= 0 && next >= _lastHeartColorIndex) next++;
-    _lastHeartColorIndex = next;
-    return _heartColors[next];
-  }
+  BalloonSkinDefinition get _equippedBalloonSkin =>
+      BalloonSkinCatalog.byIdOrDefault(
+        _equippedProductIds[StoreCategory.balloon],
+      );
 
-  Color _nextHeartBossColor() {
-    var next = _lastHeartBossColorIndex < 0
-        ? _random.nextInt(_heartColors.length)
-        : _random.nextInt(_heartColors.length - 1);
-    if (_lastHeartBossColorIndex >= 0 && next >= _lastHeartBossColorIndex) {
-      next++;
+  BalloonSkinDefinition _bossSkinFor(BalloonSkinDefinition equipped) =>
+      equipped.supportsBossSkin ? equipped : BalloonSkinCatalog.defaultSkin;
+
+  Color _nextSkinColor(BalloonSkinDefinition skin, {required bool boss}) {
+    final palette = skin.colorPalette;
+    final previousIndexes =
+        boss ? _lastBossColorIndexes : _lastBalloonColorIndexes;
+    final previous = previousIndexes[skin.id] ?? -1;
+    var next = _random.nextInt(palette.length);
+    if (skin.avoidImmediateColorRepeat &&
+        palette.length > 1 &&
+        next == previous) {
+      next = (next + 1 + _random.nextInt(palette.length - 1)) % palette.length;
     }
-    _lastHeartBossColorIndex = next;
-    return _heartColors[next];
+    previousIndexes[skin.id] = next;
+    return palette[next];
   }
 
   void _spawnBoss() {
     final config = _stageConfig;
-    final skinId =
-        _equippedProductIds[StoreCategory.balloon] ?? 'balloon-default';
+    final skin = _bossSkinFor(_equippedBalloonSkin);
     final maxSize = _stage >= 20 ? 300.0 : 270.0;
     final minSize = _stage >= 20 ? 225.0 : 210.0;
     final size =
@@ -823,8 +778,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           velocity: Offset(cos(angle) * speed, sin(angle) * speed),
           size: size,
           maxHp: config.bossHp,
-          skinId: skinId,
-          skinColor: skinId == 'balloon-heart' ? _nextHeartBossColor() : null,
+          skinId: skin.id,
+          skinColor: _nextSkinColor(skin, boss: true),
         ),
       );
     }
@@ -971,13 +926,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
     final center =
         balloon.position + Offset(balloon.size / 2, balloon.size / 2);
-    if (balloon.skinId == 'balloon-heart') {
-      PopSound.playHeart();
-      _spawnHeartPieces(center, balloon.color, balloon.size);
-    } else {
-      PopSound.play();
-      _spawnPieces(center, balloon.color, balloon.size, big: false);
-    }
+    final skin = BalloonSkinCatalog.byIdOrDefault(balloon.skinId);
+    _playSkinPopSound(skin, boss: false);
+    _spawnSkinPopEffect(
+      skin,
+      center,
+      balloon.color,
+      balloon.size,
+      big: false,
+    );
     _spawnRing(center, balloon.color, balloon.size * 0.72);
 
     setState(() {
@@ -1012,7 +969,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
     PopSound.play();
     final center = boss.position + Offset(boss.size / 2, boss.size / 2);
-    final hitColor = _bossColor(boss);
+    final hitColor = _bossColor(
+      boss,
+      BalloonSkinCatalog.byIdOrDefault(boss.skinId),
+    );
     _spawnPieces(center, hitColor, boss.size * 0.35, big: false);
 
     setState(() {
@@ -1033,14 +993,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final removed = _bosses.remove(boss);
     if (!removed) return;
     _score += 10;
-    if (boss.skinId == 'balloon-heart') {
-      PopSound.playHeart();
-      PopSound.playBossExplosion();
-      _spawnHeartPieces(center, color, boss.size, big: true);
-    } else {
-      PopSound.playBossExplosion();
-      _spawnPieces(center, color, 280, big: true);
-    }
+    final skin = BalloonSkinCatalog.byIdOrDefault(boss.skinId);
+    _playSkinPopSound(skin, boss: true);
+    _spawnSkinPopEffect(skin, center, color, boss.size, big: true);
     _spawnRing(center, const Color(0xFFFFD54F), 190);
     _spawnRing(center, const Color(0xFFFF5C8A), 250);
     if (_bosses.isNotEmpty) {
@@ -1107,6 +1062,35 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
     }
     _effectsRevision++;
+  }
+
+  void _spawnSkinPopEffect(
+    BalloonSkinDefinition skin,
+    Offset center,
+    Color color,
+    double sourceSize, {
+    required bool big,
+  }) {
+    switch (skin.popEffectType) {
+      case BalloonPopEffectType.shards:
+        _spawnPieces(center, color, sourceSize, big: big);
+      case BalloonPopEffectType.hearts:
+        _spawnHeartPieces(center, color, sourceSize, big: big);
+    }
+  }
+
+  void _playSkinPopSound(
+    BalloonSkinDefinition skin, {
+    required bool boss,
+  }) {
+    // Sound-pack selection can override this dispatch point in a later update.
+    switch (skin.popSoundType) {
+      case BalloonPopSoundType.basic:
+        boss ? PopSound.playBossExplosion() : PopSound.play();
+      case BalloonPopSoundType.heart:
+        PopSound.playHeart();
+        if (boss) PopSound.playBossExplosion();
+    }
   }
 
   void _spawnHeartPieces(
@@ -2737,8 +2721,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
     }
 
-    final productsByRarity = <StoreRarity, List<StoreProduct>>{
-      for (final rarity in StoreRarity.values)
+    final productsByRarity = <BalloonRarity, List<StoreProduct>>{
+      for (final rarity in BalloonRarity.values)
         rarity: products
             .where((product) => product.rarity == rarity)
             .toList(growable: false),
@@ -2747,8 +2731,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       key: const ValueKey('store-product-grid'),
       padding: EdgeInsets.fromLTRB(6, 6, 6, bottomPadding),
       children: [
-        for (final rarity in StoreRarity.values) ...[
-          StoreRaritySectionHeader(rarity: rarity),
+        for (final rarity in BalloonRarity.values) ...[
+          BalloonRaritySectionHeader(rarity: rarity),
           GridView.builder(
             key: ValueKey('store-rarity-grid-${rarity.name}'),
             shrinkWrap: true,
@@ -2977,6 +2961,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   Widget _buildBalloon(Balloon balloon) {
+    final skin = BalloonSkinCatalog.byIdOrDefault(balloon.skinId);
     return Positioned(
       key: ValueKey(balloon.id),
       left: balloon.position.dx,
@@ -2989,14 +2974,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           child: SizedBox(
             width: balloon.size,
             height: balloon.size + 26,
-            child: balloon.skinId == 'balloon-heart'
-                ? HeartBalloonSprite(
-                    key: ValueKey('heart-balloon-${balloon.id}'),
-                    color: _balloonColor(balloon),
-                  )
-                : CustomPaint(
-                    painter: BalloonPainter(color: _balloonColor(balloon)),
-                  ),
+            child: BalloonSkinRenderer(
+              key: ValueKey('balloon-skin-${balloon.id}'),
+              definition: skin,
+              color: _balloonColor(balloon, skin),
+            ),
           ),
         ),
       ),
@@ -3004,6 +2986,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   Widget _buildBoss(BossBalloon boss) {
+    final skin = BalloonSkinCatalog.byIdOrDefault(boss.skinId);
     return Positioned(
       key: ValueKey('boss-balloon-${boss.id}'),
       left: boss.position.dx,
@@ -3016,38 +2999,35 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           child: SizedBox(
             width: boss.size,
             height: boss.size + 32,
-            child: boss.skinId == 'balloon-heart'
-                ? HeartBossBalloonSprite(
-                    key: ValueKey('heart-boss-sprite-${boss.id}'),
-                    color: _bossColor(boss),
-                    hp: boss.hp,
-                    maxHp: boss.maxHp,
-                  )
-                : CustomPaint(
-                    painter: BossBalloonPainter(
-                      color: _bossColor(boss),
-                      hp: boss.hp,
-                      maxHp: boss.maxHp,
-                    ),
-                  ),
+            child: BalloonSkinRenderer(
+              key: ValueKey('boss-skin-${boss.id}'),
+              definition: skin,
+              color: _bossColor(boss, skin),
+              isBoss: true,
+              hp: boss.hp,
+              maxHp: boss.maxHp,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Color _balloonColor(Balloon balloon) => Color.lerp(
+  Color _balloonColor(Balloon balloon, BalloonSkinDefinition skin) =>
+      skin.colorAtDamage(
         balloon.color,
-        const Color(0xFF3B246B),
-        (balloon.maxHp - balloon.hp) / balloon.maxHp * 0.38,
-      )!;
+        (balloon.maxHp - balloon.hp) / balloon.maxHp,
+        isBoss: false,
+      );
 
-  Color _bossColor(BossBalloon boss) {
+  Color _bossColor(BossBalloon boss, BalloonSkinDefinition skin) {
     final progress = (boss.maxHp - boss.hp) / boss.maxHp;
-    if (boss.skinId == 'balloon-heart') {
-      final base = boss.skinColor ?? const Color(0xFFFF5C8A);
-      final finalColor = Color.lerp(base, const Color(0xFF3B246B), 0.62)!;
-      return Color.lerp(base, finalColor, progress)!;
+    if (skin.rendererType == BalloonRendererType.image) {
+      return skin.colorAtDamage(
+        boss.skinColor ?? skin.previewColor,
+        progress,
+        isBoss: true,
+      );
     }
     return Color.lerp(
       _stage >= 20
@@ -3500,33 +3480,33 @@ class StoreCategorySection extends StatelessWidget {
   }
 }
 
-extension StoreRarityStyle on StoreRarity {
+extension BalloonRarityStyle on BalloonRarity {
   String get label => switch (this) {
-        StoreRarity.common => 'Common',
-        StoreRarity.rare => 'Rare',
-        StoreRarity.epic => 'Epic',
-        StoreRarity.legendary => 'Legendary',
+        BalloonRarity.common => 'Common',
+        BalloonRarity.rare => 'Rare',
+        BalloonRarity.epic => 'Epic',
+        BalloonRarity.legendary => 'Legendary',
       };
 
   String get symbol => switch (this) {
-        StoreRarity.common => '⭐',
-        StoreRarity.rare => '🔵',
-        StoreRarity.epic => '🟣',
-        StoreRarity.legendary => '🟠',
+        BalloonRarity.common => '⭐',
+        BalloonRarity.rare => '🔵',
+        BalloonRarity.epic => '🟣',
+        BalloonRarity.legendary => '🟠',
       };
 
   Color get color => switch (this) {
-        StoreRarity.common => const Color(0xFF49A969),
-        StoreRarity.rare => const Color(0xFF378DE5),
-        StoreRarity.epic => const Color(0xFF8A55D8),
-        StoreRarity.legendary => const Color(0xFFF09136),
+        BalloonRarity.common => const Color(0xFF49A969),
+        BalloonRarity.rare => const Color(0xFF378DE5),
+        BalloonRarity.epic => const Color(0xFF8A55D8),
+        BalloonRarity.legendary => const Color(0xFFF09136),
       };
 }
 
-class StoreRaritySectionHeader extends StatelessWidget {
-  const StoreRaritySectionHeader({super.key, required this.rarity});
+class BalloonRaritySectionHeader extends StatelessWidget {
+  const BalloonRaritySectionHeader({super.key, required this.rarity});
 
-  final StoreRarity rarity;
+  final BalloonRarity rarity;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -3549,10 +3529,10 @@ class StoreRaritySectionHeader extends StatelessWidget {
       );
 }
 
-class StoreRarityBadge extends StatelessWidget {
-  const StoreRarityBadge({super.key, required this.rarity});
+class BalloonRarityBadge extends StatelessWidget {
+  const BalloonRarityBadge({super.key, required this.rarity});
 
-  final StoreRarity rarity;
+  final BalloonRarity rarity;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -3580,7 +3560,7 @@ class StoreComingSoonCard extends StatelessWidget {
     required this.slot,
   });
 
-  final StoreRarity rarity;
+  final BalloonRarity rarity;
   final int slot;
 
   @override
@@ -3606,6 +3586,40 @@ class StoreComingSoonCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      );
+}
+
+extension BalloonBadgeLabel on BalloonBadge {
+  String get label => switch (this) {
+        BalloonBadge.none => '',
+        BalloonBadge.newItem => 'NEW',
+        BalloonBadge.popular => 'HOT',
+        BalloonBadge.event => 'EVENT',
+        BalloonBadge.recommended => '추천',
+      };
+}
+
+class StoreProductBadge extends StatelessWidget {
+  const StoreProductBadge({super.key, required this.badge});
+
+  final BalloonBadge badge;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        key: ValueKey('store-product-badge-${badge.name}'),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF4F7B),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          badge.label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 6.5,
+            fontWeight: FontWeight.w900,
+          ),
         ),
       );
 }
@@ -3673,7 +3687,13 @@ class StoreProductCard extends StatelessWidget {
                 Positioned(
                   left: 0,
                   top: 0,
-                  child: StoreRarityBadge(rarity: product.rarity),
+                  child: BalloonRarityBadge(rarity: product.rarity),
+                ),
+              if (product.badge != BalloonBadge.none)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: StoreProductBadge(badge: product.badge),
                 ),
             ],
           ),
@@ -3766,22 +3786,15 @@ class StoreProductCard extends StatelessWidget {
   Widget _preview() {
     switch (product.previewType) {
       case StorePreviewType.balloon:
+        final definition = BalloonSkinCatalog.byIdOrDefault(product.id);
         return Center(
           child: SizedBox(
-            width: 34,
-            height: 45,
-            child: CustomPaint(
-                painter: BalloonPainter(color: product.previewData)),
-          ),
-        );
-      case StorePreviewType.heartBalloon:
-        return Center(
-          child: Image.asset(
-            'assets/images/heart_balloon.png',
             width: 48,
             height: 56,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.medium,
+            child: BalloonSkinRenderer(
+              definition: definition,
+              color: definition.previewColor,
+            ),
           ),
         );
       case StorePreviewType.effect:
@@ -4020,74 +4033,139 @@ class PlaySky extends StatelessWidget {
   }
 }
 
-class HeartBalloonSprite extends StatelessWidget {
-  const HeartBalloonSprite({super.key, required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Image.asset(
-        'assets/images/heart_balloon.png',
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.medium,
-        gaplessPlayback: true,
-        color: color,
-        // Apply the random color only where the source asset has alpha.
-        // BlendMode.hue can color the transparent image bounds on web.
-        colorBlendMode: BlendMode.srcIn,
-      );
-}
-
-class HeartBossBalloonSprite extends StatelessWidget {
-  const HeartBossBalloonSprite({
+/// Shared rendering entry point used by shop previews, normal balloons,
+/// and Stage 10/20 bosses. Product IDs are never checked here.
+class BalloonSkinRenderer extends StatelessWidget {
+  const BalloonSkinRenderer({
     super.key,
+    required this.definition,
     required this.color,
-    required this.hp,
-    required this.maxHp,
+    this.isBoss = false,
+    this.hp = 1,
+    this.maxHp = 1,
   });
 
+  final BalloonSkinDefinition definition;
   final Color color;
+  final bool isBoss;
   final int hp;
   final int maxHp;
 
   @override
-  Widget build(BuildContext context) => Stack(
-        children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 32,
-            child: HeartBalloonSprite(color: color),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 5,
-            child: Center(
-              child: FractionallySizedBox(
-                widthFactor: 0.62,
-                child: Container(
-                  height: 11,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  alignment: Alignment.centerLeft,
-                  child: FractionallySizedBox(
-                    widthFactor: hp / maxHp,
-                    child: const DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Color(0xFFFFD54F),
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                      ),
-                    ),
-                  ),
+  Widget build(BuildContext context) {
+    if (definition.rendererType == BalloonRendererType.painted) {
+      return CustomPaint(
+        painter: isBoss
+            ? BossBalloonPainter(color: color, hp: hp, maxHp: maxHp)
+            : BalloonPainter(color: color),
+      );
+    }
+
+    final image = BalloonSkinArtwork(
+      definition: definition,
+      color: color,
+    );
+    if (!isBoss) return image;
+    return Stack(
+      children: [
+        Positioned(left: 0, right: 0, top: 0, bottom: 32, child: image),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 5,
+          child: _BossHealthBar(hp: hp, maxHp: maxHp),
+        ),
+      ],
+    );
+  }
+}
+
+class BalloonSkinArtwork extends StatelessWidget {
+  const BalloonSkinArtwork({
+    super.key,
+    required this.definition,
+    required this.color,
+  });
+
+  final BalloonSkinDefinition definition;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => ColorFiltered(
+        colorFilter: ColorFilter.matrix(_tintMatrix(color)),
+        child: Image.asset(
+          definition.assetPath!,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+        ),
+      );
+
+  /// Recolors luminance while leaving source alpha untouched. This keeps the
+  /// asset's glossy highlights, outline, knot, and string identical in shop,
+  /// normal-play, and boss rendering without coloring transparent pixels.
+  static List<double> tintMatrix(Color color) => _tintMatrix(color);
+
+  static List<double> _tintMatrix(Color color) {
+    const redLuma = 0.2126;
+    const greenLuma = 0.7152;
+    const blueLuma = 0.0722;
+    final redScale = 0.35 + 0.65 * color.r;
+    final greenScale = 0.35 + 0.65 * color.g;
+    final blueScale = 0.35 + 0.65 * color.b;
+    return <double>[
+      redLuma * redScale,
+      greenLuma * redScale,
+      blueLuma * redScale,
+      0,
+      0,
+      redLuma * greenScale,
+      greenLuma * greenScale,
+      blueLuma * greenScale,
+      0,
+      0,
+      redLuma * blueScale,
+      greenLuma * blueScale,
+      blueLuma * blueScale,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+  }
+}
+
+class _BossHealthBar extends StatelessWidget {
+  const _BossHealthBar({required this.hp, required this.maxHp});
+
+  final int hp;
+  final int maxHp;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: FractionallySizedBox(
+          widthFactor: 0.62,
+          child: Container(
+            height: 11,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: hp / maxHp,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Color(0xFFFFD54F),
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
                 ),
               ),
             ),
           ),
-        ],
+        ),
       );
 }
 
