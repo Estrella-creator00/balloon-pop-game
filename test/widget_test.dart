@@ -6,6 +6,7 @@ import 'package:balloon_pop_game/audio/pop_sound.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
+import 'package:balloon_pop_game/services/haptic_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
 import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flutter/material.dart';
@@ -45,7 +46,10 @@ void main() {
   setUp(() {
     ProgressStorage.clear();
     PopSound.resetDebug();
+    HapticService.setPerformerForTest(() async {});
   });
+
+  tearDown(HapticService.resetPerformerForTest);
 
   test('stage rules are generated for normal and boss tiers', () {
     final stage10 = StageConfig.forStage(10);
@@ -66,6 +70,15 @@ void main() {
     expect(stage10.bossCount, 1);
     expect(stage20.bossCount, 2);
     expect(stage20.duration, const Duration(seconds: 10));
+  });
+
+  test('unsupported haptics never interrupt gameplay', () async {
+    HapticService.setPerformerForTest(() async {
+      throw UnsupportedError('haptics unavailable');
+    });
+
+    expect(HapticService.shortImpact, returnsNormally);
+    await Future<void>.delayed(Duration.zero);
   });
 
   test('boss health fraction is visible, proportional, and clamped', () {
@@ -615,8 +628,7 @@ void main() {
     );
   });
 
-  testWidgets('store root shows a fixed two-column category menu',
-      (tester) async {
+  testWidgets('shop opens the balloon product list directly', (tester) async {
     tester.view.physicalSize = const Size(390, 667);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -626,9 +638,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('store-title')), findsOneWidget);
-    expect(find.text('상점'), findsWidgets);
-    expect(find.text('샵'), findsNothing);
+    expect(find.byKey(const ValueKey('store-title')), findsNothing);
+    expect(find.text('풍선 모양'), findsNothing);
     expect(find.byKey(const ValueKey('home-nav-home')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-nav-shop')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-nav-event')), findsOneWidget);
@@ -636,53 +647,13 @@ void main() {
     expect(
         find.byKey(const ValueKey('home-nav-selected-store')), findsOneWidget);
     expect(find.byType(HomeFloatingBalloons), findsNothing);
-    expect(tester.binding.transientCallbackCount, 0);
-    expect(find.byKey(const ValueKey('store-category-grid')), findsOneWidget);
-    expect(find.byType(StoreCategoryMenuCard), findsNWidgets(6));
-    expect(find.byType(StoreProductCard), findsNothing);
-    expect(find.byKey(const ValueKey('store-vertical-scroll')), findsNothing);
-    expect(find.byKey(const ValueKey('store-detail-scroll')), findsNothing);
-    expect(find.byKey(const ValueKey('store-bottom-nav-slide')), findsNothing);
-
-    const categoryNames = [
-      'balloon',
-      'popEffect',
-      'background',
-      'soundEffect',
-      'music',
-      'limited',
-    ];
-    final categoryRects = categoryNames
-        .map(
-          (name) => tester.getRect(
-            find.byKey(ValueKey('store-category-card-$name')),
-          ),
-        )
-        .toList();
-    for (final name in categoryNames) {
-      expect(
-        find.descendant(
-          of: find.byKey(ValueKey('store-category-card-$name')),
-          matching: find.byType(Icon),
-        ),
-        findsNothing,
-      );
-    }
-    expect(categoryRects[0].top, categoryRects[1].top);
-    expect(categoryRects[2].top, categoryRects[3].top);
-    expect(categoryRects[4].top, categoryRects[5].top);
-    expect(categoryRects[0].left, categoryRects[2].left);
-    expect(categoryRects[1].left, categoryRects[3].left);
-    expect(categoryRects[2].top, greaterThan(categoryRects[0].bottom));
-    expect(categoryRects[4].top, greaterThan(categoryRects[2].bottom));
-
-    await tester.tap(
-      find.byKey(const ValueKey('store-category-card-balloon')),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('store-detail-title')), findsOneWidget);
-    expect(find.byKey(const ValueKey('store-detail-scroll')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-category-grid')), findsNothing);
     expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
+    expect(find.byType(StoreProductCard), findsNWidgets(4));
+    expect(find.byKey(const ValueKey('store-vertical-scroll')), findsNothing);
+    expect(find.byKey(const ValueKey('store-detail-scroll')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('store-bottom-nav-slide')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-all')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-owned')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-unowned')), findsOneWidget);
@@ -696,7 +667,7 @@ void main() {
         .first;
     for (final rarity in BalloonRarity.values) {
       await tester.scrollUntilVisible(
-        find.byKey(ValueKey('store-rarity-header-${rarity.name}')),
+        find.byKey(ValueKey('store-rarity-grid-${rarity.name}')),
         180,
         scrollable: storeScrollable,
       );
@@ -704,6 +675,7 @@ void main() {
         find.byKey(ValueKey('store-rarity-header-${rarity.name}')),
         findsOneWidget,
       );
+      expect(find.text(rarity.label), findsAtLeastNWidgets(1));
       final grid = tester.widget<GridView>(
         find.byKey(ValueKey('store-rarity-grid-${rarity.name}')),
       );
@@ -801,11 +773,6 @@ void main() {
     );
     expect(find.byType(StoreProductCard), findsNWidgets(4));
 
-    await tester.tap(find.byKey(const ValueKey('store-detail-back')));
-    await tester.pumpAndSettle();
-    expect(find.byType(StoreCategoryMenuCard), findsNWidgets(6));
-    expect(find.byType(StoreProductCard), findsNothing);
-
     await tester.tap(find.byKey(const ValueKey('home-nav-event')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('event-coming-soon')), findsOneWidget);
@@ -834,10 +801,6 @@ void main() {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('store-category-card-balloon')),
-    );
     await tester.pumpAndSettle();
 
     final productCard = find.byKey(const ValueKey('store-product-balloon-a'));
@@ -891,10 +854,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('store-category-card-balloon')),
-    );
-    await tester.pumpAndSettle();
     final reloadedCard = find.byKey(const ValueKey('store-product-balloon-a'));
     expect(
       find.descendant(of: reloadedCard, matching: find.text('사용 중')),
@@ -909,10 +868,6 @@ void main() {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('store-category-card-balloon')),
-    );
     await tester.pumpAndSettle();
 
     await tester.tap(
@@ -940,10 +895,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('store-category-card-balloon')),
-    );
-    await tester.pumpAndSettle();
 
     final heartCard = find.byKey(
       const ValueKey('store-product-balloon-heart'),
@@ -962,7 +913,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(of: heartCard, matching: find.text('Common')),
+      find.descendant(of: heartCard, matching: find.text('일반')),
       findsOneWidget,
     );
     expect(
@@ -1086,8 +1037,6 @@ void main() {
 
       final coinRect =
           tester.getRect(find.byKey(const ValueKey('home-coin-hud')));
-      final titleRect =
-          tester.getRect(find.byKey(const ValueKey('store-title')));
       final settingsRect = tester.getRect(
         find.byKey(const ValueKey('home-settings-button')),
       );
@@ -1096,11 +1045,10 @@ void main() {
       final navigationBarRect = tester.getRect(
         find.byKey(const ValueKey('main-bottom-navigation-bar')),
       );
-      final firstCategoryRect = tester.getRect(
-        find.byKey(const ValueKey('store-category-card-balloon')),
-      );
-      final lastCategoryRect = tester.getRect(
-        find.byKey(const ValueKey('store-category-card-limited')),
+      final filterRect =
+          tester.getRect(find.byKey(const ValueKey('store-filter-all')));
+      final firstProductRect = tester.getRect(
+        find.byKey(const ValueKey('store-product-balloon-default')),
       );
       expect(coinRect.width, closeTo(homeCoinRect.width, 0.01));
       expect(coinRect.height, closeTo(homeCoinRect.height, 0.01));
@@ -1116,15 +1064,11 @@ void main() {
         navigationBarRect.height,
         closeTo(homeNavigationBarRect.height, 0.01),
       );
-      expect(titleRect.overlaps(coinRect), false);
-      expect(titleRect.overlaps(settingsRect), false);
-      expect(titleRect.top, greaterThan(coinRect.bottom));
-      expect(titleRect.top, greaterThan(settingsRect.bottom));
+      expect(filterRect.top, greaterThanOrEqualTo(coinRect.bottom));
+      expect(filterRect.top, greaterThanOrEqualTo(settingsRect.bottom));
       expect(navRect.bottom, lessThanOrEqualTo(size.height));
-      expect(firstCategoryRect.width, lessThanOrEqualTo(248));
-      expect(lastCategoryRect.bottom, lessThan(navigationBarRect.top));
-      expect(find.byType(StoreCategoryMenuCard), findsNWidgets(6));
-      expect(find.byType(StoreProductCard), findsNothing);
+      expect(firstProductRect.width, greaterThan(0));
+      expect(find.byType(StoreProductCard), findsNWidgets(4));
       expect(tester.binding.transientCallbackCount, 0);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -1244,6 +1188,10 @@ void main() {
     await tester.pump();
     await tapSectionStart(tester, 1);
 
+    var hapticCount = 0;
+    HapticService.setPerformerForTest(() async {
+      hapticCount++;
+    });
     await tapGameTarget(tester, 0);
     await tester.pump(const Duration(milliseconds: 20));
 
@@ -1251,6 +1199,7 @@ void main() {
     expect(find.byKey(const ValueKey(1)), findsOneWidget);
     expect(find.text('1 STAGE'), findsOneWidget);
     expect(find.text('점수  0'), findsOneWidget);
+    expect(hapticCount, 1);
   });
 
   testWidgets('effects use one batched painter instead of particle widgets',
@@ -1380,6 +1329,10 @@ void main() {
     expect(defaultBossPaint.painter, isA<BossBalloonPainter>());
     expect((defaultBossPaint.painter! as BossBalloonPainter).hp, 10);
 
+    var hapticCount = 0;
+    HapticService.setPerformerForTest(() async {
+      hapticCount++;
+    });
     await tapGameTarget(tester, 'boss-balloon-0');
     final damagedBossPaint = tester.widget<CustomPaint>(
       find.descendant(
@@ -1388,10 +1341,12 @@ void main() {
       ),
     );
     expect((damagedBossPaint.painter! as BossBalloonPainter).hp, 9);
+    expect(hapticCount, 1);
 
     for (var hit = 1; hit < 10; hit++) {
       await tapGameTarget(tester, 'boss-balloon-0');
     }
+    expect(hapticCount, 10);
     expect(find.text('BOSS CLEAR!'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 1));
@@ -1420,6 +1375,10 @@ void main() {
     final firstSizeBefore = tester.getSize(find.byKey(ValueKey(firstId)));
     final secondSizeBefore = tester.getSize(find.byKey(ValueKey(secondId)));
 
+    var hapticCount = 0;
+    HapticService.setPerformerForTest(() async {
+      hapticCount++;
+    });
     await tapGameTarget(tester, firstId);
 
     expect(find.byKey(ValueKey(firstId)), findsOneWidget);
@@ -1431,12 +1390,14 @@ void main() {
     );
     expect(tester.getSize(find.byKey(ValueKey(secondId))), secondSizeBefore);
     expect(find.text('남은 풍선  2'), findsOneWidget);
+    expect(hapticCount, 0);
 
     await tapGameTarget(tester, firstId);
     expect(find.byKey(ValueKey(firstId)), findsNothing);
     expect(find.byKey(ValueKey(secondId)), findsOneWidget);
     expect(find.text('11 STAGE'), findsOneWidget);
     expect(find.text('남은 풍선  1'), findsOneWidget);
+    expect(hapticCount, 1);
   });
 
   testWidgets('stage twenty has two independent bosses and scores once each',
@@ -1594,6 +1555,10 @@ void main() {
       11,
     );
 
+    var hapticCount = 0;
+    HapticService.setPerformerForTest(() async {
+      hapticCount++;
+    });
     await tester.tap(find.byKey(const ValueKey('pause-button')));
     await tester.pump();
     await tapGameTarget(tester, 'boss-balloon-0');
@@ -1601,6 +1566,7 @@ void main() {
       tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor,
       1,
     );
+    expect(hapticCount, 0);
     await tester.tap(find.byKey(const ValueKey('resume-button')));
     await tester.pump();
     expect(
@@ -1609,6 +1575,7 @@ void main() {
     );
 
     await tapGameTarget(tester, 'boss-balloon-0');
+    expect(hapticCount, 1);
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('boss-balloon-0'))).width <
@@ -1660,6 +1627,7 @@ void main() {
     );
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
+    expect(hapticCount, 15);
     expect(find.text('BOSS CLEAR!'), findsNothing);
     expect(find.text('남은 풍선  1'), findsOneWidget);
     expect(find.text('점수  316'), findsOneWidget);

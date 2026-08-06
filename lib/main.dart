@@ -10,6 +10,7 @@ import 'audio/pop_sound.dart';
 import 'balloon_skin_catalog.dart';
 import 'dev/dev_coin_tool.dart';
 import 'services/coin_service.dart';
+import 'services/haptic_service.dart';
 import 'services/purchase_service.dart';
 import 'storage/progress_storage.dart';
 
@@ -492,7 +493,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   bool _resultSaved = false;
   MainTab _mainTab = MainTab.home;
   bool _storeNavigationVisible = true;
-  StoreCategory? _selectedStoreCategory;
   StoreProductFilter _storeProductFilter = StoreProductFilter.all;
   late final PageController _stagePageController;
   late final ValueNotifier<GameHeaderData> _headerData;
@@ -616,7 +616,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondsLeft = 10;
       _phase = GamePhase.menu;
       _mainTab = MainTab.home;
-      _selectedStoreCategory = null;
       _storeProductFilter = StoreProductFilter.all;
       _storeNavigationVisible = true;
       _balloons.clear();
@@ -927,6 +926,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final center =
         balloon.position + Offset(balloon.size / 2, balloon.size / 2);
     final skin = BalloonSkinCatalog.byIdOrDefault(balloon.skinId);
+    HapticService.shortImpact();
     _playSkinPopSound(skin, boss: false);
     _spawnSkinPopEffect(
       skin,
@@ -967,6 +967,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _hitBoss(BossBalloon boss) {
     if (_phase != GamePhase.playing || !_bosses.contains(boss)) return;
 
+    HapticService.shortImpact();
     PopSound.play();
     final center = boss.position + Offset(boss.size / 2, boss.size / 2);
     final hitColor = _bossColor(
@@ -2313,7 +2314,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (_mainTab != MainTab.home) {
       setState(() {
         _mainTab = MainTab.home;
-        _selectedStoreCategory = null;
         _storeProductFilter = StoreProductFilter.all;
       });
     }
@@ -2321,10 +2321,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _onShopMenuTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    if (_mainTab != MainTab.store || _selectedStoreCategory != null) {
+    if (_mainTab != MainTab.store) {
       setState(() {
         _mainTab = MainTab.store;
-        _selectedStoreCategory = null;
         _storeProductFilter = StoreProductFilter.all;
         _storeNavigationVisible = true;
       });
@@ -2336,7 +2335,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (_mainTab != MainTab.event) {
       setState(() {
         _mainTab = MainTab.event;
-        _selectedStoreCategory = null;
         _storeProductFilter = StoreProductFilter.all;
       });
     }
@@ -2376,7 +2374,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (_mainTab != MainTab.ranking) {
       setState(() {
         _mainTab = MainTab.ranking;
-        _selectedStoreCategory = null;
         _storeProductFilter = StoreProductFilter.all;
       });
     }
@@ -2424,136 +2421,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
-  // S-01 상점 카테고리 화면 / S-02 상점 상품 목록 화면 분기
-  Widget _buildShopScreen() {
-    final selectedCategory = _selectedStoreCategory;
-    if (selectedCategory != null) {
-      return _buildStoreCategoryDetail(selectedCategory);
-    }
-    final homeChromeScale = _homeChromeScale(context);
-    return Scaffold(
-      backgroundColor: const Color(0xFFE8F8FF),
-      body: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                SizedBox(
-                  height: 44,
-                  child: Center(
-                    child: _scaledHomeChrome(
-                      scale: homeChromeScale,
-                      width: 500,
-                      height: 38,
-                      child: _mainTopOverlay(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  '상점',
-                  key: ValueKey('store-title'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Color(0xFFFF4F7B),
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    shadows: [
-                      Shadow(color: Colors.white, offset: Offset(0, 2)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: 520,
-                        maxHeight: 360,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: _buildStoreCategoryGrid(),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 86 * homeChromeScale + 8),
-              ],
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 86 * homeChromeScale,
-              child: Center(
-                child: _scaledHomeChrome(
-                  scale: homeChromeScale,
-                  width: 442,
-                  height: 86,
-                  child: _bottomMenu(selectedTab: MainTab.store),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // S-01 상점 카테고리 화면
-  Widget _buildStoreCategoryGrid() {
-    const categories = [
-      (StoreCategory.balloon, '풍선 모양'),
-      (StoreCategory.popEffect, '터짐 효과'),
-      (StoreCategory.background, '배경'),
-      (StoreCategory.soundEffect, '효과음'),
-      (StoreCategory.music, '배경음악'),
-      (StoreCategory.limited, '한정 상품'),
-    ];
-    return Column(
-      key: const ValueKey('store-category-grid'),
-      children: [
-        for (var row = 0; row < 3; row++) ...[
-          Expanded(
-            child: Row(
-              children: [
-                for (var column = 0; column < 2; column++) ...[
-                  if (column > 0) const SizedBox(width: 12),
-                  Expanded(
-                    child: StoreCategoryMenuCard(
-                      category: categories[row * 2 + column].$1,
-                      title: categories[row * 2 + column].$2,
-                      onTap: _openStoreCategory,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (row < 2) const SizedBox(height: 12),
-        ],
-      ],
-    );
-  }
-
-  void _openStoreCategory(StoreCategory category) {
-    setState(() {
-      _selectedStoreCategory = category;
-      _storeNavigationVisible = true;
-      _storeProductFilter = StoreProductFilter.all;
-    });
-  }
-
-  String _storeCategoryTitle(StoreCategory category) => switch (category) {
-        StoreCategory.balloon => '풍선 모양',
-        StoreCategory.popEffect => '터짐 효과',
-        StoreCategory.background => '배경',
-        StoreCategory.soundEffect => '효과음',
-        StoreCategory.music => '배경음악',
-        StoreCategory.limited => '한정 상품',
-      };
+  // S-02 상점 상품 목록 화면. S-01은 더 이상 진입 경로에 사용되지 않는다.
+  Widget _buildShopScreen() => _buildStoreCategoryDetail(StoreCategory.balloon);
 
   List<StoreProduct> _filteredStoreProducts(StoreCategory category) {
     return _storeProducts.map((product) {
@@ -2576,7 +2445,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   // S-02 상점 상품 목록 화면
   Widget _buildStoreCategoryDetail(StoreCategory category) {
     final homeChromeScale = _homeChromeScale(context);
-    final title = _storeCategoryTitle(category);
     final products = _filteredStoreProducts(category);
     return Scaffold(
       backgroundColor: const Color(0xFFE8F8FF),
@@ -2597,35 +2465,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     ),
                   ),
                 ),
-                SizedBox(
-                  height: 44,
-                  child: Row(
-                    children: [
-                      IconButton(
-                        key: const ValueKey('store-detail-back'),
-                        onPressed: () => setState(() {
-                          _selectedStoreCategory = null;
-                          _storeNavigationVisible = true;
-                          _storeProductFilter = StoreProductFilter.all;
-                        }),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                      ),
-                      Expanded(
-                        child: Text(
-                          title,
-                          key: const ValueKey('store-detail-title'),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Color(0xFFFF4F7B),
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 48),
-                    ],
-                  ),
-                ),
+                const SizedBox(height: 4),
                 StoreProductFilterBar(
                   selected: _storeProductFilter,
                   onSelected: (filter) => setState(() {
@@ -3300,48 +3140,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 }
 
-class StoreCategoryMenuCard extends StatelessWidget {
-  const StoreCategoryMenuCard({
-    super.key,
-    required this.category,
-    required this.title,
-    required this.onTap,
-  });
-
-  final StoreCategory category;
-  final String title;
-  final ValueChanged<StoreCategory> onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-        key: ValueKey('store-category-card-${category.name}'),
-        color: Colors.white,
-        elevation: 2,
-        shadowColor: const Color(0x3317485F),
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: () => onTap(category),
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE4EDF2)),
-            ),
-            child: Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF294F65),
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ),
-      );
-}
-
 class StoreProductFilterBar extends StatelessWidget {
   const StoreProductFilterBar({
     super.key,
@@ -3411,81 +3209,12 @@ class StoreProductFilterBar extends StatelessWidget {
   }
 }
 
-class StoreCategorySection extends StatelessWidget {
-  const StoreCategorySection({
-    super.key,
-    required this.category,
-    required this.title,
-    required this.icon,
-    required this.products,
-    required this.onProductPressed,
-  });
-
-  final StoreCategory category;
-  final String title;
-  final IconData icon;
-  final List<StoreProduct> products;
-  final ValueChanged<StoreProduct> onProductPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 9),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFE4ED),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: Icon(icon, color: const Color(0xFFFF4F7B), size: 21),
-                ),
-                const SizedBox(width: 9),
-                Text(
-                  title,
-                  key: ValueKey('store-category-${category.name}'),
-                  style: const TextStyle(
-                    color: Color(0xFF244F68),
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 218,
-            child: ListView.separated(
-              key: ValueKey('store-products-${category.name}'),
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              itemCount: products.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, index) => StoreProductCard(
-                product: products[index],
-                onPressed: () => onProductPressed(products[index]),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 extension BalloonRarityStyle on BalloonRarity {
   String get label => switch (this) {
-        BalloonRarity.common => 'Common',
-        BalloonRarity.rare => 'Rare',
-        BalloonRarity.epic => 'Epic',
-        BalloonRarity.legendary => 'Legendary',
+        BalloonRarity.common => '일반',
+        BalloonRarity.rare => '희귀',
+        BalloonRarity.epic => '에픽',
+        BalloonRarity.legendary => '전설',
       };
 
   String get symbol => switch (this) {
