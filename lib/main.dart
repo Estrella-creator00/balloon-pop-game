@@ -4091,43 +4091,58 @@ class BalloonSkinArtwork extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => ColorFiltered(
-        colorFilter: ColorFilter.matrix(_tintMatrix(color)),
-        child: Image.asset(
-          definition.assetPath!,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.medium,
-          gaplessPlayback: true,
-        ),
-      );
+  Widget build(BuildContext context) {
+    final image = Image.asset(
+      definition.assetPath!,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      gaplessPlayback: true,
+    );
+    if (usesOriginalAsset(definition, color)) return image;
+    return ColorFiltered(
+      colorFilter: ColorFilter.matrix(colorMatrix(definition, color)),
+      child: image,
+    );
+  }
 
-  /// Adds a bright skin tint to the source luminance while leaving alpha
-  /// untouched. Highlights, outline, knot, and string therefore use the same
-  /// vivid treatment in shop, normal-play, and boss rendering.
-  static List<double> tintMatrix(Color color) => _tintMatrix(color);
+  /// The catalog preview color is the reference artwork color. Returning the
+  /// raw asset here guarantees pixel-identical pink in shop, normal-play, and
+  /// boss rendering.
+  static bool usesOriginalAsset(
+    BalloonSkinDefinition definition,
+    Color color,
+  ) =>
+      definition.previewColor.toARGB32() == color.toARGB32();
 
-  static List<double> _tintMatrix(Color color) {
-    const redLuma = 0.2126;
-    const greenLuma = 0.7152;
-    const blueLuma = 0.0722;
-    const sourceLightWeight = 0.52;
-    const tintWeight = 0.48;
+  /// Rotates only hue for non-reference variants. There is no opacity, black
+  /// overlay, or brightness scaling, so the source highlight and shading are
+  /// retained and the source alpha remains untouched.
+  static List<double> colorMatrix(
+    BalloonSkinDefinition definition,
+    Color color,
+  ) {
+    final sourceHue = HSLColor.fromColor(definition.previewColor).hue;
+    final targetHue = HSLColor.fromColor(color).hue;
+    final degrees = (targetHue - sourceHue + 540) % 360 - 180;
+    final radians = degrees * pi / 180;
+    final cosine = cos(radians);
+    final sine = sin(radians);
     return <double>[
-      redLuma * sourceLightWeight,
-      greenLuma * sourceLightWeight,
-      blueLuma * sourceLightWeight,
+      0.213 + cosine * 0.787 - sine * 0.213,
+      0.715 - cosine * 0.715 - sine * 0.715,
+      0.072 - cosine * 0.072 + sine * 0.928,
       0,
-      color.r * 255 * tintWeight,
-      redLuma * sourceLightWeight,
-      greenLuma * sourceLightWeight,
-      blueLuma * sourceLightWeight,
       0,
-      color.g * 255 * tintWeight,
-      redLuma * sourceLightWeight,
-      greenLuma * sourceLightWeight,
-      blueLuma * sourceLightWeight,
+      0.213 - cosine * 0.213 + sine * 0.143,
+      0.715 + cosine * 0.285 + sine * 0.140,
+      0.072 - cosine * 0.072 - sine * 0.283,
       0,
-      color.b * 255 * tintWeight,
+      0,
+      0.213 - cosine * 0.213 - sine * 0.787,
+      0.715 - cosine * 0.715 + sine * 0.715,
+      0.072 + cosine * 0.928 + sine * 0.072,
+      0,
+      0,
       0,
       0,
       0,

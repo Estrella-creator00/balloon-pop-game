@@ -153,14 +153,8 @@ void main() {
 
   testWidgets('all six heart colors preserve the asset alpha mask',
       (tester) async {
-    const colors = [
-      Color(0xFFFF5C8A),
-      Color(0xFFFF4D67),
-      Color(0xFFA77BFF),
-      Color(0xFF5EE4C0),
-      Color(0xFF5CC8FF),
-      Color(0xFFFFD75A),
-    ];
+    final definition = BalloonSkinCatalog.byIdOrDefault('balloon-heart');
+    final colors = definition.colorPalette;
     await tester.pumpWidget(
       MaterialApp(
         home: Row(
@@ -171,9 +165,7 @@ void main() {
                 height: 50,
                 child: BalloonSkinRenderer(
                   key: ValueKey('heart-color-$index'),
-                  definition: BalloonSkinCatalog.byIdOrDefault(
-                    'balloon-heart',
-                  ),
+                  definition: definition,
                   color: colors[index],
                 ),
               ),
@@ -191,17 +183,74 @@ void main() {
       expect(image.colorBlendMode, isNull);
       expect(
         find.descendant(of: sprite, matching: find.byType(ColorFiltered)),
-        findsOneWidget,
+        index == 0 ? findsNothing : findsOneWidget,
       );
       final artwork = tester.widget<BalloonSkinArtwork>(
         find.descendant(of: sprite, matching: find.byType(BalloonSkinArtwork)),
       );
       expect(artwork.color, colors[index]);
-      final matrix = BalloonSkinArtwork.tintMatrix(colors[index]);
+      expect(
+        BalloonSkinArtwork.usesOriginalAsset(definition, colors[index]),
+        index == 0,
+      );
+      final matrix = BalloonSkinArtwork.colorMatrix(
+        definition,
+        colors[index],
+      );
       expect(matrix.sublist(15), <double>[0, 0, 0, 1, 0]);
-      expect(matrix[4], closeTo(colors[index].r * 255 * 0.48, 0.001));
-      expect(matrix[9], closeTo(colors[index].g * 255 * 0.48, 0.001));
-      expect(matrix[14], closeTo(colors[index].b * 255 * 0.48, 0.001));
+      expect(matrix[4], 0);
+      expect(matrix[9], 0);
+      expect(matrix[14], 0);
+    }
+  });
+
+  testWidgets('shop, normal, and boss pink use the same raw heart artwork',
+      (tester) async {
+    final definition = BalloonSkinCatalog.byIdOrDefault('balloon-heart');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Row(
+          children: [
+            for (final contextName in ['shop', 'normal', 'boss'])
+              SizedBox(
+                key: ValueKey('pink-$contextName'),
+                width: 90,
+                height: 110,
+                child: BalloonSkinRenderer(
+                  definition: definition,
+                  color: definition.previewColor,
+                  isBoss: contextName == 'boss',
+                  hp: 10,
+                  maxHp: 10,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    for (final contextName in ['shop', 'normal', 'boss']) {
+      final scope = find.byKey(ValueKey('pink-$contextName'));
+      final artwork = find.descendant(
+        of: scope,
+        matching: find.byType(BalloonSkinArtwork),
+      );
+      expect(artwork, findsOneWidget);
+      expect(
+        tester.widget<BalloonSkinArtwork>(artwork).color,
+        definition.previewColor,
+      );
+      expect(
+        find.descendant(of: artwork, matching: find.byType(ColorFiltered)),
+        findsNothing,
+      );
+      final image = tester.widget<Image>(
+        find.descendant(of: artwork, matching: find.byType(Image)),
+      );
+      expect(image.image, isA<AssetImage>());
+      expect((image.image as AssetImage).assetName, definition.assetPath);
+      expect(image.color, isNull);
+      expect(image.opacity, isNull);
     }
   });
 
@@ -906,7 +955,7 @@ void main() {
     expect(storeHeartImage.colorBlendMode, isNull);
     expect(
       find.descendant(of: heartCard, matching: find.byType(ColorFiltered)),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.descendant(of: heartCard, matching: find.byType(BalloonSkinArtwork)),
