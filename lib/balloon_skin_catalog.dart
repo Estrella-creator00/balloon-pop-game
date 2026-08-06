@@ -80,11 +80,11 @@ abstract final class BalloonSkinCatalog {
 
   static const _heartPalette = <Color>[
     Color(0xFFFF5C8A),
-    Color(0xFFF4435D),
-    Color(0xFF9B6EF3),
-    Color(0xFF56D6B1),
-    Color(0xFF55B9F3),
-    Color(0xFFFFC94D),
+    Color(0xFFFF4D67),
+    Color(0xFFA77BFF),
+    Color(0xFF5EE4C0),
+    Color(0xFF5CC8FF),
+    Color(0xFFFFD75A),
   ];
 
   static const definitions = <BalloonSkinDefinition>[

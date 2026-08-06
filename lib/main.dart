@@ -3013,21 +3013,21 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
-  Color _balloonColor(Balloon balloon, BalloonSkinDefinition skin) =>
-      skin.colorAtDamage(
-        balloon.color,
-        (balloon.maxHp - balloon.hp) / balloon.maxHp,
-        isBoss: false,
-      );
+  Color _balloonColor(Balloon balloon, BalloonSkinDefinition skin) {
+    if (skin.rendererType == BalloonRendererType.image) {
+      return balloon.color;
+    }
+    return skin.colorAtDamage(
+      balloon.color,
+      (balloon.maxHp - balloon.hp) / balloon.maxHp,
+      isBoss: false,
+    );
+  }
 
   Color _bossColor(BossBalloon boss, BalloonSkinDefinition skin) {
     final progress = (boss.maxHp - boss.hp) / boss.maxHp;
     if (skin.rendererType == BalloonRendererType.image) {
-      return skin.colorAtDamage(
-        boss.skinColor ?? skin.previewColor,
-        progress,
-        isBoss: true,
-      );
+      return boss.skinColor ?? skin.previewColor;
     }
     return Color.lerp(
       _stage >= 20
@@ -4101,34 +4101,33 @@ class BalloonSkinArtwork extends StatelessWidget {
         ),
       );
 
-  /// Recolors luminance while leaving source alpha untouched. This keeps the
-  /// asset's glossy highlights, outline, knot, and string identical in shop,
-  /// normal-play, and boss rendering without coloring transparent pixels.
+  /// Adds a bright skin tint to the source luminance while leaving alpha
+  /// untouched. Highlights, outline, knot, and string therefore use the same
+  /// vivid treatment in shop, normal-play, and boss rendering.
   static List<double> tintMatrix(Color color) => _tintMatrix(color);
 
   static List<double> _tintMatrix(Color color) {
     const redLuma = 0.2126;
     const greenLuma = 0.7152;
     const blueLuma = 0.0722;
-    final redScale = 0.35 + 0.65 * color.r;
-    final greenScale = 0.35 + 0.65 * color.g;
-    final blueScale = 0.35 + 0.65 * color.b;
+    const sourceLightWeight = 0.52;
+    const tintWeight = 0.48;
     return <double>[
-      redLuma * redScale,
-      greenLuma * redScale,
-      blueLuma * redScale,
+      redLuma * sourceLightWeight,
+      greenLuma * sourceLightWeight,
+      blueLuma * sourceLightWeight,
       0,
+      color.r * 255 * tintWeight,
+      redLuma * sourceLightWeight,
+      greenLuma * sourceLightWeight,
+      blueLuma * sourceLightWeight,
       0,
-      redLuma * greenScale,
-      greenLuma * greenScale,
-      blueLuma * greenScale,
+      color.g * 255 * tintWeight,
+      redLuma * sourceLightWeight,
+      greenLuma * sourceLightWeight,
+      blueLuma * sourceLightWeight,
       0,
-      0,
-      redLuma * blueScale,
-      greenLuma * blueScale,
-      blueLuma * blueScale,
-      0,
-      0,
+      color.b * 255 * tintWeight,
       0,
       0,
       0,
@@ -4145,28 +4144,37 @@ class _BossHealthBar extends StatelessWidget {
   final int maxHp;
 
   @override
-  Widget build(BuildContext context) => Center(
+  Widget build(BuildContext context) {
+    final fraction = bossHealthFraction(hp, maxHp);
+    return Center(
         child: FractionallySizedBox(
-          widthFactor: 0.62,
-          child: Container(
-            height: 11,
+      widthFactor: 0.62,
+      child: Container(
+        height: 11,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.8),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          key: const ValueKey('boss-health-fill'),
+          widthFactor: fraction,
+          heightFactor: 1,
+          child: const DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: hp / maxHp,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Color(0xFFFFD54F),
-                  borderRadius: BorderRadius.all(Radius.circular(8)),
-                ),
-              ),
+              color: Color(0xFFFFD54F),
+              borderRadius: BorderRadius.all(Radius.circular(8)),
             ),
           ),
         ),
-      );
+      ),
+    ));
+  }
+}
+
+double bossHealthFraction(int hp, int maxHp) {
+  if (maxHp <= 0) return 0;
+  return (hp / maxHp).clamp(0.0, 1.0);
 }
 
 class BalloonPainter extends CustomPainter {
@@ -4295,7 +4303,12 @@ class BossBalloonPainter extends CustomPainter {
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(barLeft, barTop, barWidth * hp / maxHp, 11),
+        Rect.fromLTWH(
+          barLeft,
+          barTop,
+          barWidth * bossHealthFraction(hp, maxHp),
+          11,
+        ),
         const Radius.circular(8),
       ),
       Paint()..color = const Color(0xFFFFD54F),

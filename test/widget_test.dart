@@ -68,6 +68,16 @@ void main() {
     expect(stage20.duration, const Duration(seconds: 10));
   });
 
+  test('boss health fraction is visible, proportional, and clamped', () {
+    expect(bossHealthFraction(10, 10), 1);
+    expect(bossHealthFraction(9, 10), closeTo(0.9, 0.0001));
+    expect(bossHealthFraction(14, 15), closeTo(14 / 15, 0.0001));
+    expect(bossHealthFraction(0, 15), 0);
+    expect(bossHealthFraction(-1, 15), 0);
+    expect(bossHealthFraction(16, 15), 1);
+    expect(bossHealthFraction(1, 0), 0);
+  });
+
   test('balloon catalog is unique, ordered, and defines basic and heart', () {
     expect(BalloonSkinCatalog.hasUniqueIds, isTrue);
     expect(
@@ -145,11 +155,11 @@ void main() {
       (tester) async {
     const colors = [
       Color(0xFFFF5C8A),
-      Color(0xFFF4435D),
-      Color(0xFF9B6EF3),
-      Color(0xFF56D6B1),
-      Color(0xFF55B9F3),
-      Color(0xFFFFC94D),
+      Color(0xFFFF4D67),
+      Color(0xFFA77BFF),
+      Color(0xFF5EE4C0),
+      Color(0xFF5CC8FF),
+      Color(0xFFFFD75A),
     ];
     await tester.pumpWidget(
       MaterialApp(
@@ -189,6 +199,9 @@ void main() {
       expect(artwork.color, colors[index]);
       final matrix = BalloonSkinArtwork.tintMatrix(colors[index]);
       expect(matrix.sublist(15), <double>[0, 0, 0, 1, 0]);
+      expect(matrix[4], closeTo(colors[index].r * 255 * 0.48, 0.001));
+      expect(matrix[9], closeTo(colors[index].g * 255 * 0.48, 0.001));
+      expect(matrix[14], closeTo(colors[index].b * 255 * 0.48, 0.001));
     }
   });
 
@@ -1316,8 +1329,18 @@ void main() {
       ),
     );
     expect(defaultBossPaint.painter, isA<BossBalloonPainter>());
+    expect((defaultBossPaint.painter! as BossBalloonPainter).hp, 10);
 
-    for (var hit = 0; hit < 10; hit++) {
+    await tapGameTarget(tester, 'boss-balloon-0');
+    final damagedBossPaint = tester.widget<CustomPaint>(
+      find.descendant(
+        of: find.byKey(const ValueKey('boss-raster-0')),
+        matching: find.byType(CustomPaint),
+      ),
+    );
+    expect((damagedBossPaint.painter! as BossBalloonPainter).hp, 9);
+
+    for (var hit = 1; hit < 10; hit++) {
       await tapGameTarget(tester, 'boss-balloon-0');
     }
     expect(find.text('BOSS CLEAR!'), findsOneWidget);
@@ -1413,7 +1436,24 @@ void main() {
           find.byKey(const ValueKey('boss-skin-0')),
           findsOneWidget,
         );
-        for (var hit = 0; hit < 10; hit++) {
+        final stage10HealthFill = tester.widget<FractionallySizedBox>(
+          find.descendant(
+            of: find.byKey(const ValueKey('boss-skin-0')),
+            matching: find.byKey(const ValueKey('boss-health-fill')),
+          ),
+        );
+        expect(stage10HealthFill.widthFactor, 1);
+        expect(stage10HealthFill.heightFactor, 1);
+        expect(tester.getSize(find.byWidget(stage10HealthFill)).height, 11);
+        await tapGameTarget(tester, 'boss-balloon-0');
+        final damagedStage10HealthFill = tester.widget<FractionallySizedBox>(
+          find.descendant(
+            of: find.byKey(const ValueKey('boss-skin-0')),
+            matching: find.byKey(const ValueKey('boss-health-fill')),
+          ),
+        );
+        expect(damagedStage10HealthFill.widthFactor, closeTo(0.9, 0.0001));
+        for (var hit = 1; hit < 10; hit++) {
           await tapGameTarget(tester, 'boss-balloon-0');
         }
         await tester.pump(const Duration(seconds: 1));
@@ -1422,6 +1462,19 @@ void main() {
       final count = (stage - 1) % 10 + 2;
       final hitsPerBalloon = stage >= 11 ? 2 : 1;
       for (var i = 0; i < count; i++) {
+        if (stage == 11 && i == 0) {
+          final skinKey = ValueKey('balloon-skin-$nextBalloonId');
+          final colorBeforeHit =
+              tester.widget<BalloonSkinRenderer>(find.byKey(skinKey)).color;
+          await tapGameTarget(tester, nextBalloonId);
+          expect(
+            tester.widget<BalloonSkinRenderer>(find.byKey(skinKey)).color,
+            colorBeforeHit,
+          );
+          await tapGameTarget(tester, nextBalloonId);
+          nextBalloonId++;
+          continue;
+        }
         for (var hit = 0; hit < hitsPerBalloon; hit++) {
           await tapGameTarget(tester, nextBalloonId);
         }
@@ -1479,6 +1532,33 @@ void main() {
           find.byKey(const ValueKey('boss-skin-0')),
         )
         .color;
+    final bossAHealthFill = find.descendant(
+      of: find.byKey(const ValueKey('boss-skin-0')),
+      matching: find.byKey(const ValueKey('boss-health-fill')),
+    );
+    expect(
+      tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor,
+      1,
+    );
+    expect(
+      tester.getSize(bossAHealthFill).height,
+      11,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('pause-button')));
+    await tester.pump();
+    await tapGameTarget(tester, 'boss-balloon-0');
+    expect(
+      tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor,
+      1,
+    );
+    await tester.tap(find.byKey(const ValueKey('resume-button')));
+    await tester.pump();
+    expect(
+      tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor,
+      1,
+    );
+
     await tapGameTarget(tester, 'boss-balloon-0');
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(
@@ -1492,7 +1572,11 @@ void main() {
             find.byKey(const ValueKey('boss-skin-0')),
           )
           .color,
-      isNot(bossAColorBeforeHit),
+      bossAColorBeforeHit,
+    );
+    expect(
+      tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor,
+      closeTo(14 / 15, 0.0001),
     );
     expect(
       tester.getSize(find.byKey(const ValueKey('boss-balloon-1'))),
