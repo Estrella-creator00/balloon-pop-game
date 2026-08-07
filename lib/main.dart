@@ -265,6 +265,7 @@ class StageConfig {
   static const firstFakeBalloonStage = 21;
   static const lastFakeBalloonStage = 29;
   static const lastImplementedStage = 29;
+  static const fakeBalloonHp = 1;
 
   factory StageConfig.forStage(int stage) {
     if (stage < 1 || stage > lastImplementedStage) {
@@ -279,7 +280,7 @@ class StageConfig {
       stage: stage,
       isBoss: isBoss,
       balloonCount: isBoss ? 0 : positionInTier + 1,
-      balloonHp: tier + 1,
+      balloonHp: stage >= firstFakeBalloonStage ? 1 : tier + 1,
       duration: Duration(
         seconds: isBoss ? 8 + tier * 2 : 10 + tier * 2 + timeGroup * 5,
       ),
@@ -971,8 +972,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           size: size,
           floatPhase: _random.nextDouble() * pi * 2,
           floatPower: 10 + _random.nextDouble() * 10,
-          hp: isFake ? 1 : _stageConfig.balloonHp,
-          maxHp: isFake ? 1 : _stageConfig.balloonHp,
+          hp: isFake ? StageConfig.fakeBalloonHp : _stageConfig.balloonHp,
+          maxHp: isFake ? StageConfig.fakeBalloonHp : _stageConfig.balloonHp,
           skinId: skin.id,
           isFake: isFake,
         ),
@@ -4423,28 +4424,10 @@ class BalloonSkinArtwork extends StatelessWidget {
     return isFake ? _composeColorMatrices(_fakeToneMatrix, base) : base;
   }
 
-  static const _fakeToneMatrix = <double>[
-    0.802,
-    0.117,
-    0.012,
-    0,
-    0,
-    0.032,
-    0.887,
-    0.012,
-    0,
-    0,
-    0.032,
-    0.117,
-    0.782,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-  ];
+  static final _fakeToneMatrix = saturationBrightnessColorMatrix(
+    saturation: fakeBalloonSaturationFactor,
+    brightness: fakeBalloonBrightnessFactor,
+  );
 
   static List<double> _composeColorMatrices(
     List<double> after,
@@ -4513,11 +4496,50 @@ class BalloonSkinArtwork extends StatelessWidget {
   }
 }
 
+const fakeBalloonSaturationFactor = 0.58;
+const fakeBalloonBrightnessFactor = 0.92;
+
+List<double> saturationBrightnessColorMatrix({
+  required double saturation,
+  required double brightness,
+}) {
+  final inverse = 1 - saturation;
+  const redLuminance = 0.213;
+  const greenLuminance = 0.715;
+  const blueLuminance = 0.072;
+  return <double>[
+    (redLuminance * inverse + saturation) * brightness,
+    greenLuminance * inverse * brightness,
+    blueLuminance * inverse * brightness,
+    0,
+    0,
+    redLuminance * inverse * brightness,
+    (greenLuminance * inverse + saturation) * brightness,
+    blueLuminance * inverse * brightness,
+    0,
+    0,
+    redLuminance * inverse * brightness,
+    greenLuminance * inverse * brightness,
+    (blueLuminance * inverse + saturation) * brightness,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+  ];
+}
+
 Color fakeBalloonColor(Color color) {
   final hsl = HSLColor.fromColor(color);
   return hsl
-      .withSaturation((hsl.saturation * 0.82).clamp(0.0, 1.0))
-      .withLightness((hsl.lightness * 0.94).clamp(0.0, 1.0))
+      .withSaturation(
+        (hsl.saturation * fakeBalloonSaturationFactor).clamp(0.0, 1.0),
+      )
+      .withLightness(
+        (hsl.lightness * fakeBalloonBrightnessFactor).clamp(0.0, 1.0),
+      )
       .toColor();
 }
 

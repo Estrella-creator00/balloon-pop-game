@@ -176,31 +176,43 @@ void main() {
     expect(stage20.duration, const Duration(seconds: 10));
     expect(stage21.isBoss, false);
     expect(stage21.balloonCount, 2);
-    expect(stage21.balloonHp, 3);
+    expect(stage21.balloonHp, 1);
     expect(stage21.duration, const Duration(seconds: 14));
     expect(stage21.fakeBalloonCount, 2);
     expect(stage29.balloonCount, 10);
-    expect(stage29.balloonHp, 3);
+    expect(stage29.balloonHp, 1);
     expect(stage29.duration, const Duration(seconds: 24));
     expect(stage29.fakeBalloonCount, 2);
     for (var stage = 1; stage <= 20; stage++) {
       expect(StageConfig.forStage(stage).fakeBalloonCount, 0);
     }
+    for (var stage = 11; stage <= 19; stage++) {
+      expect(StageConfig.forStage(stage).balloonHp, 2);
+    }
     for (var stage = 21; stage <= 29; stage++) {
       expect(StageConfig.forStage(stage).fakeBalloonCount, 2);
+      expect(StageConfig.forStage(stage).balloonHp, 1);
     }
+    expect(StageConfig.fakeBalloonHp, 1);
     expect(() => StageConfig.forStage(30), throwsRangeError);
   });
 
-  test('fake balloon tone keeps hue while subtly reducing saturation', () {
+  test('fake balloon tone keeps hue with a clearly faded shared treatment', () {
     const normal = Color(0xFFFF5C8A);
     final fake = fakeBalloonColor(normal);
     final normalHsl = HSLColor.fromColor(normal);
     final fakeHsl = HSLColor.fromColor(fake);
 
     expect(fakeHsl.hue, closeTo(normalHsl.hue, 0.6));
-    expect(fakeHsl.saturation, lessThan(normalHsl.saturation));
-    expect(fakeHsl.lightness, lessThan(normalHsl.lightness));
+    expect(
+      fakeHsl.saturation,
+      closeTo(normalHsl.saturation * fakeBalloonSaturationFactor, 0.02),
+    );
+    expect(
+      fakeHsl.lightness,
+      closeTo(normalHsl.lightness * fakeBalloonBrightnessFactor, 0.02),
+    );
+    expect(normalHsl.saturation - fakeHsl.saturation, greaterThan(0.25));
     final matrix = BalloonSkinArtwork.visualColorMatrix(
       BalloonSkinCatalog.byIdOrDefault('balloon-heart'),
       normal,
@@ -208,6 +220,47 @@ void main() {
     );
     expect(matrix[18], 1);
     expect(matrix[19], 0);
+  });
+
+  testWidgets('every balloon definition uses the shared fake renderer path',
+      (tester) async {
+    for (final definition in BalloonSkinCatalog.definitions) {
+      final key = ValueKey('shared-fake-${definition.id}');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox.square(
+              dimension: 120,
+              child: BalloonSkinRenderer(
+                key: key,
+                definition: definition,
+                color: definition.previewColor,
+                isFake: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final renderer = tester.widget<BalloonSkinRenderer>(find.byKey(key));
+      expect(renderer.isFake, isTrue);
+      if (definition.rendererType == BalloonRendererType.painted) {
+        final paint = tester.widget<CustomPaint>(
+          find.descendant(
+              of: find.byKey(key), matching: find.byType(CustomPaint)),
+        );
+        expect(
+          (paint.painter! as BalloonPainter).color,
+          fakeBalloonColor(definition.previewColor),
+        );
+      } else {
+        expect(
+          find.descendant(
+              of: find.byKey(key), matching: find.byType(ColorFiltered)),
+          findsOneWidget,
+        );
+      }
+    }
   });
 
   test('ranking week uses the Monday 17:00 KST boundary', () {
@@ -2329,8 +2382,6 @@ void main() {
     expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
 
     for (final id in const [0, 1]) {
-      await tapGameTarget(tester, id);
-      await tapGameTarget(tester, id);
       await tapGameTarget(tester, id);
     }
     expect(find.text('Stage Clear!'), findsOneWidget);
