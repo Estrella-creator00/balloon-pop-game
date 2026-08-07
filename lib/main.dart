@@ -306,6 +306,136 @@ bool advanceEffects(
   return true;
 }
 
+/// Shared visual-effect factory used by gameplay and the shop preview.
+void addBalloonPopEffect({
+  required BalloonSkinDefinition definition,
+  required List<PopPiece> pieces,
+  required Random random,
+  required Offset center,
+  required Color color,
+  required double sourceSize,
+  required bool big,
+}) {
+  switch (definition.popEffectType) {
+    case BalloonPopEffectType.shards:
+      addBalloonShardPieces(
+        pieces: pieces,
+        random: random,
+        center: center,
+        color: color,
+        big: big,
+      );
+    case BalloonPopEffectType.hearts:
+      addBalloonHeartPieces(
+        pieces: pieces,
+        random: random,
+        center: center,
+        color: color,
+        sourceSize: sourceSize,
+        big: big,
+      );
+  }
+}
+
+void addBalloonShardPieces({
+  required List<PopPiece> pieces,
+  required Random random,
+  required Offset center,
+  required Color color,
+  required bool big,
+}) {
+  final count = big ? 28 : 6 + random.nextInt(3);
+  final speedBase = big ? 250.0 : 145.0;
+  for (var i = 0; i < count; i++) {
+    final angle = (pi * 2 / count) * i + (random.nextDouble() - 0.5) * 0.65;
+    final speed = speedBase + random.nextDouble() * (big ? 280 : 145);
+    pieces.add(
+      PopPiece(
+        position: center,
+        velocity:
+            Offset(cos(angle) * speed, sin(angle) * speed - (big ? 120 : 65)),
+        color: Color.lerp(color, Colors.white, random.nextDouble() * 0.18)!,
+        size: (big ? 11 : 8) + random.nextDouble() * (big ? 17 : 10),
+        rotation: random.nextDouble() * pi,
+        spin: (random.nextDouble() - 0.5) * 12,
+        life: big
+            ? 1.4 + random.nextDouble() * 0.7
+            : 0.82 + random.nextDouble() * 0.35,
+        maxLife: big ? 2.1 : 1.15,
+      ),
+    );
+  }
+}
+
+void addBalloonHeartPieces({
+  required List<PopPiece> pieces,
+  required Random random,
+  required Offset center,
+  required Color color,
+  required double sourceSize,
+  required bool big,
+}) {
+  final count = big ? 28 : 5;
+  final speedBase = big ? 250.0 : 125.0;
+  for (var i = 0; i < count; i++) {
+    final angle = (pi * 2 / count) * i -
+        pi * 0.82 +
+        (random.nextDouble() - 0.5) * (big ? 0.35 : 0.12);
+    final speed = speedBase + random.nextDouble() * (big ? 280.0 : 85.0);
+    pieces.add(
+      PopPiece(
+        position: center,
+        velocity: Offset(
+          cos(angle) * speed,
+          sin(angle) * speed - (big ? 120 : 55),
+        ),
+        color: Color.lerp(color, Colors.white, 0.12)!,
+        size: big
+            ? 12 + random.nextDouble() * 16
+            : sourceSize * (0.105 + random.nextDouble() * 0.035),
+        rotation: random.nextDouble() * pi,
+        spin: (random.nextDouble() - 0.5) * (big ? 12 : 8),
+        life: big
+            ? 1.4 + random.nextDouble() * 0.7
+            : 0.72 + random.nextDouble() * 0.18,
+        maxLife: big ? 2.1 : 0.9,
+        shape: EffectPieceShape.heart,
+      ),
+    );
+  }
+}
+
+void addBalloonBurstRing({
+  required List<BurstRing> rings,
+  required Offset center,
+  required Color color,
+  required double radius,
+}) {
+  rings.add(
+    BurstRing(
+      center: center,
+      color: color,
+      radius: radius,
+      life: 0.38,
+      maxLife: 0.38,
+    ),
+  );
+}
+
+/// Shared sound dispatch used by gameplay and the shop preview.
+void playBalloonPopSound(
+  BalloonSkinDefinition definition, {
+  required bool boss,
+}) {
+  switch (definition.popSoundType) {
+    case BalloonPopSoundType.basic:
+      boss ? PopSound.playBossExplosion() : PopSound.play();
+    case BalloonPopSoundType.heart:
+      PopSound.playHeart();
+      if (boss) PopSound.playBossExplosion();
+  }
+}
+
 const gameLoopInterval = Duration(milliseconds: 33);
 const maxFrameDeltaSeconds = 0.05;
 
@@ -1041,27 +1171,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _spawnPieces(Offset center, Color color, double sourceSize,
       {required bool big}) {
-    final count = big ? 28 : 6 + _random.nextInt(3);
-    final speedBase = big ? 250.0 : 145.0;
-    for (var i = 0; i < count; i++) {
-      final angle = (pi * 2 / count) * i + (_random.nextDouble() - 0.5) * 0.65;
-      final speed = speedBase + _random.nextDouble() * (big ? 280 : 145);
-      _pieces.add(
-        PopPiece(
-          position: center,
-          velocity:
-              Offset(cos(angle) * speed, sin(angle) * speed - (big ? 120 : 65)),
-          color: Color.lerp(color, Colors.white, _random.nextDouble() * 0.18)!,
-          size: (big ? 11 : 8) + _random.nextDouble() * (big ? 17 : 10),
-          rotation: _random.nextDouble() * pi,
-          spin: (_random.nextDouble() - 0.5) * 12,
-          life: big
-              ? 1.4 + _random.nextDouble() * 0.7
-              : 0.82 + _random.nextDouble() * 0.35,
-          maxLife: big ? 2.1 : 1.15,
-        ),
-      );
-    }
+    addBalloonShardPieces(
+      pieces: _pieces,
+      random: _random,
+      center: center,
+      color: color,
+      big: big,
+    );
     _effectsRevision++;
   }
 
@@ -1072,12 +1188,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     double sourceSize, {
     required bool big,
   }) {
-    switch (skin.popEffectType) {
-      case BalloonPopEffectType.shards:
-        _spawnPieces(center, color, sourceSize, big: big);
-      case BalloonPopEffectType.hearts:
-        _spawnHeartPieces(center, color, sourceSize, big: big);
-    }
+    addBalloonPopEffect(
+      definition: skin,
+      pieces: _pieces,
+      random: _random,
+      center: center,
+      color: color,
+      sourceSize: sourceSize,
+      big: big,
+    );
+    _effectsRevision++;
   }
 
   void _playSkinPopSound(
@@ -1085,61 +1205,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     required bool boss,
   }) {
     // Sound-pack selection can override this dispatch point in a later update.
-    switch (skin.popSoundType) {
-      case BalloonPopSoundType.basic:
-        boss ? PopSound.playBossExplosion() : PopSound.play();
-      case BalloonPopSoundType.heart:
-        PopSound.playHeart();
-        if (boss) PopSound.playBossExplosion();
-    }
-  }
-
-  void _spawnHeartPieces(
-    Offset center,
-    Color color,
-    double sourceSize, {
-    bool big = false,
-  }) {
-    final count = big ? 28 : 5;
-    final speedBase = big ? 250.0 : 125.0;
-    for (var i = 0; i < count; i++) {
-      final angle = (pi * 2 / count) * i -
-          pi * 0.82 +
-          (_random.nextDouble() - 0.5) * (big ? 0.35 : 0.12);
-      final speed = speedBase + _random.nextDouble() * (big ? 280.0 : 85.0);
-      _pieces.add(
-        PopPiece(
-          position: center,
-          velocity: Offset(
-            cos(angle) * speed,
-            sin(angle) * speed - (big ? 120 : 55),
-          ),
-          color: Color.lerp(color, Colors.white, 0.12)!,
-          size: big
-              ? 12 + _random.nextDouble() * 16
-              : sourceSize * (0.105 + _random.nextDouble() * 0.035),
-          rotation: _random.nextDouble() * pi,
-          spin: (_random.nextDouble() - 0.5) * (big ? 12 : 8),
-          life: big
-              ? 1.4 + _random.nextDouble() * 0.7
-              : 0.72 + _random.nextDouble() * 0.18,
-          maxLife: big ? 2.1 : 0.9,
-          shape: EffectPieceShape.heart,
-        ),
-      );
-    }
-    _effectsRevision++;
+    playBalloonPopSound(skin, boss: boss);
   }
 
   void _spawnRing(Offset center, Color color, double radius) {
-    _rings.add(
-      BurstRing(
-        center: center,
-        color: color,
-        radius: radius,
-        life: 0.38,
-        maxLife: 0.38,
-      ),
+    addBalloonBurstRing(
+      rings: _rings,
+      center: center,
+      color: color,
+      radius: radius,
     );
     _effectsRevision++;
   }
@@ -2425,13 +2499,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Widget _buildShopScreen() => _buildStoreCategoryDetail(StoreCategory.balloon);
 
   List<StoreProduct> _filteredStoreProducts(StoreCategory category) {
-    return _storeProducts.map((product) {
-      final owned = product.owned || _ownedProductIds.contains(product.id);
-      final equipped = _equippedProductIds[product.category] == product.id;
-      return owned == product.owned && equipped == product.equipped
-          ? product
-          : product.copyWith(owned: owned, equipped: equipped);
-    }).where((product) {
+    return _storeProducts.map(_currentStoreProduct).where((product) {
       if (product.category != category) return false;
       return switch (_storeProductFilter) {
         StoreProductFilter.all => true,
@@ -2440,6 +2508,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         StoreProductFilter.limited => product.limited,
       };
     }).toList(growable: false);
+  }
+
+  StoreProduct _currentStoreProduct(StoreProduct product) {
+    final owned = product.owned || _ownedProductIds.contains(product.id);
+    final equipped = _equippedProductIds[product.category] == product.id;
+    return owned == product.owned && equipped == product.equipped
+        ? product
+        : product.copyWith(owned: owned, equipped: equipped);
   }
 
   // S-02 상점 상품 목록 화면
@@ -2555,7 +2631,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           final product = products[index];
           return StoreProductCard(
             product: product,
-            onPressed: () => _onStoreProductPressed(product),
+            onPressed: () => _showBalloonPreview(product),
           );
         },
       );
@@ -2590,7 +2666,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 final product = rarityProducts[index];
                 return StoreProductCard(
                   product: product,
-                  onPressed: () => _onStoreProductPressed(product),
+                  onPressed: () => _showBalloonPreview(product),
                 );
               }
               return StoreComingSoonCard(rarity: rarity, slot: index);
@@ -2599,6 +2675,34 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           const SizedBox(height: 12),
         ],
       ],
+    );
+  }
+
+  Future<void> _showBalloonPreview(StoreProduct product) async {
+    if (product.category != StoreCategory.balloon || product.locked) return;
+    final definition = BalloonSkinCatalog.byIdOrDefault(product.id);
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '풍선 미리보기 닫기',
+      barrierColor: const Color(0x660D2940),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogContext, _, __) => BalloonPreviewDialog(
+        definition: definition,
+        productProvider: () => _currentStoreProduct(product),
+        onAction: () {
+          _onStoreProductPressed(_currentStoreProduct(product));
+        },
+      ),
+      transitionBuilder: (context, animation, _, child) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.96, end: 1).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          ),
+          child: child,
+        ),
+      ),
     );
   }
 
@@ -3353,6 +3457,275 @@ class StoreProductBadge extends StatelessWidget {
       );
 }
 
+/// One data-driven preview for every real balloon product.
+///
+/// The same [BalloonSkinRenderer], palette, effect factory, and sound dispatch
+/// used by gameplay are reused here. Preview playback never invokes gameplay,
+/// score, coin-reward, stage, HP, or haptic code.
+class BalloonPreviewDialog extends StatefulWidget {
+  const BalloonPreviewDialog({
+    super.key,
+    required this.definition,
+    required this.productProvider,
+    required this.onAction,
+  });
+
+  final BalloonSkinDefinition definition;
+  final StoreProduct Function() productProvider;
+  final VoidCallback onAction;
+
+  @override
+  State<BalloonPreviewDialog> createState() => _BalloonPreviewDialogState();
+}
+
+class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
+    with SingleTickerProviderStateMixin {
+  static const _previewSize = Size(250, 220);
+  static const _balloonSize = Size(150, 176);
+  static const _visibleDuration = Duration(milliseconds: 1000);
+  static const _effectDuration = Duration(milliseconds: 1150);
+
+  final Random _random = Random();
+  final List<PopPiece> _pieces = [];
+  final List<BurstRing> _rings = [];
+  late final AnimationController _effectController;
+  Timer? _cycleTimer;
+  Duration _lastEffectElapsed = Duration.zero;
+  late Color _color;
+  bool _balloonVisible = true;
+  int _effectsRevision = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _color = widget.definition.previewColor;
+    _effectController = AnimationController(
+      vsync: this,
+      duration: _effectDuration,
+    )
+      ..addListener(_advanceEffects)
+      ..addStatusListener(_onEffectStatus);
+    _schedulePop();
+  }
+
+  void _schedulePop() {
+    _cycleTimer?.cancel();
+    _cycleTimer = Timer(_visibleDuration, _playPop);
+  }
+
+  void _playPop() {
+    if (!mounted) return;
+    setState(() {
+      _balloonVisible = false;
+      addBalloonPopEffect(
+        definition: widget.definition,
+        pieces: _pieces,
+        random: _random,
+        center: _previewSize.center(Offset.zero),
+        color: _color,
+        sourceSize: _balloonSize.width,
+        big: false,
+      );
+      addBalloonBurstRing(
+        rings: _rings,
+        center: _previewSize.center(Offset.zero),
+        color: _color,
+        radius: _balloonSize.width * 0.72,
+      );
+      _effectsRevision++;
+    });
+    // Preview sound only: no haptic and no gameplay action is invoked here.
+    playBalloonPopSound(widget.definition, boss: false);
+    _lastEffectElapsed = Duration.zero;
+    _effectController.forward(from: 0);
+  }
+
+  void _advanceEffects() {
+    final elapsed = _effectController.lastElapsedDuration ?? Duration.zero;
+    final delta = elapsed - _lastEffectElapsed;
+    _lastEffectElapsed = elapsed;
+    if (advanceEffects(_pieces, _rings, calculateFrameDelta(delta))) {
+      _effectsRevision++;
+    }
+  }
+
+  void _onEffectStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !mounted) return;
+    _pieces.clear();
+    _rings.clear();
+    setState(() {
+      _effectsRevision++;
+      _color = _nextPaletteColor();
+      _balloonVisible = true;
+    });
+    _schedulePop();
+  }
+
+  Color _nextPaletteColor() {
+    final palette = widget.definition.colorPalette;
+    if (palette.length <= 1) return palette.first;
+    final currentIndex = palette.indexOf(_color);
+    var nextIndex = _random.nextInt(palette.length);
+    if (nextIndex == currentIndex) {
+      nextIndex = (nextIndex + 1) % palette.length;
+    }
+    return palette[nextIndex];
+  }
+
+  void _handleAction() {
+    widget.onAction();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _cycleTimer?.cancel();
+    _effectController
+      ..removeListener(_advanceEffects)
+      ..removeStatusListener(_onEffectStatus)
+      ..dispose();
+    _pieces.clear();
+    _rings.clear();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final product = widget.productProvider();
+    return SafeArea(
+      child: Dialog(
+        key: const ValueKey('balloon-preview-dialog'),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        backgroundColor: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Material(
+            color: Colors.white,
+            elevation: 12,
+            shadowColor: const Color(0x553B246B),
+            borderRadius: BorderRadius.circular(26),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const SizedBox(width: 40),
+                      Expanded(
+                        child: Text(
+                          widget.definition.displayName,
+                          key: const ValueKey('balloon-preview-name'),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFFF4F7B),
+                            fontSize: 23,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        key: const ValueKey('balloon-preview-close'),
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                        color: const Color(0xFF526B79),
+                        tooltip: '닫기',
+                      ),
+                    ],
+                  ),
+                  Text(
+                    widget.definition.rarity.label,
+                    key: const ValueKey('balloon-preview-rarity'),
+                    style: TextStyle(
+                      color: widget.definition.rarity.color,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: _previewSize.width,
+                    height: _previewSize.height,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        if (_balloonVisible)
+                          SizedBox(
+                            key: const ValueKey('balloon-preview-renderer'),
+                            width: _balloonSize.width,
+                            height: _balloonSize.height,
+                            child: RepaintBoundary(
+                              child: BalloonSkinRenderer(
+                                definition: widget.definition,
+                                color: _color,
+                              ),
+                            ),
+                          ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: RepaintBoundary(
+                              child: AnimatedBuilder(
+                                animation: _effectController,
+                                builder: (context, _) => CustomPaint(
+                                  key: const ValueKey(
+                                    'balloon-preview-effects',
+                                  ),
+                                  painter: EffectsPainter(
+                                    pieces: _pieces,
+                                    rings: _rings,
+                                    revision: _effectsRevision,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: _actionButton(product),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionButton(StoreProduct product) {
+    if (product.equipped) {
+      return FilledButton.icon(
+        key: const ValueKey('balloon-preview-action'),
+        onPressed: null,
+        icon: const Icon(Icons.check_circle_rounded),
+        label: const Text('사용 중'),
+      );
+    }
+    if (product.owned) {
+      return FilledButton(
+        key: const ValueKey('balloon-preview-action'),
+        onPressed: _handleAction,
+        child: const Text('사용하기'),
+      );
+    }
+    return FilledButton.icon(
+      key: const ValueKey('balloon-preview-action'),
+      onPressed: _handleAction,
+      icon: const Icon(Icons.monetization_on_rounded),
+      label: Text('${product.price} 구매'),
+    );
+  }
+}
+
 class StoreProductCard extends StatelessWidget {
   const StoreProductCard({
     super.key,
@@ -3373,7 +3746,7 @@ class StoreProductCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         key: ValueKey('store-action-${product.id}'),
-        onTap: product.equipped || product.locked ? null : onPressed,
+        onTap: product.locked ? null : onPressed,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.fromLTRB(5, 5, 5, 6),

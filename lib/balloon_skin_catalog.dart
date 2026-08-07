@@ -105,7 +105,7 @@ abstract final class BalloonSkinCatalog {
     ),
     BalloonSkinDefinition(
       id: 'balloon-heart',
-      displayName: '하트',
+      displayName: '하트 풍선',
       price: 100,
       rarity: BalloonRarity.common,
       rendererType: BalloonRendererType.image,

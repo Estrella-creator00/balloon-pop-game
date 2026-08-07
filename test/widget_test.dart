@@ -31,6 +31,18 @@ Future<void> tapGameTarget(WidgetTester tester, Object key) async {
   await tester.pump();
 }
 
+Future<void> openBalloonPreview(WidgetTester tester, String productId) async {
+  await tester.tap(find.byKey(ValueKey('store-action-$productId')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+  expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsOneWidget);
+}
+
+Future<void> tapBalloonPreviewAction(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('balloon-preview-action')));
+  await tester.pump();
+}
+
 void main() {
   test('screen identifiers stay stable', () {
     expect(ScreenIds.names[ScreenIds.home], '홈 화면');
@@ -696,7 +708,7 @@ void main() {
             find.byKey(const ValueKey('store-action-balloon-default')),
           )
           .onTap,
-      isNull,
+      isNotNull,
     );
     expect(
       tester
@@ -795,6 +807,73 @@ void main() {
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
   });
 
+  testWidgets(
+      'balloon preview reuses renderer effects and sound and cleans up on close',
+      (tester) async {
+    var hapticCount = 0;
+    HapticService.setPerformerForTest(() async {
+      hapticCount++;
+    });
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+
+    await openBalloonPreview(tester, 'balloon-default');
+    expect(find.text('기본 풍선'), findsWidgets);
+    expect(
+        find.byKey(const ValueKey('balloon-preview-rarity')), findsOneWidget);
+    final previewRenderer = tester.widget<BalloonSkinRenderer>(
+      find.descendant(
+        of: find.byKey(const ValueKey('balloon-preview-renderer')),
+        matching: find.byType(BalloonSkinRenderer),
+      ),
+    );
+    expect(previewRenderer.definition, BalloonSkinCatalog.defaultSkin);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('balloon-preview-action')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(PopSound.basicPlayCount, 0);
+
+    await tester.pump(const Duration(milliseconds: 810));
+    final effects = tester
+        .widget<CustomPaint>(
+          find.byKey(const ValueKey('balloon-preview-effects')),
+        )
+        .painter! as EffectsPainter;
+    expect(PopSound.basicPlayCount, 1);
+    expect(effects.pieceCount, inInclusiveRange(6, 8));
+    expect(effects.ringCount, 1);
+    expect(hapticCount, 0);
+    expect(CoinService.balance, 0);
+
+    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pump();
+    expect(
+        find.byKey(const ValueKey('balloon-preview-renderer')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 1010));
+    expect(PopSound.basicPlayCount, 2);
+    expect(hapticCount, 0);
+
+    await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
+    await tester.pumpAndSettle();
+    final soundCountAfterClose = PopSound.basicPlayCount;
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsNothing);
+    expect(PopSound.basicPlayCount, soundCountAfterClose);
+    expect(hapticCount, 0);
+
+    await openBalloonPreview(tester, 'balloon-default');
+    await tester.tapAt(const Offset(2, 2));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsNothing);
+  });
+
   testWidgets('buying a store product updates coins and survives reload',
       (tester) async {
     ProgressStorage.addCoins(600);
@@ -809,10 +888,10 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('store-action-balloon-a')),
-    );
-    await tester.pump();
+    await openBalloonPreview(tester, 'balloon-a');
+    expect(find.text('특별 풍선 A'), findsWidgets);
+    expect(find.text('500 구매'), findsOneWidget);
+    await tapBalloonPreviewAction(tester);
     expect(find.text('특별 풍선 A 구매 완료!'), findsOneWidget);
     expect(CoinService.balance, 100);
     expect(
@@ -831,10 +910,8 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('store-action-balloon-a')),
-    );
-    await tester.pump();
+    expect(find.text('사용하기'), findsWidgets);
+    await tapBalloonPreviewAction(tester);
     expect(CoinService.balance, 100);
     expect(
       find.descendant(of: productCard, matching: find.text('사용 중')),
@@ -847,6 +924,9 @@ void main() {
       ),
       findsOneWidget,
     );
+
+    await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
+    await tester.pumpAndSettle();
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -870,10 +950,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('store-action-balloon-a')),
-    );
-    await tester.pump();
+    await openBalloonPreview(tester, 'balloon-a');
+    await tapBalloonPreviewAction(tester);
     expect(find.text('코인이 부족해요!'), findsOneWidget);
     expect(CoinService.balance, 100);
     final productCard = find.byKey(const ValueKey('store-product-balloon-a'));
@@ -921,20 +999,50 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('store-action-balloon-heart')),
+    var previewHapticCount = 0;
+    HapticService.setPerformerForTest(() async {
+      previewHapticCount++;
+    });
+    await openBalloonPreview(tester, 'balloon-heart');
+    expect(find.text('하트 풍선'), findsWidgets);
+    final previewRenderer = tester.widget<BalloonSkinRenderer>(
+      find.descendant(
+        of: find.byKey(const ValueKey('balloon-preview-renderer')),
+        matching: find.byType(BalloonSkinRenderer),
+      ),
     );
+    expect(previewRenderer.definition.id, 'balloon-heart');
+    expect(previewRenderer.color, previewRenderer.definition.previewColor);
+    await tester.pump(const Duration(milliseconds: 810));
+    final previewEffects = tester
+        .widget<CustomPaint>(
+          find.byKey(const ValueKey('balloon-preview-effects')),
+        )
+        .painter! as EffectsPainter;
+    expect(previewEffects.heartPieceCount, 5);
+    expect(PopSound.heartPlayCount, 1);
+    expect(previewHapticCount, 0);
+    await tester.pump(const Duration(milliseconds: 1200));
     await tester.pump();
+    final recoloredPreview = tester.widget<BalloonSkinRenderer>(
+      find.descendant(
+        of: find.byKey(const ValueKey('balloon-preview-renderer')),
+        matching: find.byType(BalloonSkinRenderer),
+      ),
+    );
+    expect(
+      recoloredPreview.definition.colorPalette,
+      contains(recoloredPreview.color),
+    );
+    expect(recoloredPreview.color, isNot(previewRenderer.color));
+    await tapBalloonPreviewAction(tester);
     expect(CoinService.balance, 0);
     expect(
       find.descendant(of: heartCard, matching: find.text('사용하기')),
       findsOneWidget,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('store-action-balloon-heart')),
-    );
-    await tester.pump();
+    await tapBalloonPreviewAction(tester);
     expect(
       PurchaseService.equippedProductId(
         StoreCategory.balloon.name,
@@ -946,6 +1054,10 @@ void main() {
       find.descendant(of: heartCard, matching: find.text('사용 중')),
       findsOneWidget,
     );
+
+    await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
+    await tester.pumpAndSettle();
+    PopSound.resetDebug();
 
     // Existing persisted IDs remain valid after the catalog migration.
     await tester.pumpWidget(const SizedBox.shrink());
