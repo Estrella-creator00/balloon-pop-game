@@ -9,6 +9,8 @@ import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/haptic_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
+import 'package:balloon_pop_game/services/settings_service.dart';
+import 'package:balloon_pop_game/settings_page.dart';
 import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -46,6 +48,12 @@ Future<void> tapBalloonPreviewAction(WidgetTester tester) async {
   await tester.pump();
 }
 
+Future<void> openSettings(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('home-settings-button')));
+  await tester.pumpAndSettle();
+  expect(find.byType(SettingsPage), findsOneWidget);
+}
+
 void main() {
   test('screen identifiers stay stable', () {
     expect(ScreenIds.names[ScreenIds.home], '홈 화면');
@@ -54,12 +62,18 @@ void main() {
     expect(ScreenIds.names[ScreenIds.event], '이벤트 화면');
     expect(ScreenIds.names[ScreenIds.ranking], '랭킹 화면');
     expect(ScreenIds.names[ScreenIds.settings], '설정 화면');
+    expect(ScreenIds.names[ScreenIds.nicknameEdit], '닉네임 변경 팝업');
+    expect(ScreenIds.names[ScreenIds.terms], '이용약관 화면');
+    expect(ScreenIds.names[ScreenIds.privacy], '개인정보처리방침 화면');
+    expect(ScreenIds.names[ScreenIds.contact], '문의하기 화면');
+    expect(ScreenIds.names[ScreenIds.dataReset], '데이터 초기화 확인 팝업');
     expect(ScreenIds.names[ScreenIds.gameplay], '게임 플레이 화면');
     expect(ScreenIds.names[ScreenIds.gameResult], '게임 완료 및 게임오버 화면');
   });
 
   setUp(() {
     ProgressStorage.clear();
+    SettingsService.applyStoredPreferences();
     PopSound.resetDebug();
     HapticService.setPerformerForTest(() async {});
   });
@@ -618,9 +632,260 @@ void main() {
     expect(find.text('도움말'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('home-settings-button')));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.text('설정'), findsOneWidget);
+    expect(find.byType(HomeFloatingBalloons), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('settings-back-button')));
     await tester.pump();
-    expect(find.text('설정 준비 중'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump();
+    expect(find.byType(SettingsPage), findsNothing);
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
+  });
+
+  test('nickname and preference services validate and persist values',
+      () async {
+    expect(SettingsService.nickname, isNull);
+    expect(SettingsService.saveNickname(''), isFalse);
+    expect(SettingsService.saveNickname(' '), isFalse);
+    expect(SettingsService.saveNickname('A'), isFalse);
+    expect(SettingsService.saveNickname('12345678901'), isFalse);
+    expect(SettingsService.saveNickname('  POPPOP  '), isTrue);
+    expect(SettingsService.nickname, 'POPPOP');
+
+    SettingsService.setSoundEnabled(false);
+    PopSound.play();
+    PopSound.playHeart();
+    PopSound.playBossExplosion();
+    expect(PopSound.basicPlayCount, 0);
+    expect(PopSound.heartPlayCount, 0);
+    expect(PopSound.bossExplosionPlayCount, 0);
+
+    SettingsService.setSoundEnabled(true);
+    PopSound.play();
+    expect(PopSound.basicPlayCount, 1);
+
+    var hapticCount = 0;
+    HapticService.setPerformerForTest(() async => hapticCount++);
+    SettingsService.setHapticEnabled(false);
+    HapticService.shortImpact();
+    await Future<void>.delayed(Duration.zero);
+    expect(hapticCount, 0);
+    SettingsService.setHapticEnabled(true);
+    HapticService.shortImpact();
+    await Future<void>.delayed(Duration.zero);
+    expect(hapticCount, 1);
+  });
+
+  testWidgets('home and store open the same settings page and return',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+
+    await openSettings(tester);
+    await tester.tap(find.byKey(const ValueKey('settings-back-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    expect(find.text('BEST SCORE'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
+    await openSettings(tester);
+    await tester.tap(find.byKey(const ValueKey('settings-back-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
+  });
+
+  testWidgets('settings content remains scrollable without mobile overflow',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 667);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await openSettings(tester);
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('settings-reset-button')),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('settings-version')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('nickname dialog validates, trims, updates, and survives reload',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await openSettings(tester);
+
+    await tester.tap(find.byKey(const ValueKey('settings-nickname-row')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('nickname-dialog')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const ValueKey('nickname-input')), ' ');
+    await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
+    await tester.pump();
+    expect(find.text('닉네임은 2자 이상 10자 이하로 입력해 주세요.'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const ValueKey('nickname-input')), 'A');
+    await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('nickname-dialog')), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('nickname-input')),
+      '  팝팝  ',
+    );
+    await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('팝팝'), findsOneWidget);
+    expect(SettingsService.nickname, '팝팝');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await openSettings(tester);
+    expect(find.text('팝팝'), findsOneWidget);
+  });
+
+  testWidgets('information rows open replaceable SET-03 to SET-05 pages',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await openSettings(tester);
+
+    for (final entry in const [
+      ('settings-terms-row', 'settings-terms-page', '이용약관'),
+      ('settings-privacy-row', 'settings-privacy-page', '개인정보처리방침'),
+      ('settings-contact-row', 'settings-contact-page', '문의하기'),
+    ]) {
+      await tester.ensureVisible(find.byKey(ValueKey(entry.$1)));
+      await tester.tap(find.byKey(ValueKey(entry.$1)));
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey(entry.$2)), findsOneWidget);
+      expect(find.text(entry.$3), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('settings-back-button')));
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+    }
+  });
+
+  testWidgets('disabled sound blocks preview and disabled haptics block play',
+      (tester) async {
+    var hapticCount = 0;
+    HapticService.setPerformerForTest(() async => hapticCount++);
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await openSettings(tester);
+
+    await tester.tap(find.byKey(const ValueKey('settings-sound-switch')));
+    await tester.tap(find.byKey(const ValueKey('settings-haptic-switch')));
+    await tester.pump();
+    expect(SettingsService.soundEnabled, isFalse);
+    expect(SettingsService.hapticEnabled, isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('settings-back-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    await openBalloonPreview(tester, 'balloon-default');
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(PopSound.basicPlayCount, 0);
+    await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-nav-home')));
+    await tester.pump();
+    await tapSectionStart(tester, 1);
+    await tapGameTarget(tester, 0);
+    await tester.pump();
+    expect(hapticCount, 0);
+    expect(PopSound.basicPlayCount, 0);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await openSettings(tester);
+    expect(
+      tester
+          .widget<Switch>(find.byKey(const ValueKey('settings-sound-switch')))
+          .value,
+      isFalse,
+    );
+    expect(
+      tester
+          .widget<Switch>(find.byKey(const ValueKey('settings-haptic-switch')))
+          .value,
+      isFalse,
+    );
+  });
+
+  testWidgets('data reset cancellation preserves and confirmation clears all',
+      (tester) async {
+    ProgressStorage.addCoins(1000);
+    ProgressStorage.unlockSecondSection();
+    ProgressStorage.saveScore(99);
+    expect(
+      ProgressStorage.tryPurchaseProduct('balloon-heart', 100),
+      isTrue,
+    );
+    ProgressStorage.setEquippedProductId('balloon', 'balloon-heart');
+    SettingsService.saveNickname('테스터');
+    SettingsService.setSoundEnabled(false);
+    SettingsService.setHapticEnabled(false);
+
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await openSettings(tester);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('settings-reset-button')),
+    );
+    await tester.tap(find.byKey(const ValueKey('settings-reset-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-reset-cancel')));
+    await tester.pumpAndSettle();
+    expect(CoinService.balance, 900);
+    expect(SettingsService.nickname, '테스터');
+    expect(PurchaseService.ownedProductIds, contains('balloon-heart'));
+
+    await tester.tap(find.byKey(const ValueKey('settings-reset-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-reset-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(CoinService.balance, 0);
+    expect(SettingsService.nickname, isNull);
+    expect(SettingsService.soundEnabled, isTrue);
+    expect(SettingsService.hapticEnabled, isTrue);
+    expect(PurchaseService.ownedProductIds, isEmpty);
+    expect(ProgressStorage.equippedProductId('balloon'), isNull);
+    expect(ProgressStorage.isSecondSectionUnlocked(), isFalse);
+    expect(ProgressStorage.bestScore(), 0);
+    expect(find.text('설정 안 됨'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('settings-back-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-coin-hud')),
+        matching: find.text('0'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('hidden developer coin flow rejects a wrong password',

@@ -33,8 +33,12 @@ extension type _AudioParam._(JSObject _) implements JSObject {
 
 abstract final class PopSound {
   static _AudioContext? _context;
+  static bool enabled = true;
+
+  static void setEnabled(bool value) => enabled = value;
 
   static void play() {
+    if (!enabled) return;
     // This method is called directly inside the balloon's user-click handler.
     // Creating/resuming the context here also unlocks audio on the first click.
     try {
@@ -66,6 +70,7 @@ abstract final class PopSound {
   /// Default heart skin sound: a soft 0.23 second pop with a small chime.
   /// Keeping this entry point separate lets a future sound pack replace it.
   static void playHeart() {
+    if (!enabled) return;
     try {
       final context = _context ??= _AudioContext();
       context.resume();
@@ -107,6 +112,7 @@ abstract final class PopSound {
   }
 
   static void playLightTap() {
+    if (!enabled) return;
     try {
       final context = _context ??= _AudioContext();
       context.resume();
@@ -131,6 +137,7 @@ abstract final class PopSound {
   }
 
   static void playBossExplosion() {
+    if (!enabled) return;
     try {
       final context = _context ??= _AudioContext();
       context.resume();

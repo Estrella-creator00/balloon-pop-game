@@ -1,15 +1,24 @@
 abstract final class PopSound {
+  static bool enabled = true;
   static int basicPlayCount = 0;
   static int heartPlayCount = 0;
   static int bossExplosionPlayCount = 0;
 
-  static void play() => basicPlayCount++;
+  static void setEnabled(bool value) => enabled = value;
 
-  static void playHeart() => heartPlayCount++;
+  static void play() {
+    if (enabled) basicPlayCount++;
+  }
+
+  static void playHeart() {
+    if (enabled) heartPlayCount++;
+  }
 
   static void playLightTap() {}
 
-  static void playBossExplosion() => bossExplosionPlayCount++;
+  static void playBossExplosion() {
+    if (enabled) bossExplosionPlayCount++;
+  }
 
   static void resetDebug() {
     basicPlayCount = 0;

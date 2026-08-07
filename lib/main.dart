@@ -13,6 +13,8 @@ import 'dev/dev_coin_tool.dart';
 import 'services/coin_service.dart';
 import 'services/haptic_service.dart';
 import 'services/purchase_service.dart';
+import 'services/settings_service.dart';
+import 'settings_page.dart';
 import 'storage/progress_storage.dart';
 
 void main() {
@@ -58,6 +60,11 @@ abstract final class ScreenIds {
   static const String event = 'E-01';
   static const String ranking = 'R-01';
   static const String settings = 'SET-01';
+  static const String nicknameEdit = 'SET-02';
+  static const String terms = 'SET-03';
+  static const String privacy = 'SET-04';
+  static const String contact = 'SET-05';
+  static const String dataReset = 'SET-06';
   static const String gameplay = 'G-01';
   static const String gameResult = 'G-02';
 
@@ -68,6 +75,11 @@ abstract final class ScreenIds {
     event: '이벤트 화면',
     ranking: '랭킹 화면',
     settings: '설정 화면',
+    nicknameEdit: '닉네임 변경 팝업',
+    terms: '이용약관 화면',
+    privacy: '개인정보처리방침 화면',
+    contact: '문의하기 화면',
+    dataReset: '데이터 초기화 확인 팝업',
     gameplay: '게임 플레이 화면',
     gameResult: '게임 완료 및 게임오버 화면',
   };
@@ -640,6 +652,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _bestScore = ProgressStorage.bestScore();
     _lastScore = ProgressStorage.lastScore();
     _coinBalance = CoinService.balance;
+    SettingsService.applyStoredPreferences();
     _ownedProductIds = PurchaseService.ownedProductIds;
     _equippedProductIds = _loadEquippedProductIds();
     _stagePageController = PageController();
@@ -1267,7 +1280,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
     if (confirmed != true || !mounted) return;
 
-    ProgressStorage.clear();
+    SettingsService.resetAllData();
+    _reloadAfterAllDataReset();
+  }
+
+  void _reloadAfterAllDataReset() {
+    if (!mounted) return;
     setState(() {
       _secondSectionUnlocked = false;
       _bestScore = 0;
@@ -2381,8 +2399,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
-  // SET-01 설정 화면 진입점 (현재는 준비 중 안내)
-  void _onSettingsPressed() => _showComingSoon('설정 준비 중');
+  // SET-01 설정 화면. H-01과 S-02가 이 진입점을 함께 사용한다.
+  Future<void> _onSettingsPressed() async {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) => SettingsPage(
+          onDataReset: _reloadAfterAllDataReset,
+        ),
+      ),
+    );
+  }
 
   void _onHomeMenuTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();

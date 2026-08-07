@@ -12,8 +12,12 @@ typedef HapticPerformer = Future<void> Function();
 /// deliberately owns no timer, ticker, or repeating work.
 abstract final class HapticService {
   static HapticPerformer _perform = HapticFeedback.lightImpact;
+  static bool enabled = true;
+
+  static void setEnabled(bool value) => enabled = value;
 
   static void shortImpact() {
+    if (!enabled) return;
     try {
       unawaited(_ignoreFailure(_perform()));
     } catch (_) {

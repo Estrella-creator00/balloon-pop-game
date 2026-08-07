@@ -16,6 +16,9 @@ abstract final class ProgressStorage {
   static const _coinKey = 'poppop_coin_balance';
   static const _ownedProductsKey = 'poppop_owned_product_ids';
   static const _equippedProductsKey = 'poppop_equipped_product_ids';
+  static const _nicknameKey = 'poppop_nickname';
+  static const _soundEnabledKey = 'poppop_sound_enabled';
+  static const _hapticEnabledKey = 'poppop_haptic_enabled';
 
   static bool isSecondSectionUnlocked() {
     try {
@@ -38,6 +41,35 @@ abstract final class ProgressStorage {
   static int lastScore() => _readInt(_lastKey);
 
   static int coinBalance() => _readInt(_coinKey);
+
+  static String? nickname() {
+    try {
+      final value = _localStorage.getItem(_nicknameKey.toJS)?.toDart;
+      return value == null || value.isEmpty ? null : value;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void setNickname(String nickname) {
+    try {
+      _localStorage.setItem(_nicknameKey.toJS, nickname.toJS);
+    } catch (_) {
+      // Storage failure must not interrupt settings navigation.
+    }
+  }
+
+  static bool soundEnabled() => _readBool(_soundEnabledKey);
+
+  static void setSoundEnabled(bool enabled) {
+    _writeBool(_soundEnabledKey, enabled);
+  }
+
+  static bool hapticEnabled() => _readBool(_hapticEnabledKey);
+
+  static void setHapticEnabled(bool enabled) {
+    _writeBool(_hapticEnabledKey, enabled);
+  }
 
   static int addCoins(int amount) {
     if (amount <= 0) return coinBalance();
@@ -135,6 +167,23 @@ abstract final class ProgressStorage {
     }
   }
 
+  static bool _readBool(String key) {
+    try {
+      final stored = _localStorage.getItem(key.toJS)?.toDart;
+      return stored == null ? true : stored == 'true';
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static void _writeBool(String key, bool value) {
+    try {
+      _localStorage.setItem(key.toJS, '$value'.toJS);
+    } catch (_) {
+      // Storage failure must not interrupt settings changes.
+    }
+  }
+
   static void clear() {
     try {
       _localStorage.removeItem(_key.toJS);
@@ -143,6 +192,9 @@ abstract final class ProgressStorage {
       _localStorage.removeItem(_coinKey.toJS);
       _localStorage.removeItem(_ownedProductsKey.toJS);
       _localStorage.removeItem(_equippedProductsKey.toJS);
+      _localStorage.removeItem(_nicknameKey.toJS);
+      _localStorage.removeItem(_soundEnabledKey.toJS);
+      _localStorage.removeItem(_hapticEnabledKey.toJS);
     } catch (_) {
       // The menu still resets even if storage is unavailable.
     }
