@@ -32,7 +32,9 @@ Future<void> tapGameTarget(WidgetTester tester, Object key) async {
 }
 
 Future<void> openBalloonPreview(WidgetTester tester, String productId) async {
-  await tester.tap(find.byKey(ValueKey('store-action-$productId')));
+  // Tap the same full-card InkWell a real touch user hits. The former helper
+  // targeted an internal child and did not protect the production tap path.
+  await tester.tap(find.byKey(ValueKey('store-product-$productId')));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
   expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsOneWidget);
@@ -705,7 +707,7 @@ void main() {
     expect(
       tester
           .widget<InkWell>(
-            find.byKey(const ValueKey('store-action-balloon-default')),
+            find.byKey(const ValueKey('store-product-balloon-default')),
           )
           .onTap,
       isNotNull,
@@ -713,7 +715,7 @@ void main() {
     expect(
       tester
           .widget<InkWell>(
-            find.byKey(const ValueKey('store-action-balloon-a')),
+            find.byKey(const ValueKey('store-product-balloon-a')),
           )
           .onTap,
       isNotNull,
@@ -721,7 +723,7 @@ void main() {
     expect(
       tester
           .widget<InkWell>(
-            find.byKey(const ValueKey('store-action-balloon-b')),
+            find.byKey(const ValueKey('store-product-balloon-b')),
           )
           .onTap,
       isNotNull,
@@ -872,6 +874,33 @@ void main() {
     await tester.tapAt(const Offset(2, 2));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsNothing);
+  });
+
+  testWidgets(
+      'real balloon card surfaces open preview and coming soon stays inert',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+
+    await openBalloonPreview(tester, 'balloon-default');
+    expect(find.text('기본 풍선'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
+
+    await openBalloonPreview(tester, 'balloon-heart');
+    expect(find.text('하트 풍선'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
+    await tester.pumpAndSettle();
+
+    final comingSoon = find.byKey(const ValueKey('store-placeholder-common-4'));
+    await tester.ensureVisible(comingSoon);
+    await tester.tap(comingSoon);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsNothing);
+    expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
   });
 
   testWidgets('buying a store product updates coins and survives reload',
@@ -1957,7 +1986,7 @@ void main() {
     expect(
       tester
           .widget<InkWell>(
-            find.byKey(const ValueKey('store-action-locked-balloon')),
+            find.byKey(const ValueKey('store-product-locked-balloon')),
           )
           .onTap,
       isNull,

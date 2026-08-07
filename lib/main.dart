@@ -3739,16 +3739,18 @@ class StoreProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      key: ValueKey('store-product-${product.id}'),
       color: Colors.white,
       elevation: product.equipped ? 3 : 1.5,
       shadowColor: const Color(0x33204A5F),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        key: ValueKey('store-action-${product.id}'),
+        // This public card key identifies the actual mobile tap surface. Keep
+        // purchase/equip actions inside BalloonPreviewDialog, never here.
+        key: ValueKey('store-product-${product.id}'),
         onTap: product.locked ? null : onPressed,
         borderRadius: BorderRadius.circular(12),
         child: Container(
+          key: ValueKey('store-action-${product.id}'),
           padding: const EdgeInsets.fromLTRB(5, 5, 5, 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
