@@ -6,6 +6,7 @@ import 'package:balloon_pop_game/audio/pop_sound.dart';
 import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/main.dart';
+import 'package:balloon_pop_game/onboarding_page.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/haptic_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
@@ -56,6 +57,10 @@ Future<void> openSettings(WidgetTester tester) async {
 
 void main() {
   test('screen identifiers stay stable', () {
+    expect(
+      ScreenIds.names[ScreenIds.nicknameOnboarding],
+      '최초 닉네임 설정 화면',
+    );
     expect(ScreenIds.names[ScreenIds.home], '홈 화면');
     expect(ScreenIds.names[ScreenIds.shopCategories], '상점 카테고리 화면');
     expect(ScreenIds.names[ScreenIds.shopProductList], '상점 상품 목록 화면');
@@ -73,6 +78,7 @@ void main() {
 
   setUp(() {
     ProgressStorage.clear();
+    ProgressStorage.setNicknameOnboardingCompleted(true);
     SettingsService.applyStoredPreferences();
     PopSound.resetDebug();
     HapticService.setPerformerForTest(() async {});
@@ -678,6 +684,85 @@ void main() {
     expect(hapticCount, 1);
   });
 
+  testWidgets('new users complete ON-01 once and return directly to home',
+      (tester) async {
+    ProgressStorage.clear();
+
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    expect(find.byType(NicknameOnboardingPage), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('nickname-onboarding-page')),
+      findsOneWidget,
+    );
+
+    final startButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('onboarding-start-button')),
+    );
+    expect(startButton.onPressed, isNull);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('onboarding-nickname-input')),
+      '  새사용자  ',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('onboarding-start-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(SettingsService.nickname, '새사용자');
+    expect(SettingsService.nicknameOnboardingCompleted, isTrue);
+    expect(find.byType(NicknameOnboardingPage), findsNothing);
+    expect(find.text('BEST SCORE'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    expect(find.byType(NicknameOnboardingPage), findsNothing);
+    expect(find.text('BEST SCORE'), findsOneWidget);
+  });
+
+  testWidgets('existing user data survives first ON-01 migration',
+      (tester) async {
+    ProgressStorage.clear();
+    ProgressStorage.addCoins(1000);
+    ProgressStorage.unlockSecondSection();
+    ProgressStorage.saveScore(88);
+    expect(
+      ProgressStorage.tryPurchaseProduct('balloon-heart', 100),
+      isTrue,
+    );
+    ProgressStorage.setEquippedProductId('balloon', 'balloon-heart');
+    SettingsService.saveNickname('기존사용자');
+    SettingsService.setSoundEnabled(false);
+    SettingsService.setHapticEnabled(false);
+
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    expect(find.byType(NicknameOnboardingPage), findsOneWidget);
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('onboarding-nickname-input')),
+    );
+    expect(field.controller?.text, '기존사용자');
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-start-button')));
+    await tester.pump();
+
+    expect(CoinService.balance, 900);
+    expect(ProgressStorage.isSecondSectionUnlocked(), isTrue);
+    expect(ProgressStorage.bestScore(), 88);
+    expect(PurchaseService.ownedProductIds, contains('balloon-heart'));
+    expect(
+      ProgressStorage.equippedProductId('balloon'),
+      'balloon-heart',
+    );
+    expect(SettingsService.soundEnabled, isFalse);
+    expect(SettingsService.hapticEnabled, isFalse);
+    expect(SettingsService.nickname, '기존사용자');
+    expect(SettingsService.nicknameOnboardingCompleted, isTrue);
+  });
+
   testWidgets('home and store open the same settings page and return',
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
@@ -873,6 +958,7 @@ void main() {
     expect(ProgressStorage.equippedProductId('balloon'), isNull);
     expect(ProgressStorage.isSecondSectionUnlocked(), isFalse);
     expect(ProgressStorage.bestScore(), 0);
+    expect(SettingsService.nicknameOnboardingCompleted, isFalse);
     expect(find.text('설정 안 됨'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('settings-back-button')));
@@ -886,6 +972,12 @@ void main() {
       ),
       findsOneWidget,
     );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    expect(find.byType(NicknameOnboardingPage), findsOneWidget);
   });
 
   testWidgets('hidden developer coin flow rejects a wrong password',

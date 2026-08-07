@@ -8,6 +8,8 @@ abstract final class SettingsService {
   static const int maxNicknameLength = 10;
 
   static String? get nickname => ProgressStorage.nickname();
+  static bool get nicknameOnboardingCompleted =>
+      ProgressStorage.nicknameOnboardingCompleted();
   static bool get soundEnabled => ProgressStorage.soundEnabled();
   static bool get hapticEnabled => ProgressStorage.hapticEnabled();
 
@@ -24,6 +26,14 @@ abstract final class SettingsService {
     final normalized = normalizeNickname(input);
     if (normalized == null) return false;
     ProgressStorage.setNickname(normalized);
+    return true;
+  }
+
+  /// Saves the shared nickname and marks ON-01 complete without touching any
+  /// existing game, purchase, coin, or preference data.
+  static bool completeNicknameOnboarding(String input) {
+    if (!saveNickname(input)) return false;
+    ProgressStorage.setNicknameOnboardingCompleted(true);
     return true;
   }
 

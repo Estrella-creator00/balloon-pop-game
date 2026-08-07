@@ -10,6 +10,7 @@ import 'audio/pop_sound.dart';
 import 'balloon_background.dart';
 import 'balloon_skin_catalog.dart';
 import 'dev/dev_coin_tool.dart';
+import 'onboarding_page.dart';
 import 'services/coin_service.dart';
 import 'services/haptic_service.dart';
 import 'services/purchase_service.dart';
@@ -21,8 +22,27 @@ void main() {
   runApp(const BalloonPopApp());
 }
 
-class BalloonPopApp extends StatelessWidget {
+class BalloonPopApp extends StatefulWidget {
   const BalloonPopApp({super.key});
+
+  @override
+  State<BalloonPopApp> createState() => _BalloonPopAppState();
+}
+
+class _BalloonPopAppState extends State<BalloonPopApp> {
+  late bool _nicknameOnboardingCompleted;
+
+  @override
+  void initState() {
+    super.initState();
+    SettingsService.applyStoredPreferences();
+    _nicknameOnboardingCompleted = SettingsService.nicknameOnboardingCompleted;
+  }
+
+  void _completeNicknameOnboarding() {
+    if (!mounted) return;
+    setState(() => _nicknameOnboardingCompleted = true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +54,11 @@ class BalloonPopApp extends StatelessWidget {
         useMaterial3: true,
         fontFamilyFallback: const ['Arial', 'sans-serif'],
       ),
-      home: const BalloonGamePage(),
+      home: _nicknameOnboardingCompleted
+          ? const BalloonGamePage()
+          : NicknameOnboardingPage(
+              onCompleted: _completeNicknameOnboarding,
+            ),
     );
   }
 }
@@ -54,6 +78,7 @@ enum MainTab { home, store, event, ranking }
 /// Internal screen identifiers used by development requests and documentation.
 /// These values are not rendered in the user interface.
 abstract final class ScreenIds {
+  static const String nicknameOnboarding = 'ON-01';
   static const String home = 'H-01';
   static const String shopCategories = 'S-01';
   static const String shopProductList = 'S-02';
@@ -69,6 +94,7 @@ abstract final class ScreenIds {
   static const String gameResult = 'G-02';
 
   static const Map<String, String> names = {
+    nicknameOnboarding: '최초 닉네임 설정 화면',
     home: '홈 화면',
     shopCategories: '상점 카테고리 화면',
     shopProductList: '상점 상품 목록 화면',

@@ -17,6 +17,8 @@ abstract final class ProgressStorage {
   static const _ownedProductsKey = 'poppop_owned_product_ids';
   static const _equippedProductsKey = 'poppop_equipped_product_ids';
   static const _nicknameKey = 'poppop_nickname';
+  static const _nicknameOnboardingCompletedKey =
+      'poppop_nickname_onboarding_completed';
   static const _soundEnabledKey = 'poppop_sound_enabled';
   static const _hapticEnabledKey = 'poppop_haptic_enabled';
 
@@ -57,6 +59,21 @@ abstract final class ProgressStorage {
     } catch (_) {
       // Storage failure must not interrupt settings navigation.
     }
+  }
+
+  static bool nicknameOnboardingCompleted() {
+    try {
+      return _localStorage
+              .getItem(_nicknameOnboardingCompletedKey.toJS)
+              ?.toDart ==
+          'true';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static void setNicknameOnboardingCompleted(bool completed) {
+    _writeBool(_nicknameOnboardingCompletedKey, completed);
   }
 
   static bool soundEnabled() => _readBool(_soundEnabledKey);
@@ -193,6 +210,7 @@ abstract final class ProgressStorage {
       _localStorage.removeItem(_ownedProductsKey.toJS);
       _localStorage.removeItem(_equippedProductsKey.toJS);
       _localStorage.removeItem(_nicknameKey.toJS);
+      _localStorage.removeItem(_nicknameOnboardingCompletedKey.toJS);
       _localStorage.removeItem(_soundEnabledKey.toJS);
       _localStorage.removeItem(_hapticEnabledKey.toJS);
     } catch (_) {

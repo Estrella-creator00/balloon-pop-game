@@ -4,6 +4,7 @@ abstract final class ProgressStorage {
   static int _lastScore = 0;
   static int _coinBalance = 0;
   static String? _nickname;
+  static bool _nicknameOnboardingCompleted = false;
   static bool _soundEnabled = true;
   static bool _hapticEnabled = true;
   static final Set<String> _ownedProductIds = <String>{};
@@ -25,6 +26,12 @@ abstract final class ProgressStorage {
 
   static void setNickname(String nickname) {
     _nickname = nickname;
+  }
+
+  static bool nicknameOnboardingCompleted() => _nicknameOnboardingCompleted;
+
+  static void setNicknameOnboardingCompleted(bool completed) {
+    _nicknameOnboardingCompleted = completed;
   }
 
   static bool soundEnabled() => _soundEnabled;
@@ -78,6 +85,7 @@ abstract final class ProgressStorage {
     _lastScore = 0;
     _coinBalance = 0;
     _nickname = null;
+    _nicknameOnboardingCompleted = false;
     _soundEnabled = true;
     _hapticEnabled = true;
     _ownedProductIds.clear();
