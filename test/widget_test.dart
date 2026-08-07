@@ -7,6 +7,10 @@ import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/onboarding_page.dart';
+import 'package:balloon_pop_game/ranking/mock_ranking_repository.dart';
+import 'package:balloon_pop_game/ranking/ranking_entry.dart';
+import 'package:balloon_pop_game/ranking/ranking_page.dart';
+import 'package:balloon_pop_game/ranking/ranking_repository.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/haptic_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
@@ -55,6 +59,69 @@ Future<void> openSettings(WidgetTester tester) async {
   expect(find.byType(SettingsPage), findsOneWidget);
 }
 
+class _LoadingRankingRepository implements RankingRepository {
+  final Completer<List<RankingEntry>> _top20 = Completer<List<RankingEntry>>();
+
+  @override
+  Future<List<RankingEntry>> fetchCurrentWeekTop20(RankingWeek week) =>
+      _top20.future;
+
+  @override
+  Future<RankingEntry?> fetchCurrentUserRanking({
+    required RankingWeek week,
+    required String? nickname,
+  }) async =>
+      null;
+
+  @override
+  Future<RankingEntry?> fetchCurrentWeekLeader(RankingWeek week) async => null;
+
+  @override
+  Future<RankingEntry?> fetchPreviousWeekLeader(RankingWeek week) async => null;
+}
+
+class _EmptyRankingRepository implements RankingRepository {
+  const _EmptyRankingRepository();
+
+  @override
+  Future<List<RankingEntry>> fetchCurrentWeekTop20(RankingWeek week) async =>
+      const [];
+
+  @override
+  Future<RankingEntry?> fetchCurrentUserRanking({
+    required RankingWeek week,
+    required String? nickname,
+  }) async =>
+      null;
+
+  @override
+  Future<RankingEntry?> fetchCurrentWeekLeader(RankingWeek week) async => null;
+
+  @override
+  Future<RankingEntry?> fetchPreviousWeekLeader(RankingWeek week) async => null;
+}
+
+class _ErrorRankingRepository implements RankingRepository {
+  const _ErrorRankingRepository();
+
+  @override
+  Future<List<RankingEntry>> fetchCurrentWeekTop20(RankingWeek week) async =>
+      throw StateError('mock ranking failure');
+
+  @override
+  Future<RankingEntry?> fetchCurrentUserRanking({
+    required RankingWeek week,
+    required String? nickname,
+  }) async =>
+      null;
+
+  @override
+  Future<RankingEntry?> fetchCurrentWeekLeader(RankingWeek week) async => null;
+
+  @override
+  Future<RankingEntry?> fetchPreviousWeekLeader(RankingWeek week) async => null;
+}
+
 void main() {
   test('screen identifiers stay stable', () {
     expect(
@@ -65,7 +132,7 @@ void main() {
     expect(ScreenIds.names[ScreenIds.shopCategories], '상점 카테고리 화면');
     expect(ScreenIds.names[ScreenIds.shopProductList], '상점 상품 목록 화면');
     expect(ScreenIds.names[ScreenIds.event], '이벤트 화면');
-    expect(ScreenIds.names[ScreenIds.ranking], '랭킹 화면');
+    expect(ScreenIds.names[ScreenIds.ranking], '주간 랭킹 화면');
     expect(ScreenIds.names[ScreenIds.settings], '설정 화면');
     expect(ScreenIds.names[ScreenIds.nicknameEdit], '닉네임 변경 팝업');
     expect(ScreenIds.names[ScreenIds.terms], '이용약관 화면');
@@ -105,6 +172,43 @@ void main() {
     expect(stage10.bossCount, 1);
     expect(stage20.bossCount, 2);
     expect(stage20.duration, const Duration(seconds: 10));
+  });
+
+  test('ranking week uses the Monday 17:00 KST boundary', () {
+    final beforeBoundary = RankingWeek.forInstant(
+      DateTime.utc(2026, 8, 10, 7, 59, 59),
+    );
+    final atBoundary = RankingWeek.forInstant(
+      DateTime.utc(2026, 8, 10, 8),
+    );
+
+    expect(beforeBoundary.id, '2026-08-03');
+    expect(atBoundary.id, '2026-08-10');
+    expect(atBoundary.startKst.weekday, DateTime.monday);
+    expect(atBoundary.startKst.hour, 17);
+    expect(atBoundary.nextStartKst.weekday, DateTime.monday);
+    expect(atBoundary.nextStartKst.hour, 17);
+  });
+
+  test('mock ranking provides a sorted current top 20 and weekly leaders',
+      () async {
+    const repository = MockRankingRepository();
+    final week = RankingWeek.forInstant(DateTime.utc(2026, 8, 12));
+    final entries = await repository.fetchCurrentWeekTop20(week);
+    final current = await repository.fetchCurrentWeekLeader(week);
+    final previous = await repository.fetchPreviousWeekLeader(week);
+
+    expect(entries, hasLength(20));
+    expect(
+      entries.map((entry) => entry.rank),
+      orderedEquals(List.generate(20, (index) => index + 1)),
+    );
+    for (var index = 1; index < entries.length; index++) {
+      expect(entries[index - 1].score, greaterThan(entries[index].score));
+    }
+    expect(entries.every((entry) => entry.weekId == week.id), isTrue);
+    expect(current?.rank, 1);
+    expect(previous?.weekId, week.previous.id);
   });
 
   test('unsupported haptics never interrupt gameplay', () async {
@@ -763,6 +867,157 @@ void main() {
     expect(SettingsService.nicknameOnboardingCompleted, isTrue);
   });
 
+  testWidgets('home ranking button opens R-01 with ordered top 20 and returns',
+      (tester) async {
+    SettingsService.saveNickname('시원이');
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WeeklyRankingPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('ranking-week-info')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('previous-week-leader-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('current-week-leader-card')),
+      findsOneWidget,
+    );
+    final rows = tester.widgetList<RankingEntryRow>(
+      find.byType(RankingEntryRow),
+    );
+    expect(rows, hasLength(20));
+    expect(
+      rows.map((row) => row.entry.rank),
+      orderedEquals(List.generate(20, (index) => index + 1)),
+    );
+    final scores = rows.map((row) => row.entry.score).toList();
+    expect(scores, orderedEquals([...scores]..sort((a, b) => b.compareTo(a))));
+    expect(find.byKey(const ValueKey('ranking-top-accent-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ranking-top-accent-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ranking-top-accent-3')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('ranking-current-user-badge')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.byKey(const ValueKey('ranking-row-20')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('ranking-row-20')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.drag(
+      find.byKey(const ValueKey('ranking-scroll')),
+      const Offset(0, 1800),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('ranking-back-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    expect(find.text('BEST SCORE'), findsOneWidget);
+  });
+
+  testWidgets(
+      'ranking supports outside-top20, loading, empty, and error states',
+      (tester) async {
+    final fixedNow = DateTime.utc(2026, 8, 12);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WeeklyRankingPage(
+          currentNickname: '목록밖테스터',
+          now: () => fixedNow,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (var drag = 0; drag < 6; drag++) {
+      await tester.drag(
+        find.byKey(const ValueKey('ranking-scroll')),
+        const Offset(0, -400),
+      );
+      await tester.pump();
+    }
+    expect(
+      find.byKey(const ValueKey('ranking-outside-top20-card')),
+      findsOneWidget,
+    );
+    expect(find.text('34위'), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WeeklyRankingPage(
+          key: const ValueKey('ranking-loading-page'),
+          repository: _LoadingRankingRepository(),
+          now: () => fixedNow,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('ranking-loading')), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WeeklyRankingPage(
+          key: const ValueKey('ranking-empty-page'),
+          repository: const _EmptyRankingRepository(),
+          now: () => fixedNow,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('ranking-empty')), findsOneWidget);
+    expect(find.text('이번 주 랭킹이 아직 없어요.'), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WeeklyRankingPage(
+          key: const ValueKey('ranking-error-page'),
+          repository: const _ErrorRankingRepository(),
+          now: () => fixedNow,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('ranking-error')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ranking-retry-button')), findsOneWidget);
+  });
+
+  testWidgets('R-01 fits a narrow mobile viewport without overflow',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 667);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WeeklyRankingPage(
+          currentNickname: '목록밖테스터',
+          now: () => DateTime.utc(2026, 8, 12),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    for (var drag = 0; drag < 6; drag++) {
+      await tester.drag(
+        find.byKey(const ValueKey('ranking-scroll')),
+        const Offset(0, -400),
+      );
+      await tester.pump();
+    }
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('ranking-outside-top20-card')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('home and store open the same settings page and return',
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
@@ -1206,11 +1461,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('ranking-coming-soon')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('home-nav-selected-ranking')),
-      findsOneWidget,
-    );
+    expect(find.byType(WeeklyRankingPage), findsOneWidget);
+    expect(find.text('주간 랭킹'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('ranking-back-button')));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('home-nav-home')));
     await tester.pump();

@@ -11,6 +11,7 @@ import 'balloon_background.dart';
 import 'balloon_skin_catalog.dart';
 import 'dev/dev_coin_tool.dart';
 import 'onboarding_page.dart';
+import 'ranking/ranking_page.dart';
 import 'services/coin_service.dart';
 import 'services/haptic_service.dart';
 import 'services/purchase_service.dart';
@@ -99,7 +100,7 @@ abstract final class ScreenIds {
     shopCategories: '상점 카테고리 화면',
     shopProductList: '상점 상품 목록 화면',
     event: '이벤트 화면',
-    ranking: '랭킹 화면',
+    ranking: '주간 랭킹 화면',
     settings: '설정 화면',
     nicknameEdit: '닉네임 변경 팝업',
     terms: '이용약관 화면',
@@ -2497,14 +2498,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     setState(() => _storeNavigationVisible = visible);
   }
 
-  void _onRankingMenuTap() {
+  Future<void> _onRankingMenuTap() async {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    if (_mainTab != MainTab.ranking) {
-      setState(() {
-        _mainTab = MainTab.ranking;
-        _storeProductFilter = StoreProductFilter.all;
-      });
-    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) => WeeklyRankingPage(
+          currentNickname: SettingsService.nickname,
+        ),
+      ),
+    );
   }
 
   void _showComingSoon(String message) {
