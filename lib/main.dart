@@ -242,7 +242,7 @@ class StageConfig {
     required this.stage,
     required this.isBoss,
     required this.balloonCount,
-    required this.balloonHp,
+    required this.requiredHits,
     required this.duration,
     required this.bossHp,
     required this.bossSpeed,
@@ -253,7 +253,12 @@ class StageConfig {
   final int stage;
   final bool isBoss;
   final int balloonCount;
-  final int balloonHp;
+
+  /// Number of taps required to pop a normal balloon in this stage.
+  ///
+  /// Keep this separate from boss HP and fake-balloon handling so later
+  /// stage tiers cannot accidentally inherit multi-hit behavior.
+  final int requiredHits;
   final Duration duration;
   final int bossHp;
   final double bossSpeed;
@@ -265,7 +270,19 @@ class StageConfig {
   static const firstFakeBalloonStage = 21;
   static const lastFakeBalloonStage = 29;
   static const lastImplementedStage = 29;
-  static const fakeBalloonHp = 1;
+  static const fakeBalloonRequiredHits = 1;
+
+  static int normalBalloonRequiredHitsForStage(int stage) {
+    if (stage >= 11 && stage <= 19) return 2;
+    if ((stage >= 1 && stage <= 9) ||
+        (stage >= firstFakeBalloonStage && stage <= lastFakeBalloonStage)) {
+      return 1;
+    }
+
+    // Boss stages do not spawn normal balloons. Preserve their historical
+    // tier value without allowing it to leak into Stages 21-29.
+    return (stage - 1) ~/ 10 + 1;
+  }
 
   factory StageConfig.forStage(int stage) {
     if (stage < 1 || stage > lastImplementedStage) {
@@ -280,7 +297,7 @@ class StageConfig {
       stage: stage,
       isBoss: isBoss,
       balloonCount: isBoss ? 0 : positionInTier + 1,
-      balloonHp: stage >= firstFakeBalloonStage ? 1 : tier + 1,
+      requiredHits: normalBalloonRequiredHitsForStage(stage),
       duration: Duration(
         seconds: isBoss ? 8 + tier * 2 : 10 + tier * 2 + timeGroup * 5,
       ),
@@ -959,6 +976,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _spawnBalloonGroup(int count, {required bool isFake}) {
     final skin = _equippedBalloonSkin;
+    final requiredHits = isFake
+        ? StageConfig.fakeBalloonRequiredHits
+        : _stageConfig.requiredHits;
     for (var i = 0; i < count; i++) {
       final angle = _random.nextDouble() * pi * 2;
       final speed = 48 + (_stage * 4.2) + _random.nextDouble() * 32;
@@ -972,8 +992,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           size: size,
           floatPhase: _random.nextDouble() * pi * 2,
           floatPower: 10 + _random.nextDouble() * 10,
-          hp: isFake ? StageConfig.fakeBalloonHp : _stageConfig.balloonHp,
-          maxHp: isFake ? StageConfig.fakeBalloonHp : _stageConfig.balloonHp,
+          hp: requiredHits,
+          maxHp: requiredHits,
           skinId: skin.id,
           isFake: isFake,
         ),
@@ -4357,32 +4377,41 @@ class BalloonSkinRenderer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    late final Widget visual;
     if (definition.rendererType == BalloonRendererType.painted) {
       final displayColor = isFake ? fakeBalloonColor(color) : color;
-      return CustomPaint(
+      visual = CustomPaint(
         painter: isBoss
             ? BossBalloonPainter(color: displayColor, hp: hp, maxHp: maxHp)
             : BalloonPainter(color: displayColor),
       );
+    } else {
+      final image = BalloonSkinArtwork(
+        definition: definition,
+        color: color,
+        isFake: isFake,
+      );
+      visual = !isBoss
+          ? image
+          : Stack(
+              children: [
+                Positioned(left: 0, right: 0, top: 0, bottom: 32, child: image),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 5,
+                  child: _BossHealthBar(hp: hp, maxHp: maxHp),
+                ),
+              ],
+            );
     }
 
-    final image = BalloonSkinArtwork(
-      definition: definition,
-      color: color,
-      isFake: isFake,
-    );
-    if (!isBoss) return image;
-    return Stack(
-      children: [
-        Positioned(left: 0, right: 0, top: 0, bottom: 32, child: image),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 5,
-          child: _BossHealthBar(hp: hp, maxHp: maxHp),
-        ),
-      ],
-    );
+    // Fake balloons share every skin's normal renderer and palette. A single
+    // final-stage treatment makes all current and future definitions look
+    // slightly faded without introducing skin-specific fake implementations.
+    return isFake
+        ? Opacity(opacity: fakeBalloonOpacity, child: visual)
+        : visual;
   }
 }
 
@@ -4496,8 +4525,9 @@ class BalloonSkinArtwork extends StatelessWidget {
   }
 }
 
-const fakeBalloonSaturationFactor = 0.58;
-const fakeBalloonBrightnessFactor = 0.92;
+const fakeBalloonSaturationFactor = 0.78;
+const fakeBalloonBrightnessFactor = 0.97;
+const fakeBalloonOpacity = 0.78;
 
 List<double> saturationBrightnessColorMatrix({
   required double saturation,

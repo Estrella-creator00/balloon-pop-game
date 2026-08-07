@@ -39,6 +39,17 @@ Future<void> tapGameTarget(WidgetTester tester, Object key) async {
   await tester.pump();
 }
 
+Future<void> tapGameTargetThroughPointer(
+  WidgetTester tester,
+  Object key,
+) async {
+  final target = key is int
+      ? find.byKey(ValueKey<int>(key))
+      : find.byKey(ValueKey<String>(key as String));
+  await tester.tap(target);
+  await tester.pump();
+}
+
 Future<void> openBalloonPreview(WidgetTester tester, String productId) async {
   // Tap the same full-card InkWell a real touch user hits. The former helper
   // targeted an internal child and did not protect the production tap path.
@@ -164,7 +175,7 @@ void main() {
     expect(stage10.isBoss, true);
     expect(stage10.bossHp, 10);
     expect(stage11.balloonCount, 2);
-    expect(stage11.balloonHp, 2);
+    expect(stage11.requiredHits, 2);
     expect(stage11.duration, const Duration(seconds: 12));
     expect(stage19.balloonCount, 10);
     expect(stage19.duration, const Duration(seconds: 22));
@@ -176,24 +187,24 @@ void main() {
     expect(stage20.duration, const Duration(seconds: 10));
     expect(stage21.isBoss, false);
     expect(stage21.balloonCount, 2);
-    expect(stage21.balloonHp, 1);
+    expect(stage21.requiredHits, 1);
     expect(stage21.duration, const Duration(seconds: 14));
     expect(stage21.fakeBalloonCount, 2);
     expect(stage29.balloonCount, 10);
-    expect(stage29.balloonHp, 1);
+    expect(stage29.requiredHits, 1);
     expect(stage29.duration, const Duration(seconds: 24));
     expect(stage29.fakeBalloonCount, 2);
     for (var stage = 1; stage <= 20; stage++) {
       expect(StageConfig.forStage(stage).fakeBalloonCount, 0);
     }
     for (var stage = 11; stage <= 19; stage++) {
-      expect(StageConfig.forStage(stage).balloonHp, 2);
+      expect(StageConfig.forStage(stage).requiredHits, 2);
     }
     for (var stage = 21; stage <= 29; stage++) {
       expect(StageConfig.forStage(stage).fakeBalloonCount, 2);
-      expect(StageConfig.forStage(stage).balloonHp, 1);
+      expect(StageConfig.forStage(stage).requiredHits, 1);
     }
-    expect(StageConfig.fakeBalloonHp, 1);
+    expect(StageConfig.fakeBalloonRequiredHits, 1);
     expect(() => StageConfig.forStage(30), throwsRangeError);
   });
 
@@ -212,7 +223,7 @@ void main() {
       fakeHsl.lightness,
       closeTo(normalHsl.lightness * fakeBalloonBrightnessFactor, 0.02),
     );
-    expect(normalHsl.saturation - fakeHsl.saturation, greaterThan(0.25));
+    expect(normalHsl.saturation - fakeHsl.saturation, greaterThan(0.15));
     final matrix = BalloonSkinArtwork.visualColorMatrix(
       BalloonSkinCatalog.byIdOrDefault('balloon-heart'),
       normal,
@@ -244,6 +255,10 @@ void main() {
 
       final renderer = tester.widget<BalloonSkinRenderer>(find.byKey(key));
       expect(renderer.isFake, isTrue);
+      final opacity = tester.widget<Opacity>(
+        find.descendant(of: find.byKey(key), matching: find.byType(Opacity)),
+      );
+      expect(opacity.opacity, fakeBalloonOpacity);
       if (definition.rendererType == BalloonRendererType.painted) {
         final paint = tester.widget<CustomPaint>(
           find.descendant(
@@ -2287,7 +2302,7 @@ void main() {
     HapticService.setPerformerForTest(() async {
       hapticCount++;
     });
-    await tapGameTarget(tester, firstId);
+    await tapGameTargetThroughPointer(tester, firstId);
 
     expect(find.byKey(ValueKey(firstId)), findsOneWidget);
     expect(find.byKey(ValueKey(secondId)), findsOneWidget);
@@ -2300,7 +2315,7 @@ void main() {
     expect(find.text('남은 풍선  2'), findsOneWidget);
     expect(hapticCount, 0);
 
-    await tapGameTarget(tester, firstId);
+    await tapGameTargetThroughPointer(tester, firstId);
     expect(find.byKey(ValueKey(firstId)), findsNothing);
     expect(find.byKey(ValueKey(secondId)), findsOneWidget);
     expect(find.text('11 STAGE'), findsOneWidget);
@@ -2386,6 +2401,49 @@ void main() {
     }
     expect(find.text('Stage Clear!'), findsOneWidget);
     expect(find.byKey(const ValueKey('fake-balloon-3')), findsNothing);
+  });
+
+  testWidgets(
+      'stage 21, 25, and 29 normal balloons are removed by one gameplay tap',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tapSectionStart(tester, 3);
+
+    var nextBalloonId = 0;
+    for (var stage = 21; stage <= 29; stage++) {
+      expect(find.text('$stage STAGE'), findsOneWidget);
+      final config = StageConfig.forStage(stage);
+      expect(config.requiredHits, 1);
+
+      for (var index = 0; index < config.balloonCount; index++) {
+        final id = nextBalloonId + index;
+        expect(find.byKey(ValueKey(id)), findsOneWidget);
+        if ({21, 25, 29}.contains(stage) && index == 0) {
+          await tapGameTargetThroughPointer(tester, id);
+        } else {
+          await tapGameTarget(tester, id);
+        }
+        expect(
+          find.byKey(ValueKey(id)),
+          findsNothing,
+          reason: 'Stage $stage balloon $id must pop on its first tap.',
+        );
+      }
+
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      for (var index = 0; index < config.fakeBalloonCount; index++) {
+        final fakeId = nextBalloonId + config.balloonCount + index;
+        expect(find.byKey(ValueKey('fake-balloon-$fakeId')), findsNothing);
+      }
+      nextBalloonId += config.balloonCount + config.fakeBalloonCount;
+
+      if (stage < StageConfig.lastImplementedStage) {
+        await tester.pump(const Duration(milliseconds: 401));
+      }
+    }
   });
 
   testWidgets('fake sound and haptic follow settings', (tester) async {
