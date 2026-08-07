@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/dev/dev_coin_tool.dart';
 import 'package:balloon_pop_game/audio/pop_sound.dart';
+import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
@@ -122,6 +123,7 @@ void main() {
     expect(basic.popEffectType, BalloonPopEffectType.shards);
     expect(basic.popSoundType, BalloonPopSoundType.basic);
     expect(basic.supportsBossSkin, isTrue);
+    expect(basic.background, BalloonBackgroundType.none);
 
     final heart = BalloonSkinCatalog.byIdOrDefault('balloon-heart');
     expect(heart.price, 100);
@@ -132,6 +134,58 @@ void main() {
     expect(heart.popSoundType, BalloonPopSoundType.heart);
     expect(heart.supportsBossSkin, isTrue);
     expect(heart.badge, BalloonBadge.newItem);
+    expect(heart.background, BalloonBackgroundType.none);
+  });
+
+  testWidgets('preview and gameplay use the same optional background renderer',
+      (tester) async {
+    const mock = BalloonSkinDefinition(
+      id: 'mock-background-skin',
+      displayName: 'Mock',
+      price: 0,
+      rarity: BalloonRarity.legendary,
+      rendererType: BalloonRendererType.painted,
+      colorPalette: [Colors.pink],
+      popEffectType: BalloonPopEffectType.shards,
+      popSoundType: BalloonPopSoundType.basic,
+      isDefault: false,
+      supportsBossSkin: true,
+      shopOrder: 99,
+      previewColor: Colors.pink,
+      background: BalloonBackgroundType.galaxy,
+    );
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: GameBalloonBackground(definition: mock),
+      ),
+    );
+    final gameBackground = tester.widget<BalloonBackgroundRenderer>(
+      find.byKey(const ValueKey('game-balloon-background')),
+    );
+    expect(gameBackground.background, BalloonBackgroundType.galaxy);
+    expect(gameBackground.fit, BoxFit.cover);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BalloonPreviewDialog(
+            definition: mock,
+            productProvider: () => StoreProduct.fromBalloonSkin(mock),
+            onAction: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final previewBackground = tester.widget<BalloonBackgroundRenderer>(
+      find.byKey(const ValueKey('balloon-preview-background')),
+    );
+    expect(previewBackground.background, gameBackground.background);
+    expect(previewBackground.fit, gameBackground.fit);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 
   testWidgets('heart balloon asset has a fully transparent surrounding area',
@@ -834,6 +888,14 @@ void main() {
     expect(previewRenderer.definition, BalloonSkinCatalog.defaultSkin);
     expect(
       tester
+          .widget<BalloonBackgroundRenderer>(
+            find.byKey(const ValueKey('balloon-preview-background')),
+          )
+          .background,
+      BalloonBackgroundType.none,
+    );
+    expect(
+      tester
           .widget<FilledButton>(
             find.byKey(const ValueKey('balloon-preview-action')),
           )
@@ -1299,6 +1361,11 @@ void main() {
     expect(find.byKey(const ValueKey(0)), findsOneWidget);
     expect(find.byKey(const ValueKey(1)), findsOneWidget);
     expect(find.byKey(const ValueKey('play-sky-boundary')), findsOneWidget);
+    final gameBackground = tester.widget<BalloonBackgroundRenderer>(
+      find.byKey(const ValueKey('game-balloon-background')),
+    );
+    expect(gameBackground.background, BalloonBackgroundType.none);
+    expect(gameBackground.fallback, isA<PlaySky>());
     expect(find.byKey(const ValueKey('game-header-boundary')), findsOneWidget);
     expect(find.byKey(const ValueKey('balloon-raster-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('balloon-raster-1')), findsOneWidget);

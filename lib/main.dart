@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import 'audio/pop_sound.dart';
+import 'balloon_background.dart';
 import 'balloon_skin_catalog.dart';
 import 'dev/dev_coin_tool.dart';
 import 'services/coin_service.dart';
@@ -2867,7 +2868,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        const Positioned.fill(child: PlaySky()),
+                        Positioned.fill(
+                          child: GameBalloonBackground(
+                            definition: _equippedBalloonSkin,
+                          ),
+                        ),
                         Positioned.fill(
                           child: IgnorePointer(
                             child: RepaintBoundary(
@@ -3652,6 +3657,19 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                       clipBehavior: Clip.none,
                       alignment: Alignment.center,
                       children: [
+                        Positioned.fill(
+                          child: ClipRect(
+                            child: BalloonBackgroundRenderer(
+                              key: const ValueKey(
+                                'balloon-preview-background',
+                              ),
+                              background: widget.definition.background,
+                              // The dialog's white Material remains the stage
+                              // for skins without a dedicated background.
+                              fallback: const SizedBox.expand(),
+                            ),
+                          ),
+                        ),
                         if (_balloonVisible)
                           SizedBox(
                             key: const ValueKey('balloon-preview-renderer'),
@@ -4135,6 +4153,25 @@ class PlaySky extends StatelessWidget {
       child: CustomPaint(painter: SkyPainter()),
     );
   }
+}
+
+/// G-01 background entry point. The equipped skin supplies only data; the
+/// shared renderer decides whether to keep [PlaySky] or show a registered
+/// dedicated background.
+class GameBalloonBackground extends StatelessWidget {
+  const GameBalloonBackground({
+    super.key,
+    required this.definition,
+  });
+
+  final BalloonSkinDefinition definition;
+
+  @override
+  Widget build(BuildContext context) => BalloonBackgroundRenderer(
+        key: const ValueKey('game-balloon-background'),
+        background: definition.background,
+        fallback: const PlaySky(),
+      );
 }
 
 /// Shared rendering entry point used by shop previews, normal balloons,

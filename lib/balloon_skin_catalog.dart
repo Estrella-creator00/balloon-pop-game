@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'balloon_background.dart';
+
 enum BalloonRarity { common, rare, epic, legendary }
 
 enum BalloonRendererType { painted, image }
@@ -32,6 +34,7 @@ class BalloonSkinDefinition {
     this.normalDamageTintStrength = 0.38,
     this.bossDamageTintStrength = 0.62,
     this.initiallyOwned = false,
+    this.background = BalloonBackgroundType.none,
   });
 
   final String id;
@@ -53,6 +56,7 @@ class BalloonSkinDefinition {
   final double normalDamageTintStrength;
   final double bossDamageTintStrength;
   final bool initiallyOwned;
+  final BalloonBackgroundType background;
 
   Color colorAtDamage(Color base, double progress, {required bool isBoss}) {
     final strength = isBoss ? bossDamageTintStrength : normalDamageTintStrength;
@@ -102,6 +106,7 @@ abstract final class BalloonSkinCatalog {
       shopOrder: 0,
       previewColor: Color(0xFFFF5C8A),
       initiallyOwned: true,
+      background: BalloonBackgroundType.none,
     ),
     BalloonSkinDefinition(
       id: 'balloon-heart',
@@ -119,6 +124,7 @@ abstract final class BalloonSkinCatalog {
       shopOrder: 1,
       previewColor: Color(0xFFFF5C8A),
       avoidImmediateColorRepeat: true,
+      background: BalloonBackgroundType.none,
     ),
     // Existing products retain their IDs and initial ownership behavior.
     BalloonSkinDefinition(
