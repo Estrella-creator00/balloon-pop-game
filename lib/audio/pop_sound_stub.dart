@@ -3,6 +3,7 @@ abstract final class PopSound {
   static int basicPlayCount = 0;
   static int heartPlayCount = 0;
   static int bossExplosionPlayCount = 0;
+  static int fakePlayCount = 0;
 
   static void setEnabled(bool value) => enabled = value;
 
@@ -16,6 +17,10 @@ abstract final class PopSound {
 
   static void playLightTap() {}
 
+  static void playFake() {
+    if (enabled) fakePlayCount++;
+  }
+
   static void playBossExplosion() {
     if (enabled) bossExplosionPlayCount++;
   }
@@ -24,5 +29,6 @@ abstract final class PopSound {
     basicPlayCount = 0;
     heartPlayCount = 0;
     bossExplosionPlayCount = 0;
+    fakePlayCount = 0;
   }
 }

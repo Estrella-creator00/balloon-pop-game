@@ -57,9 +57,7 @@ class _BalloonPopAppState extends State<BalloonPopApp> {
       ),
       home: _nicknameOnboardingCompleted
           ? const BalloonGamePage()
-          : NicknameOnboardingPage(
-              onCompleted: _completeNicknameOnboarding,
-            ),
+          : NicknameOnboardingPage(onCompleted: _completeNicknameOnboarding),
     );
   }
 }
@@ -201,6 +199,7 @@ class Balloon {
     required this.hp,
     required this.maxHp,
     this.skinId = 'balloon-default',
+    this.isFake = false,
   });
 
   final int id;
@@ -213,6 +212,7 @@ class Balloon {
   int hp;
   final int maxHp;
   final String skinId;
+  final bool isFake;
 }
 
 class BossBalloon {
@@ -247,6 +247,7 @@ class StageConfig {
     required this.bossHp,
     required this.bossSpeed,
     required this.bossCount,
+    required this.fakeBalloonCount,
   });
 
   final int stage;
@@ -257,8 +258,18 @@ class StageConfig {
   final int bossHp;
   final double bossSpeed;
   final int bossCount;
+  final int fakeBalloonCount;
+
+  bool get hasFakeBalloons => fakeBalloonCount > 0;
+
+  static const firstFakeBalloonStage = 21;
+  static const lastFakeBalloonStage = 29;
+  static const lastImplementedStage = 29;
 
   factory StageConfig.forStage(int stage) {
+    if (stage < 1 || stage > lastImplementedStage) {
+      throw RangeError.range(stage, 1, lastImplementedStage, 'stage');
+    }
     final isBoss = stage % 10 == 0;
     final tier = (stage - 1) ~/ 10;
     final positionInTier = (stage - 1) % 10 + 1;
@@ -275,6 +286,10 @@ class StageConfig {
       bossHp: isBoss ? 10 + tier * 5 : 0,
       bossSpeed: isBoss ? 105 * pow(1.2, tier).toDouble() : 0,
       bossCount: isBoss ? tier + 1 : 0,
+      fakeBalloonCount:
+          stage >= firstFakeBalloonStage && stage <= lastFakeBalloonStage
+              ? 2
+              : 0,
     );
   }
 }
@@ -321,12 +336,31 @@ class BurstRing {
   final double maxLife;
 }
 
+class FloatingTextFeedback {
+  FloatingTextFeedback({
+    required this.center,
+    required this.text,
+    required this.color,
+    required this.life,
+    required this.maxLife,
+  });
+
+  final Offset center;
+  final String text;
+  final Color color;
+  double life;
+  final double maxLife;
+}
+
 bool advanceEffects(
   List<PopPiece> pieces,
   List<BurstRing> rings,
-  double dt,
-) {
-  if (pieces.isEmpty && rings.isEmpty) return false;
+  double dt, {
+  List<FloatingTextFeedback>? feedbacks,
+}) {
+  if (pieces.isEmpty && rings.isEmpty && (feedbacks?.isEmpty ?? true)) {
+    return false;
+  }
   const gravity = 520.0;
   for (final piece in pieces) {
     piece.life -= dt;
@@ -343,6 +377,13 @@ bool advanceEffects(
     ring.life -= dt;
   }
   rings.removeWhere((ring) => ring.life <= 0);
+
+  if (feedbacks != null) {
+    for (final feedback in feedbacks) {
+      feedback.life -= dt;
+    }
+    feedbacks.removeWhere((feedback) => feedback.life <= 0);
+  }
   return true;
 }
 
@@ -392,8 +433,10 @@ void addBalloonShardPieces({
     pieces.add(
       PopPiece(
         position: center,
-        velocity:
-            Offset(cos(angle) * speed, sin(angle) * speed - (big ? 120 : 65)),
+        velocity: Offset(
+          cos(angle) * speed,
+          sin(angle) * speed - (big ? 120 : 65),
+        ),
         color: Color.lerp(color, Colors.white, random.nextDouble() * 0.18)!,
         size: (big ? 11 : 8) + random.nextDouble() * (big ? 17 : 10),
         rotation: random.nextDouble() * pi,
@@ -480,13 +523,13 @@ const gameLoopInterval = Duration(milliseconds: 33);
 const maxFrameDeltaSeconds = 0.05;
 
 double calculateFrameDelta(Duration elapsed) =>
-    (elapsed.inMicroseconds / Duration.microsecondsPerSecond)
-        .clamp(0.0, maxFrameDeltaSeconds);
+    (elapsed.inMicroseconds / Duration.microsecondsPerSecond).clamp(
+      0.0,
+      maxFrameDeltaSeconds,
+    );
 
 typedef PeriodicTimerFactory = Timer Function(
-  Duration interval,
-  void Function(Timer timer) callback,
-);
+    Duration interval, void Function(Timer timer) callback);
 
 class SinglePeriodicGameLoop {
   SinglePeriodicGameLoop({PeriodicTimerFactory? timerFactory})
@@ -520,113 +563,125 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   static final List<StoreProduct> _storeProducts = [
     ...BalloonSkinCatalog.shopDefinitions.map(StoreProduct.fromBalloonSkin),
     StoreProduct(
-        id: 'pop-default',
-        category: StoreCategory.popEffect,
-        name: '기본 효과',
-        price: 0,
-        owned: true,
-        equipped: true,
-        previewType: StorePreviewType.effect,
-        previewData: Color(0xFFFFC857)),
+      id: 'pop-default',
+      category: StoreCategory.popEffect,
+      name: '기본 효과',
+      price: 0,
+      owned: true,
+      equipped: true,
+      previewType: StorePreviewType.effect,
+      previewData: Color(0xFFFFC857),
+    ),
     StoreProduct(
-        id: 'pop-a',
-        category: StoreCategory.popEffect,
-        name: '특별 효과 A',
-        price: 300,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.effect,
-        previewData: Color(0xFFFF6B9D)),
+      id: 'pop-a',
+      category: StoreCategory.popEffect,
+      name: '특별 효과 A',
+      price: 300,
+      owned: false,
+      equipped: false,
+      previewType: StorePreviewType.effect,
+      previewData: Color(0xFFFF6B9D),
+    ),
     StoreProduct(
-        id: 'pop-b',
-        category: StoreCategory.popEffect,
-        name: '특별 효과 B',
-        price: 700,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.effect,
-        previewData: Color(0xFF7E57C2)),
+      id: 'pop-b',
+      category: StoreCategory.popEffect,
+      name: '특별 효과 B',
+      price: 700,
+      owned: false,
+      equipped: false,
+      previewType: StorePreviewType.effect,
+      previewData: Color(0xFF7E57C2),
+    ),
     StoreProduct(
-        id: 'background-default',
-        category: StoreCategory.background,
-        name: '기본 배경',
-        price: 0,
-        owned: true,
-        equipped: true,
-        previewType: StorePreviewType.background,
-        previewData: Color(0xFF56CCFF)),
+      id: 'background-default',
+      category: StoreCategory.background,
+      name: '기본 배경',
+      price: 0,
+      owned: true,
+      equipped: true,
+      previewType: StorePreviewType.background,
+      previewData: Color(0xFF56CCFF),
+    ),
     StoreProduct(
-        id: 'background-a',
-        category: StoreCategory.background,
-        name: '특별 배경 A',
-        price: 800,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.background,
-        previewData: Color(0xFF85D86A)),
+      id: 'background-a',
+      category: StoreCategory.background,
+      name: '특별 배경 A',
+      price: 800,
+      owned: false,
+      equipped: false,
+      previewType: StorePreviewType.background,
+      previewData: Color(0xFF85D86A),
+    ),
     StoreProduct(
-        id: 'background-b',
-        category: StoreCategory.background,
-        name: '특별 배경 B',
-        price: 1200,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.background,
-        previewData: Color(0xFFFFA45B)),
+      id: 'background-b',
+      category: StoreCategory.background,
+      name: '특별 배경 B',
+      price: 1200,
+      owned: false,
+      equipped: false,
+      previewType: StorePreviewType.background,
+      previewData: Color(0xFFFFA45B),
+    ),
     StoreProduct(
-        id: 'sound-default',
-        category: StoreCategory.soundEffect,
-        name: '기본 POP',
-        price: 0,
-        owned: true,
-        equipped: true,
-        previewType: StorePreviewType.sound,
-        previewData: Color(0xFF42B8E8)),
+      id: 'sound-default',
+      category: StoreCategory.soundEffect,
+      name: '기본 POP',
+      price: 0,
+      owned: true,
+      equipped: true,
+      previewType: StorePreviewType.sound,
+      previewData: Color(0xFF42B8E8),
+    ),
     StoreProduct(
-        id: 'sound-a',
-        category: StoreCategory.soundEffect,
-        name: '특별 효과음 A',
-        price: 300,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.sound,
-        previewData: Color(0xFF5CD6C0)),
+      id: 'sound-a',
+      category: StoreCategory.soundEffect,
+      name: '특별 효과음 A',
+      price: 300,
+      owned: false,
+      equipped: false,
+      previewType: StorePreviewType.sound,
+      previewData: Color(0xFF5CD6C0),
+    ),
     StoreProduct(
-        id: 'sound-b',
-        category: StoreCategory.soundEffect,
-        name: '특별 효과음 B',
-        price: 500,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.sound,
-        previewData: Color(0xFFFF8A5B)),
+      id: 'sound-b',
+      category: StoreCategory.soundEffect,
+      name: '특별 효과음 B',
+      price: 500,
+      owned: false,
+      equipped: false,
+      previewType: StorePreviewType.sound,
+      previewData: Color(0xFFFF8A5B),
+    ),
     StoreProduct(
-        id: 'music-default',
-        category: StoreCategory.music,
-        name: '기본 음악',
-        price: 0,
-        owned: true,
-        equipped: true,
-        previewType: StorePreviewType.music,
-        previewData: Color(0xFF7354E8)),
+      id: 'music-default',
+      category: StoreCategory.music,
+      name: '기본 음악',
+      price: 0,
+      owned: true,
+      equipped: true,
+      previewType: StorePreviewType.music,
+      previewData: Color(0xFF7354E8),
+    ),
     StoreProduct(
-        id: 'music-a',
-        category: StoreCategory.music,
-        name: '특별 음악 A',
-        price: 700,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.music,
-        previewData: Color(0xFFFF6D9A)),
+      id: 'music-a',
+      category: StoreCategory.music,
+      name: '특별 음악 A',
+      price: 700,
+      owned: false,
+      equipped: false,
+      previewType: StorePreviewType.music,
+      previewData: Color(0xFFFF6D9A),
+    ),
     StoreProduct(
-        id: 'music-b',
-        category: StoreCategory.music,
-        name: '특별 음악 B',
-        price: 1000,
-        owned: false,
-        equipped: false,
-        previewType: StorePreviewType.music,
-        previewData: Color(0xFFFFB300)),
+      id: 'music-b',
+      category: StoreCategory.music,
+      name: '특별 음악 B',
+      price: 1000,
+      owned: false,
+      equipped: false,
+      previewType: StorePreviewType.music,
+      previewData: Color(0xFFFFB300),
+    ),
   ];
   static const _stageClearDelay = Duration(milliseconds: 400);
   static const _bossClearDelay = Duration(seconds: 1);
@@ -636,6 +691,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   final List<Balloon> _balloons = [];
   final List<PopPiece> _pieces = [];
   final List<BurstRing> _rings = [];
+  final List<FloatingTextFeedback> _feedbacks = [];
   int _effectsRevision = 0;
   final SinglePeriodicGameLoop _gameLoop = SinglePeriodicGameLoop();
   final CoinRewardSession _coinRewardSession = CoinRewardSession();
@@ -647,6 +703,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   int _score = 0;
   int _stage = 1;
   int _secondsLeft = 15;
+  Duration _stageTimePenalty = Duration.zero;
   int _sectionStartStage = 1;
   GamePhase _phase = GamePhase.menu;
   final List<BossBalloon> _bosses = [];
@@ -716,7 +773,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   GameHeaderData _createHeaderData() => GameHeaderData(
         stage: _stage,
         score: _score,
-        remaining: _bosses.isNotEmpty ? _bosses.length : _balloons.length,
+        remaining: _bosses.isNotEmpty ? _bosses.length : _normalBalloonCount,
         secondsLeft: _secondsLeft,
         controlsEnabled: _phase == GamePhase.playing,
       );
@@ -754,6 +811,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _balloons.clear();
     _pieces.clear();
     _rings.clear();
+    _feedbacks.clear();
     _effectsRevision++;
     _bosses.clear();
     _startStage();
@@ -792,6 +850,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _balloons.clear();
       _pieces.clear();
       _rings.clear();
+      _feedbacks.clear();
       _bosses.clear();
     });
     _publishHeader();
@@ -872,10 +931,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       return;
     }
 
+    _feedbacks.clear();
+    _stageTimePenalty = Duration.zero;
+
     if (_stageConfig.isBoss) {
       _spawnBoss();
     } else {
       _spawnBalloons(_stageConfig.balloonCount);
+      _spawnFakeBalloons(_stageConfig.fakeBalloonCount);
     }
     _secondsLeft = _stageConfig.duration.inSeconds;
     _stopwatch
@@ -886,6 +949,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _spawnBalloons(int count) {
+    _spawnBalloonGroup(count, isFake: false);
+  }
+
+  void _spawnFakeBalloons(int count) {
+    _spawnBalloonGroup(count, isFake: true);
+  }
+
+  void _spawnBalloonGroup(int count, {required bool isFake}) {
     final skin = _equippedBalloonSkin;
     for (var i = 0; i < count; i++) {
       final angle = _random.nextDouble() * pi * 2;
@@ -900,13 +971,20 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           size: size,
           floatPhase: _random.nextDouble() * pi * 2,
           floatPower: 10 + _random.nextDouble() * 10,
-          hp: _stageConfig.balloonHp,
-          maxHp: _stageConfig.balloonHp,
+          hp: isFake ? 1 : _stageConfig.balloonHp,
+          maxHp: isFake ? 1 : _stageConfig.balloonHp,
           skinId: skin.id,
+          isFake: isFake,
         ),
       );
     }
   }
+
+  int get _normalBalloonCount =>
+      _balloons.where((balloon) => !balloon.isFake).length;
+
+  Duration get _remainingStageDuration =>
+      _stageConfig.duration - _stopwatch.elapsed - _stageTimePenalty;
 
   BalloonSkinDefinition get _equippedBalloonSkin =>
       BalloonSkinCatalog.byIdOrDefault(
@@ -936,8 +1014,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final skin = _bossSkinFor(_equippedBalloonSkin);
     final maxSize = _stage >= 20 ? 300.0 : 270.0;
     final minSize = _stage >= 20 ? 225.0 : 210.0;
-    final size =
-        min(_playArea.shortestSide * 0.62, maxSize).clamp(minSize, maxSize);
+    final size = min(
+      _playArea.shortestSide * 0.62,
+      maxSize,
+    ).clamp(minSize, maxSize);
     for (var id = 0; id < config.bossCount; id++) {
       final angle = _random.nextDouble() * pi * 2;
       final speed = config.bossSpeed;
@@ -958,8 +1038,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Offset _nonOverlappingBossPosition(double size) {
     for (var attempt = 0; attempt < 80; attempt++) {
       final candidate = _randomPosition(size);
-      final candidateRect =
-          Rect.fromLTWH(candidate.dx, candidate.dy, size, size);
+      final candidateRect = Rect.fromLTWH(
+        candidate.dx,
+        candidate.dy,
+        size,
+        size,
+      );
       final overlaps = _bosses.any((boss) {
         final bossRect = Rect.fromLTWH(
           boss.position.dx,
@@ -1000,7 +1084,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _updateBoss(dt);
     _updateEffects(dt);
 
-    final remaining = _stageConfig.duration - _stopwatch.elapsed;
+    final remaining = _remainingStageDuration;
     if (remaining <= Duration.zero) {
       _finishGame();
       return;
@@ -1079,11 +1163,18 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _updateEffects(double dt) {
-    if (advanceEffects(_pieces, _rings, dt)) _effectsRevision++;
+    if (advanceEffects(_pieces, _rings, dt, feedbacks: _feedbacks)) {
+      _effectsRevision++;
+    }
   }
 
   void _popBalloon(Balloon balloon) {
     if (_phase != GamePhase.playing) return;
+
+    if (balloon.isFake) {
+      _hitFakeBalloon(balloon);
+      return;
+    }
 
     if (balloon.hp > 1) {
       PopSound.playLightTap();
@@ -1099,23 +1190,46 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final skin = BalloonSkinCatalog.byIdOrDefault(balloon.skinId);
     HapticService.shortImpact();
     _playSkinPopSound(skin, boss: false);
-    _spawnSkinPopEffect(
-      skin,
-      center,
-      balloon.color,
-      balloon.size,
-      big: false,
-    );
+    _spawnSkinPopEffect(skin, center, balloon.color, balloon.size, big: false);
     _spawnRing(center, balloon.color, balloon.size * 0.72);
 
     setState(() {
       final removed = _balloons.remove(balloon);
       if (!removed) return;
       balloon.hp = 0;
-      if (_balloons.isEmpty) {
+      if (_normalBalloonCount == 0) {
+        _balloons.removeWhere((candidate) => candidate.isFake);
         _showStageClear();
       }
     });
+    _publishHeader();
+  }
+
+  void _hitFakeBalloon(Balloon balloon) {
+    if (_phase != GamePhase.playing || !_balloons.remove(balloon)) return;
+
+    HapticService.shortImpact();
+    PopSound.playFake();
+    _stageTimePenalty += const Duration(seconds: 2);
+    _feedbacks.add(
+      FloatingTextFeedback(
+        center: balloon.position + Offset(balloon.size / 2, balloon.size / 2),
+        text: '-2초',
+        color: const Color(0xFFE53935),
+        life: 0.72,
+        maxLife: 0.72,
+      ),
+    );
+    _effectsRevision++;
+
+    final remaining = _remainingStageDuration;
+    if (remaining <= Duration.zero) {
+      _finishGame();
+      return;
+    }
+
+    _secondsLeft = (remaining.inMilliseconds + 999) ~/ 1000;
+    setState(() {});
     _publishHeader();
   }
 
@@ -1128,6 +1242,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stageTimer?.cancel();
     _stageTimer = Timer(_stageClearDelay, () {
       if (!mounted || _phase != GamePhase.stageClear) return;
+      if (_stage == StageConfig.lastImplementedStage) {
+        setState(_completeGame);
+        return;
+      }
       setState(() {
         _stage++;
         _startStage();
@@ -1206,12 +1324,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _phase = GamePhase.completed;
     _pieces.clear();
     _rings.clear();
+    _feedbacks.clear();
     _effectsRevision++;
     _publishHeader();
   }
 
-  void _spawnPieces(Offset center, Color color, double sourceSize,
-      {required bool big}) {
+  void _spawnPieces(
+    Offset center,
+    Color color,
+    double sourceSize, {
+    required bool big,
+  }) {
     addBalloonShardPieces(
       pieces: _pieces,
       random: _random,
@@ -1241,10 +1364,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _effectsRevision++;
   }
 
-  void _playSkinPopSound(
-    BalloonSkinDefinition skin, {
-    required bool boss,
-  }) {
+  void _playSkinPopSound(BalloonSkinDefinition skin, {required bool boss}) {
     // Sound-pack selection can override this dispatch point in a later update.
     playBalloonPopSound(skin, boss: boss);
   }
@@ -1270,6 +1390,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _phase = GamePhase.gameOver;
       _balloons.clear();
       _bosses.clear();
+      _feedbacks.clear();
     });
     _publishHeader();
   }
@@ -1433,13 +1554,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 rightLocked: !_secondSectionUnlocked,
                               ),
                               _stagePair(
-                                leftTitle: '21 ~ 30',
+                                leftTitle: '21 ~ 29',
                                 rightTitle: '31 ~ 40',
                                 leftColor: const Color(0xFF42B883),
                                 rightColor: const Color(0xFF4D8EF7),
-                                leftTap: null,
+                                leftTap: () => _startGame(21),
                                 rightTap: null,
-                                leftLocked: true,
+                                leftLocked: false,
                                 rightLocked: true,
                               ),
                               _stagePair(
@@ -1535,10 +1656,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               child: _homeCoinHud(_coinBalance),
             ),
           ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _homeSettingsButton(),
-          ),
+          Align(alignment: Alignment.centerRight, child: _homeSettingsButton()),
         ],
       );
 
@@ -1568,10 +1686,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           obscureText: true,
           keyboardType: TextInputType.number,
           maxLength: 4,
-          decoration: const InputDecoration(
-            labelText: '비밀번호',
-            counterText: '',
-          ),
+          decoration: const InputDecoration(labelText: '비밀번호', counterText: ''),
         ),
         actions: [
           TextButton(
@@ -1687,11 +1802,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               top: 24,
               child: _logoLine(
                 'POP',
-                const [
-                  Color(0xFFFFFF72),
-                  Color(0xFFFFC400),
-                  Color(0xFFFF8A00),
-                ],
+                const [Color(0xFFFFFF72), Color(0xFFFFC400), Color(0xFFFF8A00)],
                 const Color(0xFFD96500),
                 isLowerLine: false,
               ),
@@ -1700,11 +1811,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               top: 119,
               child: _logoLine(
                 'POP',
-                const [
-                  Color(0xFFFFB5C2),
-                  Color(0xFFFF5275),
-                  Color(0xFFE91E63),
-                ],
+                const [Color(0xFFFFB5C2), Color(0xFFFF5275), Color(0xFFE91E63)],
                 const Color(0xFFAD174F),
                 isLowerLine: true,
               ),
@@ -1742,8 +1849,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
-  Widget _logoLine(String text, List<Color> colors, Color depthColor,
-      {required bool isLowerLine}) {
+  Widget _logoLine(
+    String text,
+    List<Color> colors,
+    Color depthColor, {
+    required bool isLowerLine,
+  }) {
     const style = TextStyle(
       height: 0.88,
       letterSpacing: -3,
@@ -1778,12 +1889,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               height: 120,
               child: Transform.rotate(
                 angle: degrees * pi / 180,
-                child: _logoLetter(
-                  text[index],
-                  style,
-                  colors,
-                  depthColor,
-                ),
+                child: _logoLetter(text[index], style, colors, depthColor),
               ),
             );
           }),
@@ -1862,10 +1968,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               colors: colors,
               stops: const [0, 0.55, 1],
             ).createShader(bounds),
-            child: Text(
-              letter,
-              style: style.copyWith(color: Colors.white),
-            ),
+            child: Text(letter, style: style.copyWith(color: Colors.white)),
           ),
           Transform.translate(
             offset: const Offset(-2, -4),
@@ -1877,14 +1980,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 colors: [
                   Color(0xBFFFFFFF),
                   Color(0x32FFFFFF),
-                  Color(0x00FFFFFF),
+                  Color(0x00FFFFFF)
                 ],
                 stops: [0, 0.32, 0.58],
               ).createShader(bounds),
-              child: Text(
-                letter,
-                style: style.copyWith(color: Colors.white),
-              ),
+              child: Text(letter, style: style.copyWith(color: Colors.white)),
             ),
           ),
           Positioned(
@@ -2007,10 +2107,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           height: 1,
                           fontWeight: FontWeight.w900,
                           shadows: const [
-                            Shadow(
-                              color: Colors.white,
-                              offset: Offset(0, 2),
-                            ),
+                            Shadow(color: Colors.white, offset: Offset(0, 2)),
                           ],
                         ),
                       ),
@@ -2087,7 +2184,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 ? 'start-section-1'
                                 : title.startsWith('11 ')
                                     ? 'start-section-2'
-                                    : 'start-$title',
+                                    : title.startsWith('21 ')
+                                        ? 'start-section-3'
+                                        : 'start-$title',
                           ),
                           onPressed: onTap,
                           icon: Icon(
@@ -2195,11 +2294,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         child: Row(
           children: [
             _recordTile('BEST SCORE', _bestScore, _isNewBest),
-            Container(
-              width: 1.5,
-              height: 54,
-              color: const Color(0xFFE6D8CB),
-            ),
+            Container(width: 1.5, height: 54, color: const Color(0xFFE6D8CB)),
             _recordTile('LAST SCORE', _lastScore, false),
           ],
         ),
@@ -2416,7 +2511,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                   fontWeight: FontWeight.w900,
                   shadows: selected
                       ? const [
-                          Shadow(color: Color(0x55002C4E), offset: Offset(0, 1))
+                          Shadow(
+                              color: Color(0x55002C4E), offset: Offset(0, 1)),
                         ]
                       : null,
                 ),
@@ -2431,9 +2527,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) => SettingsPage(
-          onDataReset: _reloadAfterAllDataReset,
-        ),
+        builder: (context) =>
+            SettingsPage(onDataReset: _reloadAfterAllDataReset),
       ),
     );
   }
@@ -2502,9 +2597,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) => WeeklyRankingPage(
-          currentNickname: SettingsService.nickname,
-        ),
+        builder: (context) =>
+            WeeklyRankingPage(currentNickname: SettingsService.nickname),
       ),
     );
   }
@@ -2936,6 +3030,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 painter: EffectsPainter(
                                   pieces: _pieces,
                                   rings: _rings,
+                                  feedbacks: _feedbacks,
                                   revision: _effectsRevision,
                                 ),
                               ),
@@ -2967,7 +3062,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Widget _buildBalloon(Balloon balloon) {
     final skin = BalloonSkinCatalog.byIdOrDefault(balloon.skinId);
     return Positioned(
-      key: ValueKey(balloon.id),
+      key: balloon.isFake
+          ? ValueKey('fake-balloon-${balloon.id}')
+          : ValueKey(balloon.id),
       left: balloon.position.dx,
       top: balloon.position.dy,
       child: GestureDetector(
@@ -2979,9 +3076,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             width: balloon.size,
             height: balloon.size + 26,
             child: BalloonSkinRenderer(
-              key: ValueKey('balloon-skin-${balloon.id}'),
+              key: ValueKey(
+                '${balloon.isFake ? 'fake-' : ''}balloon-skin-${balloon.id}',
+              ),
               definition: skin,
               color: _balloonColor(balloon, skin),
+              isFake: balloon.isFake,
             ),
           ),
         ),
@@ -3559,12 +3659,10 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
   void initState() {
     super.initState();
     _color = widget.definition.previewColor;
-    _effectController = AnimationController(
-      vsync: this,
-      duration: _effectDuration,
-    )
-      ..addListener(_advanceEffects)
-      ..addStatusListener(_onEffectStatus);
+    _effectController =
+        AnimationController(vsync: this, duration: _effectDuration)
+          ..addListener(_advanceEffects)
+          ..addStatusListener(_onEffectStatus);
     _schedulePop();
   }
 
@@ -3715,9 +3813,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                         Positioned.fill(
                           child: ClipRect(
                             child: BalloonBackgroundRenderer(
-                              key: const ValueKey(
-                                'balloon-preview-background',
-                              ),
+                              key: const ValueKey('balloon-preview-background'),
                               background: widget.definition.background,
                               // The dialog's white Material remains the stage
                               // for skins without a dedicated background.
@@ -3979,13 +4075,19 @@ class StoreProductCard extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Icon(Icons.auto_awesome_rounded,
-                  color: product.previewData, size: 34),
+              Icon(
+                Icons.auto_awesome_rounded,
+                color: product.previewData,
+                size: 34,
+              ),
               const Positioned(
                 right: 5,
                 top: 2,
-                child: Icon(Icons.bolt_rounded,
-                    color: Color(0xFFFFC857), size: 17),
+                child: Icon(
+                  Icons.bolt_rounded,
+                  color: Color(0xFFFFC857),
+                  size: 17,
+                ),
               ),
             ],
           ),
@@ -4007,8 +4109,11 @@ class StoreProductCard extends StatelessWidget {
         );
       case StorePreviewType.sound:
         return Center(
-          child: Icon(Icons.graphic_eq_rounded,
-              color: product.previewData, size: 36),
+          child: Icon(
+            Icons.graphic_eq_rounded,
+            color: product.previewData,
+            size: 36,
+          ),
         );
       case StorePreviewType.music:
         return Center(
@@ -4019,8 +4124,11 @@ class StoreProductCard extends StatelessWidget {
               color: product.previewData.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.music_note_rounded,
-                color: product.previewData, size: 25),
+            child: Icon(
+              Icons.music_note_rounded,
+              color: product.previewData,
+              size: 25,
+            ),
           ),
         );
     }
@@ -4214,10 +4322,7 @@ class PlaySky extends StatelessWidget {
 /// shared renderer decides whether to keep [PlaySky] or show a registered
 /// dedicated background.
 class GameBalloonBackground extends StatelessWidget {
-  const GameBalloonBackground({
-    super.key,
-    required this.definition,
-  });
+  const GameBalloonBackground({super.key, required this.definition});
 
   final BalloonSkinDefinition definition;
 
@@ -4239,6 +4344,7 @@ class BalloonSkinRenderer extends StatelessWidget {
     this.isBoss = false,
     this.hp = 1,
     this.maxHp = 1,
+    this.isFake = false,
   });
 
   final BalloonSkinDefinition definition;
@@ -4246,20 +4352,23 @@ class BalloonSkinRenderer extends StatelessWidget {
   final bool isBoss;
   final int hp;
   final int maxHp;
+  final bool isFake;
 
   @override
   Widget build(BuildContext context) {
     if (definition.rendererType == BalloonRendererType.painted) {
+      final displayColor = isFake ? fakeBalloonColor(color) : color;
       return CustomPaint(
         painter: isBoss
-            ? BossBalloonPainter(color: color, hp: hp, maxHp: maxHp)
-            : BalloonPainter(color: color),
+            ? BossBalloonPainter(color: displayColor, hp: hp, maxHp: maxHp)
+            : BalloonPainter(color: displayColor),
       );
     }
 
     final image = BalloonSkinArtwork(
       definition: definition,
       color: color,
+      isFake: isFake,
     );
     if (!isBoss) return image;
     return Stack(
@@ -4281,10 +4390,12 @@ class BalloonSkinArtwork extends StatelessWidget {
     super.key,
     required this.definition,
     required this.color,
+    this.isFake = false,
   });
 
   final BalloonSkinDefinition definition;
   final Color color;
+  final bool isFake;
 
   @override
   Widget build(BuildContext context) {
@@ -4294,11 +4405,65 @@ class BalloonSkinArtwork extends StatelessWidget {
       filterQuality: FilterQuality.medium,
       gaplessPlayback: true,
     );
-    if (usesOriginalAsset(definition, color)) return image;
+    if (usesOriginalAsset(definition, color) && !isFake) return image;
     return ColorFiltered(
-      colorFilter: ColorFilter.matrix(colorMatrix(definition, color)),
+      colorFilter: ColorFilter.matrix(
+        visualColorMatrix(definition, color, isFake: isFake),
+      ),
       child: image,
     );
+  }
+
+  static List<double> visualColorMatrix(
+    BalloonSkinDefinition definition,
+    Color color, {
+    required bool isFake,
+  }) {
+    final base = colorMatrix(definition, color);
+    return isFake ? _composeColorMatrices(_fakeToneMatrix, base) : base;
+  }
+
+  static const _fakeToneMatrix = <double>[
+    0.802,
+    0.117,
+    0.012,
+    0,
+    0,
+    0.032,
+    0.887,
+    0.012,
+    0,
+    0,
+    0.032,
+    0.117,
+    0.782,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+  ];
+
+  static List<double> _composeColorMatrices(
+    List<double> after,
+    List<double> before,
+  ) {
+    final result = List<double>.filled(20, 0);
+    for (var row = 0; row < 4; row++) {
+      for (var column = 0; column < 4; column++) {
+        for (var index = 0; index < 4; index++) {
+          result[row * 5 + column] +=
+              after[row * 5 + index] * before[index * 5 + column];
+        }
+      }
+      result[row * 5 + 4] = after[row * 5 + 4];
+      for (var index = 0; index < 4; index++) {
+        result[row * 5 + 4] += after[row * 5 + index] * before[index * 5 + 4];
+      }
+    }
+    return result;
   }
 
   /// The catalog preview color is the reference artwork color. Returning the
@@ -4348,6 +4513,14 @@ class BalloonSkinArtwork extends StatelessWidget {
   }
 }
 
+Color fakeBalloonColor(Color color) {
+  final hsl = HSLColor.fromColor(color);
+  return hsl
+      .withSaturation((hsl.saturation * 0.82).clamp(0.0, 1.0))
+      .withLightness((hsl.lightness * 0.94).clamp(0.0, 1.0))
+      .toColor();
+}
+
 class _BossHealthBar extends StatelessWidget {
   const _BossHealthBar({required this.hp, required this.maxHp});
 
@@ -4358,28 +4531,29 @@ class _BossHealthBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final fraction = bossHealthFraction(hp, maxHp);
     return Center(
-        child: FractionallySizedBox(
-      widthFactor: 0.62,
-      child: Container(
-        height: 11,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.centerLeft,
-        child: FractionallySizedBox(
-          key: const ValueKey('boss-health-fill'),
-          widthFactor: fraction,
-          heightFactor: 1,
-          child: const DecoratedBox(
-            decoration: BoxDecoration(
-              color: Color(0xFFFFD54F),
-              borderRadius: BorderRadius.all(Radius.circular(8)),
+      child: FractionallySizedBox(
+        widthFactor: 0.62,
+        child: Container(
+          height: 11,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.8),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.centerLeft,
+          child: FractionallySizedBox(
+            key: const ValueKey('boss-health-fill'),
+            widthFactor: fraction,
+            heightFactor: 1,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color(0xFFFFD54F),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -4538,16 +4712,19 @@ class EffectsPainter extends CustomPainter {
     required this.pieces,
     required this.rings,
     required this.revision,
+    this.feedbacks = const <FloatingTextFeedback>[],
   });
 
   final List<PopPiece> pieces;
   final List<BurstRing> rings;
+  final List<FloatingTextFeedback> feedbacks;
   final int revision;
 
   int get pieceCount => pieces.length;
   int get heartPieceCount =>
       pieces.where((piece) => piece.shape == EffectPieceShape.heart).length;
   int get ringCount => rings.length;
+  int get feedbackCount => feedbacks.length;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4558,11 +4735,7 @@ class EffectsPainter extends CustomPainter {
       ringPaint
         ..color = ring.color.withValues(alpha: opacity * 0.75)
         ..strokeWidth = 5 * opacity;
-      canvas.drawCircle(
-        ring.center,
-        ring.radius * progress,
-        ringPaint,
-      );
+      canvas.drawCircle(ring.center, ring.radius * progress, ringPaint);
     }
 
     final fillPaint = Paint();
@@ -4593,6 +4766,33 @@ class EffectsPainter extends CustomPainter {
       canvas.drawPath(path, highlightPaint);
       canvas.restore();
     }
+
+    for (final feedback in feedbacks) {
+      final progress = (1 - feedback.life / feedback.maxLife).clamp(0.0, 1.0);
+      final opacity = (1 - progress).clamp(0.0, 1.0);
+      final painter = TextPainter(
+        text: TextSpan(
+          text: feedback.text,
+          style: TextStyle(
+            color: feedback.color.withValues(alpha: opacity),
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            shadows: [
+              Shadow(
+                color: Colors.white.withValues(alpha: opacity * 0.85),
+                blurRadius: 2,
+              ),
+            ],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      painter.paint(
+        canvas,
+        feedback.center -
+            Offset(painter.width / 2, painter.height / 2 + progress * 24),
+      );
+    }
   }
 
   Path _heartPath(Size size) => Path()
@@ -4607,7 +4807,13 @@ class EffectsPainter extends CustomPainter {
     )
     ..cubicTo(0, 0, size.width * 0.36, 0, size.width * 0.5, size.height * 0.2)
     ..cubicTo(
-        size.width * 0.64, 0, size.width, 0, size.width, size.height * 0.28)
+      size.width * 0.64,
+      0,
+      size.width,
+      0,
+      size.width,
+      size.height * 0.28,
+    )
     ..cubicTo(
       size.width,
       size.height * 0.58,
@@ -4655,10 +4861,7 @@ class LogoFestivalPainter extends CustomPainter {
           center.dx + cos(angle - 0.105) * inner,
           center.dy + sin(angle - 0.105) * inner,
         )
-        ..lineTo(
-          center.dx + cos(angle) * outer,
-          center.dy + sin(angle) * outer,
-        )
+        ..lineTo(center.dx + cos(angle) * outer, center.dy + sin(angle) * outer)
         ..lineTo(
           center.dx + cos(angle + 0.105) * inner,
           center.dy + sin(angle + 0.105) * inner,
@@ -4686,10 +4889,7 @@ class LogoFestivalPainter extends CustomPainter {
     for (var i = 0; i < particles.length; i++) {
       final particle = particles[i];
       final pulse = 0.82 + sin(progress * pi * 2 + i) * 0.18;
-      final point = Offset(
-        size.width * particle.$1,
-        size.height * particle.$2,
-      );
+      final point = Offset(size.width * particle.$1, size.height * particle.$2);
       _drawStar(canvas, point, particle.$4 * pulse, particle.$3);
     }
 
@@ -4756,12 +4956,7 @@ class LogoFestivalPainter extends CustomPainter {
     canvas.drawPath(path, Paint()..color = color);
   }
 
-  void _drawFirework(
-    Canvas canvas,
-    Offset center,
-    double radius,
-    Color color,
-  ) {
+  void _drawFirework(Canvas canvas, Offset center, double radius, Color color) {
     final paint = Paint()
       ..color = color.withValues(alpha: 0.78)
       ..strokeWidth = 2.2
@@ -4838,10 +5033,7 @@ class RibbonPainter extends CustomPainter {
 }
 
 class StageCardLandscapePainter extends CustomPainter {
-  const StageCardLandscapePainter({
-    required this.tint,
-    required this.locked,
-  });
+  const StageCardLandscapePainter({required this.tint, required this.locked});
 
   final Color tint;
   final bool locked;
@@ -4938,10 +5130,7 @@ class StageCardLandscapePainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Colors.white.withValues(alpha: 0.18),
-            Colors.transparent,
-          ],
+          colors: [Colors.white.withValues(alpha: 0.18), Colors.transparent],
         ).createShader(Offset.zero & size),
     );
   }
@@ -4962,11 +5151,12 @@ class _NatureLeftLayerState extends State<NatureLeftLayer> {
   ImageStream? _imageStream;
   ImageInfo? _imageInfo;
 
-  late final ImageStreamListener _imageListener = ImageStreamListener(
-    (imageInfo, _) {
-      if (mounted) setState(() => _imageInfo = imageInfo);
-    },
-  );
+  late final ImageStreamListener _imageListener = ImageStreamListener((
+    imageInfo,
+    _,
+  ) {
+    if (mounted) setState(() => _imageInfo = imageInfo);
+  });
 
   @override
   void didChangeDependencies() {
@@ -5099,11 +5289,12 @@ class _NatureRightLayerState extends State<NatureRightLayer> {
   ImageStream? _imageStream;
   ImageInfo? _imageInfo;
 
-  late final ImageStreamListener _imageListener = ImageStreamListener(
-    (imageInfo, _) {
-      if (mounted) setState(() => _imageInfo = imageInfo);
-    },
-  );
+  late final ImageStreamListener _imageListener = ImageStreamListener((
+    imageInfo,
+    _,
+  ) {
+    if (mounted) setState(() => _imageInfo = imageInfo);
+  });
 
   @override
   void didChangeDependencies() {
@@ -5235,11 +5426,12 @@ class _GrassFrontLayerState extends State<GrassFrontLayer> {
   ImageStream? _imageStream;
   ImageInfo? _imageInfo;
 
-  late final ImageStreamListener _imageListener = ImageStreamListener(
-    (imageInfo, _) {
-      if (mounted) setState(() => _imageInfo = imageInfo);
-    },
-  );
+  late final ImageStreamListener _imageListener = ImageStreamListener((
+    imageInfo,
+    _,
+  ) {
+    if (mounted) setState(() => _imageInfo = imageInfo);
+  });
 
   @override
   void didChangeDependencies() {
@@ -5448,19 +5640,14 @@ class _HomeFloatingBalloon extends StatelessWidget {
         animation: animation,
         child: RepaintBoundary(
           key: ValueKey('home-floating-balloon-$index'),
-          child: CustomPaint(
-            painter: MenuBalloonShapePainter(index: index),
-          ),
+          child: CustomPaint(painter: MenuBalloonShapePainter(index: index)),
         ),
         builder: (context, child) {
           final dy = sin(
                 animation.value * pi * 2 * cycles[slot] + phaseOffsets[slot],
               ) *
               amplitudes[slot];
-          return Transform.translate(
-            offset: Offset(0, dy),
-            child: child,
-          );
+          return Transform.translate(offset: Offset(0, dy), child: child);
         },
       ),
     );
@@ -5719,7 +5906,12 @@ class MenuSceneryPainter extends CustomPainter {
           end: Alignment.bottomCenter,
           colors: [Color(0xFF85D86A), Color(0xFF6DB84F)],
         ).createShader(
-          Rect.fromLTWH(0, size.height * 0.71, size.width, size.height * 0.29),
+          Rect.fromLTWH(
+            0,
+            size.height * 0.71,
+            size.width,
+            size.height * 0.29,
+          ),
         ),
     );
 
@@ -5748,7 +5940,12 @@ class MenuSceneryPainter extends CustomPainter {
           end: Alignment.bottomCenter,
           colors: [Color(0xFF74C95A), Color(0xFF55AD47)],
         ).createShader(
-          Rect.fromLTWH(0, size.height * 0.79, size.width, size.height * 0.21),
+          Rect.fromLTWH(
+            0,
+            size.height * 0.79,
+            size.width,
+            size.height * 0.21,
+          ),
         ),
     );
 
@@ -5876,12 +6073,7 @@ class MenuSceneryPainter extends CustomPainter {
             size.height * (layer == 0 ? 0.004 : 0.023) -
             radius * 0.46;
         canvas.drawRect(
-          Rect.fromLTWH(
-            x - radius * 0.10,
-            y,
-            radius * 0.20,
-            radius * 1.85,
-          ),
+          Rect.fromLTWH(x - radius * 0.10, y, radius * 0.20, radius * 1.85),
           Paint()..color = const Color(0x88635443),
         );
         canvas.drawCircle(Offset(x, y), radius, paint);
@@ -5983,11 +6175,7 @@ class MenuSceneryPainter extends CustomPainter {
         ..color = grassColors[i % grassColors.length].withValues(alpha: 0.72)
         ..strokeWidth = max(1, blade * 0.18)
         ..strokeCap = StrokeCap.round;
-      canvas.drawLine(
-        origin,
-        origin + Offset(-blade * 0.42, -blade),
-        paint,
-      );
+      canvas.drawLine(origin, origin + Offset(-blade * 0.42, -blade), paint);
       canvas.drawLine(
         origin,
         origin + Offset(blade * 0.48, -blade * 0.86),

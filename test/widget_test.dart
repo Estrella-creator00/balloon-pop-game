@@ -158,6 +158,8 @@ void main() {
     final stage11 = StageConfig.forStage(11);
     final stage19 = StageConfig.forStage(19);
     final stage20 = StageConfig.forStage(20);
+    final stage21 = StageConfig.forStage(21);
+    final stage29 = StageConfig.forStage(29);
 
     expect(stage10.isBoss, true);
     expect(stage10.bossHp, 10);
@@ -172,6 +174,40 @@ void main() {
     expect(stage10.bossCount, 1);
     expect(stage20.bossCount, 2);
     expect(stage20.duration, const Duration(seconds: 10));
+    expect(stage21.isBoss, false);
+    expect(stage21.balloonCount, 2);
+    expect(stage21.balloonHp, 3);
+    expect(stage21.duration, const Duration(seconds: 14));
+    expect(stage21.fakeBalloonCount, 2);
+    expect(stage29.balloonCount, 10);
+    expect(stage29.balloonHp, 3);
+    expect(stage29.duration, const Duration(seconds: 24));
+    expect(stage29.fakeBalloonCount, 2);
+    for (var stage = 1; stage <= 20; stage++) {
+      expect(StageConfig.forStage(stage).fakeBalloonCount, 0);
+    }
+    for (var stage = 21; stage <= 29; stage++) {
+      expect(StageConfig.forStage(stage).fakeBalloonCount, 2);
+    }
+    expect(() => StageConfig.forStage(30), throwsRangeError);
+  });
+
+  test('fake balloon tone keeps hue while subtly reducing saturation', () {
+    const normal = Color(0xFFFF5C8A);
+    final fake = fakeBalloonColor(normal);
+    final normalHsl = HSLColor.fromColor(normal);
+    final fakeHsl = HSLColor.fromColor(fake);
+
+    expect(fakeHsl.hue, closeTo(normalHsl.hue, 0.6));
+    expect(fakeHsl.saturation, lessThan(normalHsl.saturation));
+    expect(fakeHsl.lightness, lessThan(normalHsl.lightness));
+    final matrix = BalloonSkinArtwork.visualColorMatrix(
+      BalloonSkinCatalog.byIdOrDefault('balloon-heart'),
+      normal,
+      isFake: true,
+    );
+    expect(matrix[18], 1);
+    expect(matrix[19], 0);
   });
 
   test('ranking week uses the Monday 17:00 KST boundary', () {
@@ -2217,6 +2253,106 @@ void main() {
     expect(find.text('11 STAGE'), findsOneWidget);
     expect(find.text('남은 풍선  1'), findsOneWidget);
     expect(hapticCount, 1);
+  });
+
+  testWidgets(
+      'stage 21 uses the equipped skin, applies fake penalty, and clears on normal balloons',
+      (tester) async {
+    ProgressStorage.addCoins(100);
+    expect(
+      PurchaseService.purchase(
+        productId: 'balloon-heart',
+        price: 100,
+        initiallyOwned: false,
+      ),
+      PurchaseResult.success,
+    );
+    expect(
+      PurchaseService.equip(
+        category: StoreCategory.balloon.name,
+        productId: 'balloon-heart',
+        initiallyOwned: false,
+      ),
+      EquipResult.success,
+    );
+    var hapticCount = 0;
+    HapticService.setPerformerForTest(() async => hapticCount++);
+
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tapSectionStart(tester, 3);
+
+    expect(find.text('21 STAGE'), findsOneWidget);
+    expect(find.text('시간  14'), findsOneWidget);
+    expect(find.text('남은 풍선  2'), findsOneWidget);
+    expect(find.byKey(const ValueKey(0)), findsOneWidget);
+    expect(find.byKey(const ValueKey(1)), findsOneWidget);
+    expect(find.byKey(const ValueKey('fake-balloon-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('fake-balloon-3')), findsOneWidget);
+
+    final renderers = tester
+        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+        .toList(growable: false);
+    expect(renderers, hasLength(4));
+    expect(
+      renderers.every((renderer) => renderer.definition.id == 'balloon-heart'),
+      isTrue,
+    );
+    expect(renderers.where((renderer) => renderer.isFake), hasLength(2));
+    for (final fake in renderers.where((renderer) => renderer.isFake)) {
+      expect(fake.definition.colorPalette, contains(fake.color));
+    }
+
+    await tapGameTarget(tester, 'fake-balloon-2');
+    expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
+    expect(find.byKey(const ValueKey('fake-balloon-3')), findsOneWidget);
+    expect(find.text('시간  12'), findsOneWidget);
+    expect(find.text('점수  0'), findsOneWidget);
+    expect(find.text('남은 풍선  2'), findsOneWidget);
+    expect(PopSound.fakePlayCount, 1);
+    expect(hapticCount, 1);
+    final effects = tester
+        .widget<CustomPaint>(
+          find.descendant(
+            of: find.byKey(const ValueKey('effects-boundary')),
+            matching: find.byType(CustomPaint),
+          ),
+        )
+        .painter! as EffectsPainter;
+    expect(effects.feedbackCount, 1);
+    expect(effects.feedbacks.single.text, '-2초');
+    expect(effects.pieceCount, 0);
+    expect(effects.ringCount, 0);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
+
+    for (final id in const [0, 1]) {
+      await tapGameTarget(tester, id);
+      await tapGameTarget(tester, id);
+      await tapGameTarget(tester, id);
+    }
+    expect(find.text('Stage Clear!'), findsOneWidget);
+    expect(find.byKey(const ValueKey('fake-balloon-3')), findsNothing);
+  });
+
+  testWidgets('fake sound and haptic follow settings', (tester) async {
+    SettingsService.setSoundEnabled(false);
+    SettingsService.setHapticEnabled(false);
+    var hapticCount = 0;
+    HapticService.setPerformerForTest(() async => hapticCount++);
+
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tapSectionStart(tester, 3);
+    await tapGameTarget(tester, 'fake-balloon-2');
+
+    expect(PopSound.fakePlayCount, 0);
+    expect(hapticCount, 0);
+    expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
   });
 
   testWidgets('stage twenty has two independent bosses and scores once each',

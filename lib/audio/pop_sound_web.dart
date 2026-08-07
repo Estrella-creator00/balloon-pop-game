@@ -136,6 +136,33 @@ abstract final class PopSound {
     }
   }
 
+  /// Short, soft failure cue for a fake balloon. It is synthesized through
+  /// the existing Web Audio context and follows the shared sound preference.
+  static void playFake() {
+    if (!enabled) return;
+    try {
+      final context = _context ??= _AudioContext();
+      context.resume();
+      final now = context.currentTime;
+      final oscillator = context.createOscillator();
+      final gain = context.createGain();
+      oscillator
+        ..type = 'triangle'
+        ..frequency.setValueAtTime(240, now)
+        ..frequency.exponentialRampToValueAtTime(105, now + 0.13)
+        ..connect(gain);
+      gain
+        ..gain.setValueAtTime(0.13, now)
+        ..gain.exponentialRampToValueAtTime(0.001, now + 0.15)
+        ..connect(context.destination);
+      oscillator
+        ..start(now)
+        ..stop(now + 0.155);
+    } catch (_) {
+      // Unsupported audio must never affect the time penalty or removal.
+    }
+  }
+
   static void playBossExplosion() {
     if (!enabled) return;
     try {
