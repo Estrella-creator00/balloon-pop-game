@@ -287,7 +287,8 @@ void main() {
     expect(state.isFakeBoss(1), false);
   });
 
-  test('stage 30 boss speed is capped and overlapping bosses separate', () {
+  test('stage 30 allows partial overlap and gently separates severe overlap',
+      () {
     expect(
       stage30AcceleratedBossVelocity(const Offset(100, 0)).distance,
       closeTo(107.5, 0.001),
@@ -301,63 +302,98 @@ void main() {
     );
 
     const sizeA = 200.0;
-    const sizeB = 180.0;
+    const sizeB = 200.0;
     const playArea = Size(800, 700);
-    final result = separateStage30BossPair(
-      positionA: const Offset(200, 220),
-      positionB: const Offset(250, 220),
-      velocityA: const Offset(126, 0),
-      velocityB: const Offset(-126, 0),
+    const partialPositionA = Offset(100, 220);
+    const partialPositionB = Offset(220, 220);
+    const partialVelocityA = Offset(70, 18);
+    const partialVelocityB = Offset(-55, -24);
+    final partial = separateStage30BossPair(
+      positionA: partialPositionA,
+      positionB: partialPositionB,
+      velocityA: partialVelocityA,
+      velocityB: partialVelocityB,
       sizeA: sizeA,
       sizeB: sizeB,
       playArea: playArea,
     );
-    final centerA = result.positionA + const Offset(sizeA / 2, sizeA / 2);
-    final centerB = result.positionB + const Offset(sizeB / 2, sizeB / 2);
-    expect(
-      (centerB - centerA).distance,
-      greaterThanOrEqualTo(
-        (sizeA + sizeB) / 2 + stage30BossMinimumGap - 0.01,
-      ),
-    );
-    expect(result.positionA.dx, inInclusiveRange(0, playArea.width - sizeA));
-    expect(
-        result.positionA.dy, inInclusiveRange(0, playArea.height - sizeA - 26));
-    expect(result.positionB.dx, inInclusiveRange(0, playArea.width - sizeB));
-    expect(
-        result.positionB.dy, inInclusiveRange(0, playArea.height - sizeB - 26));
-    expect(result.velocityA.dx, lessThan(0));
-    expect(result.velocityB.dx, greaterThan(0));
-    expect(result.velocityA.distance, lessThanOrEqualTo(stage30BossMaxSpeed));
-    expect(result.velocityB.distance, lessThanOrEqualTo(stage30BossMaxSpeed));
+    expect(partial.positionA, partialPositionA);
+    expect(partial.positionB, partialPositionB);
+    expect(partial.velocityA, partialVelocityA);
+    expect(partial.velocityB, partialVelocityB);
 
-    const mobileArea = Size(390, 700);
-    const mobileBossSize = 242.0;
-    final wallResult = separateStage30BossPair(
-      positionA: const Offset(0, 210),
-      positionB: const Offset(148, 210),
-      velocityA: const Offset(126, 0),
-      velocityB: const Offset(-126, 0),
-      sizeA: mobileBossSize,
-      sizeB: mobileBossSize,
-      playArea: mobileArea,
-    );
-    final wallCenterA = wallResult.positionA +
-        const Offset(mobileBossSize / 2, mobileBossSize / 2);
-    final wallCenterB = wallResult.positionB +
-        const Offset(mobileBossSize / 2, mobileBossSize / 2);
-    expect(
-      (wallCenterB - wallCenterA).distance,
-      greaterThanOrEqualTo(
-        mobileBossSize + stage30BossMinimumGap - 0.01,
-      ),
-    );
-    for (final position in [wallResult.positionA, wallResult.positionB]) {
-      expect(
-          position.dx, inInclusiveRange(0, mobileArea.width - mobileBossSize));
-      expect(position.dy,
-          inInclusiveRange(0, mobileArea.height - mobileBossSize - 26));
+    var positionA = const Offset(180, 220);
+    var positionB = const Offset(250, 220);
+    var velocityA = const Offset(90, 22);
+    var velocityB = const Offset(-75, -31);
+    var previousDistance = (positionB - positionA).distance;
+    for (var frame = 0; frame < 20; frame++) {
+      final result = separateStage30BossPair(
+        positionA: positionA,
+        positionB: positionB,
+        velocityA: velocityA,
+        velocityB: velocityB,
+        sizeA: sizeA,
+        sizeB: sizeB,
+        playArea: playArea,
+      );
+      positionA = result.positionA + result.velocityA * 0.033;
+      positionB = result.positionB + result.velocityB * 0.033;
+      velocityA = result.velocityA;
+      velocityB = result.velocityB;
+      final distance = (positionB - positionA).distance;
+      expect(distance, greaterThanOrEqualTo(previousDistance - 0.01));
+      previousDistance = distance;
     }
+    expect(previousDistance, greaterThan(70));
+    expect(velocityA, isNot(velocityB));
+    expect(velocityA.dy, isNot(velocityB.dy));
+    for (final position in [positionA, positionB]) {
+      expect(position.dx, inInclusiveRange(0, playArea.width - sizeA));
+      expect(position.dy, inInclusiveRange(0, playArea.height - sizeA - 26));
+    }
+  });
+
+  test('stage 30 role swaps preserve entities and overlap taps choose nearest',
+      () {
+    final bosses = <BossBalloon>[
+      BossBalloon(
+        id: 0,
+        position: const Offset(100, 100),
+        velocity: const Offset(80, 25),
+        size: 200,
+        maxHp: 12,
+      ),
+      BossBalloon(
+        id: 1,
+        position: const Offset(200, 100),
+        velocity: const Offset(-65, -30),
+        size: 200,
+        maxHp: 12,
+        isFake: true,
+      ),
+    ];
+    final positions = bosses.map((boss) => boss.position).toList();
+    final velocities = bosses.map((boss) => boss.velocity).toList();
+    final state = Stage30BossState()..realBossId = 1;
+    applyStage30BossRoles(bosses, state);
+    expect(bosses[0].isFake, isTrue);
+    expect(bosses[1].isFake, isFalse);
+    expect(bosses.map((boss) => boss.position), orderedEquals(positions));
+    expect(bosses.map((boss) => boss.velocity), orderedEquals(velocities));
+
+    expect(
+      closestStage30BossForTap(bosses, const Offset(270, 190))?.id,
+      1,
+    );
+    expect(
+      closestStage30BossForTap(bosses, const Offset(230, 190))?.id,
+      0,
+    );
+    expect(
+      closestStage30BossForTap(bosses, const Offset(20, 20)),
+      isNull,
+    );
   });
 
   test('home stage page derives from the saved next playable stage', () {

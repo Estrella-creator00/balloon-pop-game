@@ -246,7 +246,9 @@ class BossBalloon {
 
 const stage30BossSwapChance = 0.50;
 const stage30BossMaxSpeed = 220.0;
-const stage30BossMinimumGap = 12.0;
+const stage30BossSevereOverlapRatio = 0.55;
+const stage30BossSeparationStep = 1.5;
+const stage30BossOutwardSpeed = 36.0;
 
 /// Stage 30 owns one shared HP pool and only swaps the roles of its two
 /// existing boss entities. Supplying the roll keeps swap/no-swap behavior
@@ -283,6 +285,39 @@ class BossPairSeparationResult {
   final Offset velocityB;
 }
 
+void applyStage30BossRoles(
+  List<BossBalloon> bosses,
+  Stage30BossState state,
+) {
+  for (final boss in bosses) {
+    boss.isFake = state.isFakeBoss(boss.id);
+  }
+}
+
+BossBalloon? closestStage30BossForTap(
+  Iterable<BossBalloon> bosses,
+  Offset point,
+) {
+  BossBalloon? closest;
+  var closestDistance = double.infinity;
+  for (final boss in bosses) {
+    final touchBounds = Rect.fromLTWH(
+      boss.position.dx,
+      boss.position.dy,
+      boss.size,
+      boss.size + 32,
+    );
+    if (!touchBounds.contains(point)) continue;
+    final center = boss.position + Offset(boss.size / 2, boss.size / 2);
+    final distance = (point - center).distanceSquared;
+    if (distance < closestDistance) {
+      closest = boss;
+      closestDistance = distance;
+    }
+  }
+  return closest;
+}
+
 Offset stage30CappedBossVelocity(Offset velocity) {
   final speed = velocity.distance;
   if (speed == 0) return velocity;
@@ -316,10 +351,11 @@ BossPairSeparationResult separateStage30BossPair({
 
   var nextA = clampPosition(positionA, sizeA);
   var nextB = clampPosition(positionB, sizeB);
-  var delta = center(nextB, sizeB) - center(nextA, sizeA);
-  var distance = delta.distance;
-  final minimumDistance = (sizeA + sizeB) / 2 + stage30BossMinimumGap;
-  if (distance >= minimumDistance) {
+  final delta = center(nextB, sizeB) - center(nextA, sizeA);
+  final distance = delta.distance;
+  final severeOverlapDistance =
+      ((sizeA + sizeB) / 2) * stage30BossSevereOverlapRatio;
+  if (distance >= severeOverlapDistance) {
     return BossPairSeparationResult(
       positionA: nextA,
       positionB: nextB,
@@ -328,93 +364,36 @@ BossPairSeparationResult separateStage30BossPair({
     );
   }
 
-  Offset normalized(Offset value) => value / value.distance;
-
-  final directNormal =
-      distance <= 0.001 ? const Offset(1, 0) : delta / distance;
-  final perpendicular = Offset(-directNormal.dy, directNormal.dx);
-  final directions = <Offset>[
-    directNormal,
-    perpendicular,
-    -perpendicular,
-    normalized(directNormal + perpendicular),
-    normalized(directNormal - perpendicular),
-  ];
-
-  ({Offset a, Offset b, double distance}) separateAlong(Offset direction) {
-    var candidateA = nextA;
-    var candidateB = nextB;
-    for (var attempt = 0; attempt < 3; attempt++) {
-      final candidateDelta =
-          center(candidateB, sizeB) - center(candidateA, sizeA);
-      final candidateDistance = candidateDelta.distance;
-      if (candidateDistance >= minimumDistance - 0.01) break;
-      final projection =
-          candidateDelta.dx * direction.dx + candidateDelta.dy * direction.dy;
-      final translation = max(
-        0.0,
-        -projection +
-            sqrt(
-              max(
-                0.0,
-                projection * projection +
-                    minimumDistance * minimumDistance -
-                    candidateDistance * candidateDistance,
-              ),
-            ),
-      );
-      candidateA = clampPosition(
-        candidateA - direction * (translation / 2),
-        sizeA,
-      );
-      candidateB = clampPosition(
-        candidateB + direction * (translation / 2),
-        sizeB,
-      );
-
-      // Let the free boss absorb any correction lost when its partner was
-      // clamped against a wall. This keeps separation stable near corners.
-      final afterHalf = center(candidateB, sizeB) - center(candidateA, sizeA);
-      if (afterHalf.distance < minimumDistance - 0.01) {
-        final remaining = minimumDistance - afterHalf.distance;
-        candidateB = clampPosition(
-          candidateB + direction * remaining,
-          sizeB,
-        );
-        candidateA = clampPosition(
-          candidateA - direction * remaining,
-          sizeA,
-        );
-      }
-    }
-    return (
-      a: candidateA,
-      b: candidateB,
-      distance:
-          (center(candidateB, sizeB) - center(candidateA, sizeA)).distance,
-    );
-  }
-
-  var bestDirection = directNormal;
-  var best = separateAlong(bestDirection);
-  for (final direction in directions.skip(1)) {
-    final candidate = separateAlong(direction);
-    if (candidate.distance > best.distance + 0.01) {
-      best = candidate;
-      bestDirection = direction;
-    }
-  }
-  nextA = best.a;
-  nextB = best.b;
-  final normal = bestDirection;
+  final relativeVelocity = velocityB - velocityA;
+  final normal = distance > 0.001
+      ? delta / distance
+      : relativeVelocity.distance > 0.001
+          ? relativeVelocity / relativeVelocity.distance
+          : const Offset(1, 0);
+  final correction = min(
+    stage30BossSeparationStep,
+    max(0.0, (severeOverlapDistance - distance) / 2),
+  );
+  final previousA = nextA;
+  final previousB = nextB;
+  nextA = clampPosition(nextA - normal * correction, sizeA);
+  nextB = clampPosition(nextB + normal * correction, sizeB);
+  final movedA = (nextA - previousA).distance > 0.001;
+  final movedB = (nextB - previousB).distance > 0.001;
 
   var nextVelocityA = velocityA;
   var nextVelocityB = velocityB;
   final normalSpeedA = velocityA.dx * normal.dx + velocityA.dy * normal.dy;
   final normalSpeedB = velocityB.dx * normal.dx + velocityB.dy * normal.dy;
-  if (normalSpeedA > normalSpeedB) {
-    nextVelocityA += normal * (normalSpeedB - normalSpeedA);
-    nextVelocityB += normal * (normalSpeedA - normalSpeedB);
+  if (!movedA) {
+    nextVelocityA -= normal * normalSpeedA;
+  } else if (normalSpeedA > -stage30BossOutwardSpeed) {
+    nextVelocityA += normal * (-stage30BossOutwardSpeed - normalSpeedA);
+  }
+  if (!movedB) {
+    nextVelocityB -= normal * normalSpeedB;
+  } else if (normalSpeedB < stage30BossOutwardSpeed) {
+    nextVelocityB += normal * (stage30BossOutwardSpeed - normalSpeedB);
   }
 
   return BossPairSeparationResult(
@@ -1603,9 +1582,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             candidate.turnCooldown,
             0.18 + hpRatio * 0.28,
           );
-          if (swapped) {
-            candidate.isFake = sharedState.isFakeBoss(candidate.id);
-          }
+        }
+        if (swapped) {
+          applyStage30BossRoles(_bosses, sharedState);
         }
         return;
       }
@@ -1621,6 +1600,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       boss.turnCooldown = min(boss.turnCooldown, 0.18 + hpRatio * 0.28);
     });
     _publishHeader();
+  }
+
+  void _hitStage30BossAt(TapUpDetails details) {
+    if (_stage != 30 || _phase != GamePhase.playing) return;
+    final boss = closestStage30BossForTap(_bosses, details.localPosition);
+    if (boss != null) _hitBoss(boss);
   }
 
   void _clearStage30Boss(BossBalloon boss, Offset center, Color color) {
@@ -3383,6 +3368,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                         ),
                         for (final balloon in _balloons) _buildBalloon(balloon),
                         for (final boss in _bosses) _buildBoss(boss),
+                        if (_stage == 30 && _phase == GamePhase.playing)
+                          Positioned.fill(
+                            key: const ValueKey('stage-30-boss-hit-layer'),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTapUp: _hitStage30BossAt,
+                            ),
+                          ),
                         if (_phase == GamePhase.stageClear)
                           _buildCenterMessage('Stage Clear!', null),
                         if (_phase == GamePhase.bossClear)
