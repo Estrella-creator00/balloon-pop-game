@@ -249,6 +249,7 @@ void main() {
   });
 
   test('fake balloon tone keeps hue with a clearly faded shared treatment', () {
+    expect(fakeBalloonOpacity, 0.50);
     const normal = Color(0xFFFF5C8A);
     final fake = fakeBalloonColor(normal);
     final normalHsl = HSLColor.fromColor(normal);

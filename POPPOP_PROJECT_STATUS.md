@@ -49,7 +49,7 @@
 - Stage 20은 독립적으로 움직이는 보스 2개다.
 - Stage 21~29는 1-hit 정상 풍선 2~10개와 Fake Balloon 2개가 함께 등장한다. 이 구간은 HP가 아니라 Fake 구별이 핵심 난이도다.
 - Stage 21~29의 Fake Balloon 수는 스테이지와 무관하게 항상 정확히 2개다.
-- Fake Balloon은 장착 중인 `BalloonSkinDefinition`, 공통 렌더러와 팔레트를 그대로 사용한다. 최종 출력은 opacity `0.63`을 우선 적용하고 채도와 밝기를 약간 낮춰, 어둡기보다 반투명하고 힘이 빠진 느낌으로 구분한다.
+- Fake Balloon은 장착 중인 `BalloonSkinDefinition`, 공통 렌더러와 팔레트를 그대로 사용한다. 최종 출력은 opacity `0.50`을 우선 적용하고 채도와 밝기를 약간 낮춰, 어둡기보다 반투명하고 힘이 빠진 느낌으로 구분한다.
 - Fake Balloon을 누르면 점수와 코인 없이 남은 시간이 2초 감소하며 `-2초` 피드백과 전용 실패 사운드가 재생된 후 제거된다.
 - Stage 21~29는 정상 풍선이 모두 제거되는 즉시 클리어되며 남아 있는 Fake Balloon은 조용히 자동 제거된다.
 - 새 풍선은 별도의 Fake 구현 없이 공통 `BalloonSkinRenderer`의 `isFake` 상태를 통해 자동 호환된다.

@@ -4528,7 +4528,7 @@ class BalloonSkinArtwork extends StatelessWidget {
 
 const fakeBalloonSaturationFactor = 0.78;
 const fakeBalloonBrightnessFactor = 0.97;
-const fakeBalloonOpacity = 0.63;
+const fakeBalloonOpacity = 0.50;
 
 List<double> saturationBrightnessColorMatrix({
   required double saturation,
