@@ -88,6 +88,14 @@ Future<void> tapGameTargetThroughPointer(
   await tapGameTarget(tester, key);
 }
 
+String stage30BossTargetKey(WidgetTester tester, {required bool fake}) {
+  final renderer = tester
+      .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+      .singleWhere((candidate) => candidate.isBoss && candidate.isFake == fake);
+  final skinKey = (renderer.key! as ValueKey<String>).value;
+  return skinKey.replaceFirst('boss-skin-', 'boss-balloon-');
+}
+
 Future<void> openBalloonPreview(WidgetTester tester, String productId) async {
   // Tap the same full-card InkWell a real touch user hits. The former helper
   // targeted an internal child and did not protect the production tap path.
@@ -209,6 +217,7 @@ void main() {
     final stage20 = StageConfig.forStage(20);
     final stage21 = StageConfig.forStage(21);
     final stage29 = StageConfig.forStage(29);
+    final stage30 = StageConfig.forStage(30);
 
     expect(stage10.isBoss, true);
     expect(stage10.bossHp, 10);
@@ -232,11 +241,17 @@ void main() {
     expect(stage29.requiredHits, 1);
     expect(stage29.duration, const Duration(seconds: 24));
     expect(stage29.fakeBalloonCount, 2);
+    expect(stage30.isBoss, true);
+    expect(stage30.bossCount, 2);
+    expect(stage30.bossHp, 15);
+    expect(stage30.bossSpeed, stage20.bossSpeed);
+    expect(stage30.duration, const Duration(seconds: 12));
     expect(StageConfig.nextStageAfter(9), 10);
     expect(StageConfig.nextStageAfter(10), 11);
     expect(StageConfig.nextStageAfter(20), 21);
     expect(StageConfig.nextStageAfter(28), 29);
-    expect(StageConfig.nextStageAfter(29), isNull);
+    expect(StageConfig.nextStageAfter(29), 30);
+    expect(StageConfig.nextStageAfter(30), isNull);
     for (var stage = 1; stage <= 20; stage++) {
       expect(StageConfig.forStage(stage).fakeBalloonCount, 0);
     }
@@ -248,7 +263,25 @@ void main() {
       expect(StageConfig.forStage(stage).requiredHits, 1);
     }
     expect(StageConfig.fakeBalloonRequiredHits, 1);
-    expect(() => StageConfig.forStage(30), throwsRangeError);
+    expect(() => StageConfig.forStage(31), throwsRangeError);
+  });
+
+  test('stage 30 shared HP and role swap policy are deterministic by roll', () {
+    final state = Stage30BossState();
+    expect(state.maxHp, 15);
+    expect(state.hp, 15);
+    expect(state.isFakeBoss(0), false);
+    expect(state.isFakeBoss(1), true);
+
+    expect(state.registerRealHit(stage30BossSwapChance), false);
+    expect(state.hp, 14);
+    expect(state.realBossId, 0);
+
+    expect(state.registerRealHit(stage30BossSwapChance - 0.01), true);
+    expect(state.hp, 13);
+    expect(state.realBossId, 1);
+    expect(state.isFakeBoss(0), true);
+    expect(state.isFakeBoss(1), false);
   });
 
   test('home stage page derives from the saved next playable stage', () {
@@ -2541,10 +2574,140 @@ void main() {
       }
       nextBalloonId += config.balloonCount + config.fakeBalloonCount;
 
-      if (stage < StageConfig.lastImplementedStage) {
+      if (stage < 29) {
         await tester.pump(const Duration(milliseconds: 401));
       }
     }
+  });
+
+  testWidgets(
+      'stage 30 has one real and one persistent fake boss with shared HP',
+      (tester) async {
+    ProgressStorage.addCoins(100);
+    expect(
+      PurchaseService.purchase(
+        productId: 'balloon-heart',
+        price: 100,
+        initiallyOwned: false,
+      ),
+      PurchaseResult.success,
+    );
+    expect(
+      PurchaseService.equip(
+        category: StoreCategory.balloon.name,
+        productId: 'balloon-heart',
+        initiallyOwned: false,
+      ),
+      EquipResult.success,
+    );
+
+    tester.view.physicalSize = const Size(800, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      BalloonPopApp(stage30SwapRollForTest: () => 0),
+    );
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tapSectionStart(tester, 3);
+
+    var nextBalloonId = 0;
+    for (var stage = 21; stage <= 29; stage++) {
+      final config = StageConfig.forStage(stage);
+      for (var index = 0; index < config.balloonCount; index++) {
+        await tapGameTarget(tester, nextBalloonId + index);
+      }
+      nextBalloonId += config.balloonCount + config.fakeBalloonCount;
+      await tester.pump(const Duration(milliseconds: 401));
+    }
+
+    expect(find.text('30 STAGE'), findsOneWidget);
+    expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
+    final bosses = tester
+        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+        .where((candidate) => candidate.isBoss)
+        .toList(growable: false);
+    expect(bosses, hasLength(2));
+    expect(bosses.where((candidate) => candidate.isFake), hasLength(1));
+    expect(
+      bosses.every(
+        (candidate) => candidate.definition.id == 'balloon-heart',
+      ),
+      isTrue,
+    );
+    expect(bosses.every((candidate) => candidate.hp == 15), isTrue);
+    expect(
+        bosses.where((candidate) => candidate.showBossHealthBar), hasLength(1));
+    expect(
+      tester.getSize(find.byKey(const ValueKey('boss-balloon-0'))),
+      tester.getSize(find.byKey(const ValueKey('boss-balloon-1'))),
+    );
+    final fakeVisual = find.descendant(
+      of: find.byKey(
+        ValueKey(stage30BossTargetKey(tester, fake: true)),
+      ),
+      matching: find.byType(Opacity),
+    );
+    expect(tester.widget<Opacity>(fakeVisual).opacity, fakeBalloonOpacity);
+
+    final initialRealKey = stage30BossTargetKey(tester, fake: false);
+    final initialFakeKey = stage30BossTargetKey(tester, fake: true);
+    final hpBeforeFakeTap = tester
+        .widget<BalloonSkinRenderer>(
+          find.byKey(
+            ValueKey(
+                initialRealKey.replaceFirst('boss-balloon-', 'boss-skin-')),
+          ),
+        )
+        .hp;
+    final secondsBeforeFakeTap = int.parse(
+      tester
+          .widgetList<Text>(find.byType(Text))
+          .map((widget) => widget.data)
+          .whereType<String>()
+          .singleWhere((text) => text.startsWith('시간  '))
+          .substring('시간  '.length),
+    );
+    PopSound.resetDebug();
+    await tapGameTarget(tester, initialFakeKey);
+    expect(find.byKey(ValueKey(initialFakeKey)), findsOneWidget);
+    expect(stage30BossTargetKey(tester, fake: true), initialFakeKey);
+    expect(
+      tester
+          .widget<BalloonSkinRenderer>(
+            find.byKey(
+              ValueKey(
+                initialRealKey.replaceFirst('boss-balloon-', 'boss-skin-'),
+              ),
+            ),
+          )
+          .hp,
+      hpBeforeFakeTap,
+    );
+    expect(find.text('시간  ${secondsBeforeFakeTap - 2}'), findsOneWidget);
+    expect(PopSound.fakePlayCount, 1);
+
+    await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
+    expect(stage30BossTargetKey(tester, fake: false), initialFakeKey);
+    expect(stage30BossTargetKey(tester, fake: true), initialRealKey);
+    final afterHit = tester
+        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+        .where((candidate) => candidate.isBoss)
+        .toList(growable: false);
+    expect(afterHit.where((candidate) => candidate.isFake), hasLength(1));
+    expect(afterHit.every((candidate) => candidate.hp == 14), isTrue);
+
+    for (var hit = 1; hit < 15; hit++) {
+      await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
+    }
+    expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
+    expect(find.byKey(const ValueKey('boss-balloon-1')), findsNothing);
+    expect(find.text('BOSS CLEAR!'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('게임 완료!'), findsOneWidget);
   });
 
   testWidgets('fake sound and haptic follow settings', (tester) async {
@@ -2842,6 +3005,12 @@ void main() {
       }
     }
 
+    expect(find.text('30 STAGE'), findsOneWidget);
+    for (var hit = 0; hit < 15; hit++) {
+      await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
+    }
+    expect(find.text('BOSS CLEAR!'), findsOneWidget);
+
     final finalScoreText = tester
         .widgetList<Text>(find.byType(Text))
         .map((widget) => widget.data)
@@ -2851,7 +3020,7 @@ void main() {
         int.parse(finalScoreText.substring('점수  '.length));
     expect(expectedFinalScore, greaterThan(scoreAtStage20Clear));
 
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text('게임 완료!'), findsOneWidget);
     expect(find.text('$expectedFinalScore점'), findsOneWidget);
     final firstReward = expectedFinalScore ~/ 10;
@@ -2882,18 +3051,17 @@ void main() {
     await tester.tap(retryButton);
     await tester.pump();
     await tester.pump();
-    expect(find.text('29 STAGE'), findsOneWidget);
+    expect(find.text('30 STAGE'), findsOneWidget);
 
-    final retryConfig = StageConfig.forStage(29);
-    for (var id = 0; id < retryConfig.balloonCount; id++) {
-      await tapGameTarget(tester, id);
+    for (var hit = 0; hit < 15; hit++) {
+      await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
     }
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(seconds: 1));
     expect(homeButton, findsOneWidget);
     await tester.tap(homeButton);
     await tester.pump();
     expect(find.text('1~10 STAGE 시작'), findsOneWidget);
-    expect(find.text('29 STAGE'), findsNothing);
+    expect(find.text('30 STAGE'), findsNothing);
   });
 
   testWidgets('home hides progress reset and preserves second-section unlock',

@@ -24,7 +24,10 @@ void main() {
 }
 
 class BalloonPopApp extends StatefulWidget {
-  const BalloonPopApp({super.key});
+  const BalloonPopApp({super.key, this.stage30SwapRollForTest});
+
+  @visibleForTesting
+  final double Function()? stage30SwapRollForTest;
 
   @override
   State<BalloonPopApp> createState() => _BalloonPopAppState();
@@ -56,7 +59,9 @@ class _BalloonPopAppState extends State<BalloonPopApp> {
         fontFamilyFallback: const ['Arial', 'sans-serif'],
       ),
       home: _nicknameOnboardingCompleted
-          ? const BalloonGamePage()
+          ? BalloonGamePage(
+              stage30SwapRollForTest: widget.stage30SwapRollForTest,
+            )
           : NicknameOnboardingPage(onCompleted: _completeNicknameOnboarding),
     );
   }
@@ -224,6 +229,7 @@ class BossBalloon {
     required this.maxHp,
     this.skinId = 'balloon-default',
     this.skinColor,
+    this.isFake = false,
   });
 
   final int id;
@@ -233,8 +239,32 @@ class BossBalloon {
   final int maxHp;
   final String skinId;
   final Color? skinColor;
+  bool isFake;
   late int hp = maxHp;
   double turnCooldown = 0.65;
+}
+
+const stage30BossSwapChance = 0.40;
+
+/// Stage 30 owns one shared HP pool and only swaps the roles of its two
+/// existing boss entities. Supplying the roll keeps swap/no-swap behavior
+/// deterministic in tests without changing production randomness.
+class Stage30BossState {
+  Stage30BossState({this.maxHp = 15, this.realBossId = 0}) : hp = maxHp;
+
+  final int maxHp;
+  int hp;
+  int realBossId;
+
+  bool isFakeBoss(int bossId) => bossId != realBossId;
+
+  bool registerRealHit(double swapRoll) {
+    if (hp <= 0) return false;
+    hp--;
+    if (hp == 0 || swapRoll >= stage30BossSwapChance) return false;
+    realBossId = realBossId == 0 ? 1 : 0;
+    return true;
+  }
 }
 
 class StageConfig {
@@ -269,7 +299,7 @@ class StageConfig {
 
   static const firstFakeBalloonStage = 21;
   static const lastFakeBalloonStage = 29;
-  static const lastImplementedStage = 29;
+  static const lastImplementedStage = 30;
   static const fakeBalloonRequiredHits = 1;
 
   /// Returns the next contiguous playable stage, or `null` when the current
@@ -299,6 +329,7 @@ class StageConfig {
     final tier = (stage - 1) ~/ 10;
     final positionInTier = (stage - 1) % 10 + 1;
     final timeGroup = (positionInTier - 1) ~/ 3;
+    final isRealFakeBossStage = stage == 30;
 
     return StageConfig(
       stage: stage,
@@ -308,9 +339,13 @@ class StageConfig {
       duration: Duration(
         seconds: isBoss ? 8 + tier * 2 : 10 + tier * 2 + timeGroup * 5,
       ),
-      bossHp: isBoss ? 10 + tier * 5 : 0,
-      bossSpeed: isBoss ? 105 * pow(1.2, tier).toDouble() : 0,
-      bossCount: isBoss ? tier + 1 : 0,
+      bossHp: isRealFakeBossStage ? 15 : (isBoss ? 10 + tier * 5 : 0),
+      // Stage 30 reuses the established Stage 20 boss movement feel rather
+      // than introducing another tier-speed jump for its role-swap gimmick.
+      bossSpeed: isRealFakeBossStage
+          ? 105 * pow(1.2, 1).toDouble()
+          : (isBoss ? 105 * pow(1.2, tier).toDouble() : 0),
+      bossCount: isRealFakeBossStage ? 2 : (isBoss ? tier + 1 : 0),
       fakeBalloonCount:
           stage >= firstFakeBalloonStage && stage <= lastFakeBalloonStage
               ? 2
@@ -592,7 +627,10 @@ class SinglePeriodicGameLoop {
 }
 
 class BalloonGamePage extends StatefulWidget {
-  const BalloonGamePage({super.key});
+  const BalloonGamePage({super.key, this.stage30SwapRollForTest});
+
+  @visibleForTesting
+  final double Function()? stage30SwapRollForTest;
 
   @override
   State<BalloonGamePage> createState() => _BalloonGamePageState();
@@ -746,6 +784,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Duration _stageTimePenalty = Duration.zero;
   GamePhase _phase = GamePhase.menu;
   final List<BossBalloon> _bosses = [];
+  Stage30BossState? _stage30BossState;
   bool _secondSectionUnlocked = false;
   int _bestScore = 0;
   int _lastScore = 0;
@@ -970,6 +1009,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _phase = GamePhase.playing;
     _balloons.clear();
     _bosses.clear();
+    _stage30BossState = null;
 
     if (_playArea == Size.zero) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1071,6 +1111,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _playArea.shortestSide * 0.62,
       maxSize,
     ).clamp(minSize, maxSize);
+    if (_stage == 30) {
+      _stage30BossState = Stage30BossState(maxHp: config.bossHp);
+    }
     for (var id = 0; id < config.bossCount; id++) {
       final angle = _random.nextDouble() * pi * 2;
       final speed = config.bossSpeed;
@@ -1083,10 +1126,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           maxHp: config.bossHp,
           skinId: skin.id,
           skinColor: _nextSkinColor(skin, boss: true),
+          isFake: _stage30BossState?.isFakeBoss(id) ?? false,
         ),
       );
     }
   }
+
+  int _currentBossHp(BossBalloon boss) => _stage30BossState?.hp ?? boss.hp;
+
+  int _currentBossMaxHp(BossBalloon boss) =>
+      _stage30BossState?.maxHp ?? boss.maxHp;
 
   Offset _nonOverlappingBossPosition(double size) {
     for (var attempt = 0; attempt < 80; attempt++) {
@@ -1172,7 +1221,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         final speed = boss.velocity.distance;
         final angle = _random.nextDouble() * pi * 2;
         boss.velocity = Offset(cos(angle) * speed, sin(angle) * speed);
-        final hpRatio = boss.hp / boss.maxHp;
+        final hpRatio = _currentBossHp(boss) / _currentBossMaxHp(boss);
         boss.turnCooldown = 0.24 + hpRatio * 0.38;
       }
       final next = boss.position + boss.velocity * dt;
@@ -1261,12 +1310,26 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _hitFakeBalloon(Balloon balloon) {
     if (_phase != GamePhase.playing || !_balloons.remove(balloon)) return;
 
+    _applyFakeHitPenalty(
+      balloon.position + Offset(balloon.size / 2, balloon.size / 2),
+    );
+  }
+
+  void _hitFakeBoss(BossBalloon boss) {
+    if (_phase != GamePhase.playing || !_bosses.contains(boss)) return;
+
+    _applyFakeHitPenalty(
+      boss.position + Offset(boss.size / 2, boss.size / 2),
+    );
+  }
+
+  void _applyFakeHitPenalty(Offset center) {
     HapticService.shortImpact();
     PopSound.playFake();
     _stageTimePenalty += const Duration(seconds: 2);
     _feedbacks.add(
       FloatingTextFeedback(
-        center: balloon.position + Offset(balloon.size / 2, balloon.size / 2),
+        center: center,
         text: '-2초',
         color: const Color(0xFFE53935),
         life: 0.72,
@@ -1321,6 +1384,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _hitBoss(BossBalloon boss) {
     if (_phase != GamePhase.playing || !_bosses.contains(boss)) return;
 
+    if (boss.isFake) {
+      _hitFakeBoss(boss);
+      return;
+    }
+
     HapticService.shortImpact();
     PopSound.play();
     final center = boss.position + Offset(boss.size / 2, boss.size / 2);
@@ -1331,6 +1399,31 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _spawnPieces(center, hitColor, boss.size * 0.35, big: false);
 
     setState(() {
+      final sharedState = _stage30BossState;
+      if (sharedState != null) {
+        final swapRoll =
+            widget.stage30SwapRollForTest?.call() ?? _random.nextDouble();
+        final swapped = sharedState.registerRealHit(swapRoll);
+        if (sharedState.hp <= 0) {
+          _clearStage30Boss(boss, center, hitColor);
+          return;
+        }
+
+        final hpRatio = sharedState.hp / sharedState.maxHp;
+        for (final candidate in _bosses) {
+          candidate.size *= 0.965;
+          candidate.velocity *= 1.075;
+          candidate.turnCooldown = min(
+            candidate.turnCooldown,
+            0.18 + hpRatio * 0.28,
+          );
+          if (swapped) {
+            candidate.isFake = sharedState.isFakeBoss(candidate.id);
+          }
+        }
+        return;
+      }
+
       boss.hp--;
       if (boss.hp <= 0) {
         _clearBoss(boss, center, hitColor);
@@ -1342,6 +1435,20 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       boss.turnCooldown = min(boss.turnCooldown, 0.18 + hpRatio * 0.28);
     });
     _publishHeader();
+  }
+
+  void _clearStage30Boss(BossBalloon boss, Offset center, Color color) {
+    if (_stage30BossState == null) return;
+    final skin = BalloonSkinCatalog.byIdOrDefault(boss.skinId);
+    final sourceSize = boss.size;
+    _bosses.clear();
+    _stage30BossState = null;
+    _score += 10;
+    _playSkinPopSound(skin, boss: true);
+    _spawnSkinPopEffect(skin, center, color, sourceSize, big: true);
+    _spawnRing(center, const Color(0xFFFFD54F), 190);
+    _spawnRing(center, const Color(0xFFFF5C8A), 250);
+    _finishBossStageClear();
   }
 
   void _clearBoss(BossBalloon boss, Offset center, Color color) {
@@ -1358,6 +1465,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       return;
     }
 
+    _finishBossStageClear();
+  }
+
+  void _finishBossStageClear() {
     _stopGameLoop();
     _stopwatch.stop();
     _score += _secondsLeft;
@@ -3155,8 +3266,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               definition: skin,
               color: _bossColor(boss, skin),
               isBoss: true,
-              hp: boss.hp,
-              maxHp: boss.maxHp,
+              hp: _currentBossHp(boss),
+              maxHp: _currentBossMaxHp(boss),
+              isFake: boss.isFake,
+              showBossHealthBar: !boss.isFake,
             ),
           ),
         ),
@@ -3176,7 +3289,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   Color _bossColor(BossBalloon boss, BalloonSkinDefinition skin) {
-    final progress = (boss.maxHp - boss.hp) / boss.maxHp;
+    final maxHp = _currentBossMaxHp(boss);
+    final progress = (maxHp - _currentBossHp(boss)) / maxHp;
     if (skin.rendererType == BalloonRendererType.image) {
       return boss.skinColor ?? skin.previewColor;
     }
@@ -4392,6 +4506,7 @@ class BalloonSkinRenderer extends StatelessWidget {
     this.hp = 1,
     this.maxHp = 1,
     this.isFake = false,
+    this.showBossHealthBar = true,
   });
 
   final BalloonSkinDefinition definition;
@@ -4400,6 +4515,7 @@ class BalloonSkinRenderer extends StatelessWidget {
   final int hp;
   final int maxHp;
   final bool isFake;
+  final bool showBossHealthBar;
 
   @override
   Widget build(BuildContext context) {
@@ -4408,7 +4524,12 @@ class BalloonSkinRenderer extends StatelessWidget {
       final displayColor = isFake ? fakeBalloonColor(color) : color;
       visual = CustomPaint(
         painter: isBoss
-            ? BossBalloonPainter(color: displayColor, hp: hp, maxHp: maxHp)
+            ? BossBalloonPainter(
+                color: displayColor,
+                hp: hp,
+                maxHp: maxHp,
+                showHealthBar: showBossHealthBar,
+              )
             : BalloonPainter(color: displayColor),
       );
     } else {
@@ -4422,12 +4543,13 @@ class BalloonSkinRenderer extends StatelessWidget {
           : Stack(
               children: [
                 Positioned(left: 0, right: 0, top: 0, bottom: 32, child: image),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 5,
-                  child: _BossHealthBar(hp: hp, maxHp: maxHp),
-                ),
+                if (showBossHealthBar)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 5,
+                    child: _BossHealthBar(hp: hp, maxHp: maxHp),
+                  ),
               ],
             );
     }
@@ -4723,11 +4845,13 @@ class BossBalloonPainter extends CustomPainter {
     required this.color,
     required this.hp,
     required this.maxHp,
+    this.showHealthBar = true,
   });
 
   final Color color;
   final int hp;
   final int maxHp;
+  final bool showHealthBar;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4754,35 +4878,38 @@ class BossBalloonPainter extends CustomPainter {
       ..close();
     canvas.drawPath(knot, paint);
 
-    final barWidth = size.width * 0.62;
-    final barLeft = size.width * 0.19;
-    final barTop = size.height - 16;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(barLeft, barTop, barWidth, 11),
-        const Radius.circular(8),
-      ),
-      Paint()..color = Colors.white.withValues(alpha: 0.8),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          barLeft,
-          barTop,
-          barWidth * bossHealthFraction(hp, maxHp),
-          11,
+    if (showHealthBar) {
+      final barWidth = size.width * 0.62;
+      final barLeft = size.width * 0.19;
+      final barTop = size.height - 16;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(barLeft, barTop, barWidth, 11),
+          const Radius.circular(8),
         ),
-        const Radius.circular(8),
-      ),
-      Paint()..color = const Color(0xFFFFD54F),
-    );
+        Paint()..color = Colors.white.withValues(alpha: 0.8),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            barLeft,
+            barTop,
+            barWidth * bossHealthFraction(hp, maxHp),
+            11,
+          ),
+          const Radius.circular(8),
+        ),
+        Paint()..color = const Color(0xFFFFD54F),
+      );
+    }
   }
 
   @override
   bool shouldRepaint(covariant BossBalloonPainter oldDelegate) =>
       oldDelegate.color != color ||
       oldDelegate.hp != hp ||
-      oldDelegate.maxHp != maxHp;
+      oldDelegate.maxHp != maxHp ||
+      oldDelegate.showHealthBar != showHealthBar;
 }
 
 class EffectsPainter extends CustomPainter {
