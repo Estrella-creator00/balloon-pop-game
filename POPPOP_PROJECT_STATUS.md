@@ -61,8 +61,9 @@
 - Stage 21~29는 정상 풍선이 모두 제거되는 즉시 클리어되며 남아 있는 Fake Balloon은 조용히 자동 제거된다.
 - 새 풍선은 별도의 Fake 구현 없이 공통 `BalloonSkinRenderer`의 `isFake` 상태를 통해 자동 호환된다.
 - 홈의 스테이지 페이지에서 `21 ~ 30` 카드로 Stage 21 구간을 직접 시작할 수 있으며 Stage 29 클리어 후 Stage 30 Boss로 연속 진행한다.
-- Stage 30은 같은 크기와 이동 규칙을 쓰는 Boss Balloon 2개로 구성된다. 선명한 Real Boss 1개와 공통 opacity `0.35` 표현을 재사용하는 Fake Boss 1개가 공유 HP 15를 사용하며 HP Bar는 Real Boss에 하나만 표시한다.
-- Stage 30에서 Fake Boss를 누르면 공유 HP와 점수는 변하지 않고 남은 시간이 2초 감소한다. Real Boss를 맞힐 때마다 HP가 1 감소하며 `40%` 확률로 두 엔티티의 위치는 유지한 채 Real/Fake 역할만 교체한다.
+- Stage 30은 같은 크기와 이동 규칙을 쓰는 Boss Balloon 2개로 구성된다. 선명한 Real Boss 1개와 공통 opacity `0.35` 표현을 재사용하는 Fake Boss 1개가 공유 HP 12를 사용하며 HP Bar는 Real Boss에 하나만 표시한다.
+- Stage 30 제한시간은 특수 Boss override로 18초다. Fake Boss를 누르면 공유 HP와 점수는 변하지 않고 남은 시간이 2초 감소하며, Real Boss를 맞힐 때마다 HP가 1 감소하고 `50%` 확률로 두 엔티티의 위치는 유지한 채 Real/Fake 역할만 교체한다.
+- Stage 30의 두 Boss는 이동 중 현재 크기의 합을 기준으로 최소 거리와 12px 여유를 유지하며 가볍게 밀려나고 반사된다. 타격 가속은 유지하되 이동 속도는 최대 `220px/s`로 제한한다.
 - Stage 30의 두 Boss는 모두 현재 장착 `BalloonSkinDefinition`과 공통 Boss 렌더러를 사용한다. 공유 HP가 0이 되면 둘을 함께 제거하고 공통 progression이 다음 구현 Stage의 존재 여부를 판단한다.
 - 장기 Boss 설계는 Stage 번호에 따라 Boss 수만 계속 늘리지 않고, 각 10단위 Boss를 고유 패턴으로 차별화하는 것을 원칙으로 한다.
 - 게임은 구현된 Stage 사이를 하나의 run으로 연속 진행한다. 일반 및 Boss Stage 모두 다음 Stage가 구현되어 있으면 공통 progression 규칙에 따라 `currentStage + 1`로 자동 진행하며 Boss Stage 자체는 run 종료 지점이 아니다.
@@ -86,7 +87,7 @@
 | Stage 21~23 | 정상 풍선 2~4개 + Fake 2개 | 모두 1-hit | 14초 |
 | Stage 24~26 | 정상 풍선 5~7개 + Fake 2개 | 모두 1-hit | 19초 |
 | Stage 27~29 | 정상 풍선 8~10개 + Fake 2개 | 모두 1-hit | 24초 |
-| Stage 30 | Real Boss 1개 + Fake Boss 1개 | 공유 HP 15 | 12초 |
+| Stage 30 | Real Boss 1개 + Fake Boss 1개 | 공유 HP 12 | 18초 |
 
 - 보스 기본 속도는 Stage 10에서 `105`, Stage 20에서 `126`이다.
 - 보스는 타격할수록 현재 규칙에 따라 크기가 `0.965`배로 감소하고 속도가 `1.075`배로 증가한다.

@@ -244,13 +244,15 @@ class BossBalloon {
   double turnCooldown = 0.65;
 }
 
-const stage30BossSwapChance = 0.40;
+const stage30BossSwapChance = 0.50;
+const stage30BossMaxSpeed = 220.0;
+const stage30BossMinimumGap = 12.0;
 
 /// Stage 30 owns one shared HP pool and only swaps the roles of its two
 /// existing boss entities. Supplying the roll keeps swap/no-swap behavior
 /// deterministic in tests without changing production randomness.
 class Stage30BossState {
-  Stage30BossState({this.maxHp = 15, this.realBossId = 0}) : hp = maxHp;
+  Stage30BossState({this.maxHp = 12, this.realBossId = 0}) : hp = maxHp;
 
   final int maxHp;
   int hp;
@@ -265,6 +267,162 @@ class Stage30BossState {
     realBossId = realBossId == 0 ? 1 : 0;
     return true;
   }
+}
+
+class BossPairSeparationResult {
+  const BossPairSeparationResult({
+    required this.positionA,
+    required this.positionB,
+    required this.velocityA,
+    required this.velocityB,
+  });
+
+  final Offset positionA;
+  final Offset positionB;
+  final Offset velocityA;
+  final Offset velocityB;
+}
+
+Offset stage30CappedBossVelocity(Offset velocity) {
+  final speed = velocity.distance;
+  if (speed == 0) return velocity;
+  final nextSpeed = min(speed, stage30BossMaxSpeed);
+  return velocity * (nextSpeed / speed);
+}
+
+Offset stage30AcceleratedBossVelocity(Offset velocity) =>
+    stage30CappedBossVelocity(velocity * 1.075);
+
+BossPairSeparationResult separateStage30BossPair({
+  required Offset positionA,
+  required Offset positionB,
+  required Offset velocityA,
+  required Offset velocityB,
+  required double sizeA,
+  required double sizeB,
+  required Size playArea,
+}) {
+  Offset clampPosition(Offset position, double size) {
+    final maxX = max(0.0, playArea.width - size);
+    final maxY = max(0.0, playArea.height - size - 26);
+    return Offset(
+      position.dx.clamp(0.0, maxX).toDouble(),
+      position.dy.clamp(0.0, maxY).toDouble(),
+    );
+  }
+
+  Offset center(Offset position, double size) =>
+      position + Offset(size / 2, size / 2);
+
+  var nextA = clampPosition(positionA, sizeA);
+  var nextB = clampPosition(positionB, sizeB);
+  var delta = center(nextB, sizeB) - center(nextA, sizeA);
+  var distance = delta.distance;
+  final minimumDistance = (sizeA + sizeB) / 2 + stage30BossMinimumGap;
+  if (distance >= minimumDistance) {
+    return BossPairSeparationResult(
+      positionA: nextA,
+      positionB: nextB,
+      velocityA: velocityA,
+      velocityB: velocityB,
+    );
+  }
+
+  Offset normalized(Offset value) => value / value.distance;
+
+  final directNormal =
+      distance <= 0.001 ? const Offset(1, 0) : delta / distance;
+  final perpendicular = Offset(-directNormal.dy, directNormal.dx);
+  final directions = <Offset>[
+    directNormal,
+    perpendicular,
+    -perpendicular,
+    normalized(directNormal + perpendicular),
+    normalized(directNormal - perpendicular),
+  ];
+
+  ({Offset a, Offset b, double distance}) separateAlong(Offset direction) {
+    var candidateA = nextA;
+    var candidateB = nextB;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final candidateDelta =
+          center(candidateB, sizeB) - center(candidateA, sizeA);
+      final candidateDistance = candidateDelta.distance;
+      if (candidateDistance >= minimumDistance - 0.01) break;
+      final projection =
+          candidateDelta.dx * direction.dx + candidateDelta.dy * direction.dy;
+      final translation = max(
+        0.0,
+        -projection +
+            sqrt(
+              max(
+                0.0,
+                projection * projection +
+                    minimumDistance * minimumDistance -
+                    candidateDistance * candidateDistance,
+              ),
+            ),
+      );
+      candidateA = clampPosition(
+        candidateA - direction * (translation / 2),
+        sizeA,
+      );
+      candidateB = clampPosition(
+        candidateB + direction * (translation / 2),
+        sizeB,
+      );
+
+      // Let the free boss absorb any correction lost when its partner was
+      // clamped against a wall. This keeps separation stable near corners.
+      final afterHalf = center(candidateB, sizeB) - center(candidateA, sizeA);
+      if (afterHalf.distance < minimumDistance - 0.01) {
+        final remaining = minimumDistance - afterHalf.distance;
+        candidateB = clampPosition(
+          candidateB + direction * remaining,
+          sizeB,
+        );
+        candidateA = clampPosition(
+          candidateA - direction * remaining,
+          sizeA,
+        );
+      }
+    }
+    return (
+      a: candidateA,
+      b: candidateB,
+      distance:
+          (center(candidateB, sizeB) - center(candidateA, sizeA)).distance,
+    );
+  }
+
+  var bestDirection = directNormal;
+  var best = separateAlong(bestDirection);
+  for (final direction in directions.skip(1)) {
+    final candidate = separateAlong(direction);
+    if (candidate.distance > best.distance + 0.01) {
+      best = candidate;
+      bestDirection = direction;
+    }
+  }
+  nextA = best.a;
+  nextB = best.b;
+  final normal = bestDirection;
+
+  var nextVelocityA = velocityA;
+  var nextVelocityB = velocityB;
+  final normalSpeedA = velocityA.dx * normal.dx + velocityA.dy * normal.dy;
+  final normalSpeedB = velocityB.dx * normal.dx + velocityB.dy * normal.dy;
+  if (normalSpeedA > normalSpeedB) {
+    nextVelocityA += normal * (normalSpeedB - normalSpeedA);
+    nextVelocityB += normal * (normalSpeedA - normalSpeedB);
+  }
+
+  return BossPairSeparationResult(
+    positionA: nextA,
+    positionB: nextB,
+    velocityA: stage30CappedBossVelocity(nextVelocityA),
+    velocityB: stage30CappedBossVelocity(nextVelocityB),
+  );
 }
 
 class StageConfig {
@@ -337,9 +495,11 @@ class StageConfig {
       balloonCount: isBoss ? 0 : positionInTier + 1,
       requiredHits: normalBalloonRequiredHitsForStage(stage),
       duration: Duration(
-        seconds: isBoss ? 8 + tier * 2 : 10 + tier * 2 + timeGroup * 5,
+        seconds: isRealFakeBossStage
+            ? 18
+            : (isBoss ? 8 + tier * 2 : 10 + tier * 2 + timeGroup * 5),
       ),
-      bossHp: isRealFakeBossStage ? 15 : (isBoss ? 10 + tier * 5 : 0),
+      bossHp: isRealFakeBossStage ? 12 : (isBoss ? 10 + tier * 5 : 0),
       // Stage 30 reuses the established Stage 20 boss movement feel rather
       // than introducing another tier-speed jump for its role-swap gimmick.
       bossSpeed: isRealFakeBossStage
@@ -1229,6 +1389,30 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         boss.velocity = velocity;
       });
     }
+
+    if (_stage == 30 && _bosses.length == 2) {
+      _separateStage30Bosses();
+    }
+  }
+
+  void _separateStage30Bosses() {
+    final bossA = _bosses[0];
+    final bossB = _bosses[1];
+    final result = separateStage30BossPair(
+      positionA: bossA.position,
+      positionB: bossB.position,
+      velocityA: bossA.velocity,
+      velocityB: bossB.velocity,
+      sizeA: bossA.size,
+      sizeB: bossB.size,
+      playArea: _playArea,
+    );
+    bossA
+      ..position = result.positionA
+      ..velocity = result.velocityA;
+    bossB
+      ..position = result.positionB
+      ..velocity = result.velocityB;
   }
 
   Offset _bounce(
@@ -1412,7 +1596,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         final hpRatio = sharedState.hp / sharedState.maxHp;
         for (final candidate in _bosses) {
           candidate.size *= 0.965;
-          candidate.velocity *= 1.075;
+          candidate.velocity = stage30AcceleratedBossVelocity(
+            candidate.velocity,
+          );
           candidate.turnCooldown = min(
             candidate.turnCooldown,
             0.18 + hpRatio * 0.28,

@@ -243,9 +243,11 @@ void main() {
     expect(stage29.fakeBalloonCount, 2);
     expect(stage30.isBoss, true);
     expect(stage30.bossCount, 2);
-    expect(stage30.bossHp, 15);
+    expect(stage30.bossHp, 12);
     expect(stage30.bossSpeed, stage20.bossSpeed);
-    expect(stage30.duration, const Duration(seconds: 12));
+    expect(stage10.duration, const Duration(seconds: 8));
+    expect(stage20.duration, const Duration(seconds: 10));
+    expect(stage30.duration, const Duration(seconds: 18));
     expect(StageConfig.nextStageAfter(9), 10);
     expect(StageConfig.nextStageAfter(10), 11);
     expect(StageConfig.nextStageAfter(20), 21);
@@ -268,20 +270,94 @@ void main() {
 
   test('stage 30 shared HP and role swap policy are deterministic by roll', () {
     final state = Stage30BossState();
-    expect(state.maxHp, 15);
-    expect(state.hp, 15);
+    expect(stage30BossSwapChance, 0.50);
+    expect(state.maxHp, 12);
+    expect(state.hp, 12);
     expect(state.isFakeBoss(0), false);
     expect(state.isFakeBoss(1), true);
 
     expect(state.registerRealHit(stage30BossSwapChance), false);
-    expect(state.hp, 14);
+    expect(state.hp, 11);
     expect(state.realBossId, 0);
 
     expect(state.registerRealHit(stage30BossSwapChance - 0.01), true);
-    expect(state.hp, 13);
+    expect(state.hp, 10);
     expect(state.realBossId, 1);
     expect(state.isFakeBoss(0), true);
     expect(state.isFakeBoss(1), false);
+  });
+
+  test('stage 30 boss speed is capped and overlapping bosses separate', () {
+    expect(
+      stage30AcceleratedBossVelocity(const Offset(100, 0)).distance,
+      closeTo(107.5, 0.001),
+    );
+    final capped = stage30AcceleratedBossVelocity(const Offset(210, 80));
+    expect(capped.distance, closeTo(stage30BossMaxSpeed, 0.001));
+    expect(capped.dx / capped.dy, closeTo(210 / 80, 0.001));
+    expect(
+      stage30CappedBossVelocity(const Offset(300, 400)).distance,
+      closeTo(stage30BossMaxSpeed, 0.001),
+    );
+
+    const sizeA = 200.0;
+    const sizeB = 180.0;
+    const playArea = Size(800, 700);
+    final result = separateStage30BossPair(
+      positionA: const Offset(200, 220),
+      positionB: const Offset(250, 220),
+      velocityA: const Offset(126, 0),
+      velocityB: const Offset(-126, 0),
+      sizeA: sizeA,
+      sizeB: sizeB,
+      playArea: playArea,
+    );
+    final centerA = result.positionA + const Offset(sizeA / 2, sizeA / 2);
+    final centerB = result.positionB + const Offset(sizeB / 2, sizeB / 2);
+    expect(
+      (centerB - centerA).distance,
+      greaterThanOrEqualTo(
+        (sizeA + sizeB) / 2 + stage30BossMinimumGap - 0.01,
+      ),
+    );
+    expect(result.positionA.dx, inInclusiveRange(0, playArea.width - sizeA));
+    expect(
+        result.positionA.dy, inInclusiveRange(0, playArea.height - sizeA - 26));
+    expect(result.positionB.dx, inInclusiveRange(0, playArea.width - sizeB));
+    expect(
+        result.positionB.dy, inInclusiveRange(0, playArea.height - sizeB - 26));
+    expect(result.velocityA.dx, lessThan(0));
+    expect(result.velocityB.dx, greaterThan(0));
+    expect(result.velocityA.distance, lessThanOrEqualTo(stage30BossMaxSpeed));
+    expect(result.velocityB.distance, lessThanOrEqualTo(stage30BossMaxSpeed));
+
+    const mobileArea = Size(390, 700);
+    const mobileBossSize = 242.0;
+    final wallResult = separateStage30BossPair(
+      positionA: const Offset(0, 210),
+      positionB: const Offset(148, 210),
+      velocityA: const Offset(126, 0),
+      velocityB: const Offset(-126, 0),
+      sizeA: mobileBossSize,
+      sizeB: mobileBossSize,
+      playArea: mobileArea,
+    );
+    final wallCenterA = wallResult.positionA +
+        const Offset(mobileBossSize / 2, mobileBossSize / 2);
+    final wallCenterB = wallResult.positionB +
+        const Offset(mobileBossSize / 2, mobileBossSize / 2);
+    expect(
+      (wallCenterB - wallCenterA).distance,
+      greaterThanOrEqualTo(
+        mobileBossSize + stage30BossMinimumGap - 0.01,
+      ),
+    );
+    for (final position in [wallResult.positionA, wallResult.positionB]) {
+      expect(
+          position.dx, inInclusiveRange(0, mobileArea.width - mobileBossSize));
+      expect(position.dy,
+          inInclusiveRange(0, mobileArea.height - mobileBossSize - 26));
+    }
   });
 
   test('home stage page derives from the saved next playable stage', () {
@@ -2624,6 +2700,7 @@ void main() {
     }
 
     expect(find.text('30 STAGE'), findsOneWidget);
+    expect(find.text('시간  18'), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
     final bosses = tester
@@ -2638,7 +2715,7 @@ void main() {
       ),
       isTrue,
     );
-    expect(bosses.every((candidate) => candidate.hp == 15), isTrue);
+    expect(bosses.every((candidate) => candidate.hp == 12), isTrue);
     expect(
         bosses.where((candidate) => candidate.showBossHealthBar), hasLength(1));
     expect(
@@ -2655,6 +2732,8 @@ void main() {
 
     final initialRealKey = stage30BossTargetKey(tester, fake: false);
     final initialFakeKey = stage30BossTargetKey(tester, fake: true);
+    final initialBossSize =
+        tester.getSize(find.byKey(ValueKey(initialRealKey)));
     final hpBeforeFakeTap = tester
         .widget<BalloonSkinRenderer>(
           find.byKey(
@@ -2698,9 +2777,13 @@ void main() {
         .where((candidate) => candidate.isBoss)
         .toList(growable: false);
     expect(afterHit.where((candidate) => candidate.isFake), hasLength(1));
-    expect(afterHit.every((candidate) => candidate.hp == 14), isTrue);
+    expect(afterHit.every((candidate) => candidate.hp == 11), isTrue);
+    expect(
+      tester.getSize(find.byKey(ValueKey(initialRealKey))).width,
+      lessThan(initialBossSize.width),
+    );
 
-    for (var hit = 1; hit < 15; hit++) {
+    for (var hit = 1; hit < 12; hit++) {
       await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
     }
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
@@ -3006,7 +3089,7 @@ void main() {
     }
 
     expect(find.text('30 STAGE'), findsOneWidget);
-    for (var hit = 0; hit < 15; hit++) {
+    for (var hit = 0; hit < 12; hit++) {
       await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
     }
     expect(find.text('BOSS CLEAR!'), findsOneWidget);
@@ -3053,7 +3136,7 @@ void main() {
     await tester.pump();
     expect(find.text('30 STAGE'), findsOneWidget);
 
-    for (var hit = 0; hit < 15; hit++) {
+    for (var hit = 0; hit < 12; hit++) {
       await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
     }
     await tester.pump(const Duration(seconds: 1));
