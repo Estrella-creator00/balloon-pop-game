@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'audio/pop_sound.dart';
 import 'balloon_background.dart';
 import 'balloon_skin_catalog.dart';
+import 'coin_purchase_page.dart';
 import 'dev/dev_coin_tool.dart';
 import 'onboarding_page.dart';
 import 'ranking/ranking_page.dart';
@@ -96,6 +97,7 @@ abstract final class ScreenIds {
   static const String dataReset = 'SET-06';
   static const String gameplay = 'G-01';
   static const String gameResult = 'G-02';
+  static const String coinPurchase = 'C-01';
 
   static const Map<String, String> names = {
     nicknameOnboarding: '최초 닉네임 설정 화면',
@@ -112,6 +114,7 @@ abstract final class ScreenIds {
     dataReset: '데이터 초기화 확인 팝업',
     gameplay: '게임 플레이 화면',
     gameResult: '게임 완료 및 게임오버 화면',
+    coinPurchase: '코인 충전 화면',
   };
 }
 
@@ -1771,14 +1774,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           left: 10,
                           right: 10,
                           height: 38,
-                          child: _mainTopOverlay(enableDevCoinTap: true),
+                          child: _mainTopOverlay(
+                            enableDevCoinTap: true,
+                            showCoinAddButton: true,
+                          ),
                         ),
                         Positioned(
                           top: 18,
                           left: 55,
                           right: 55,
                           height: 300,
-                          child: _buildPoppopLogo(),
+                          child: IgnorePointer(child: _buildPoppopLogo()),
                         ),
                         Positioned(
                           top: 316,
@@ -1900,20 +1906,60 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
 
-  Widget _mainTopOverlay({bool enableDevCoinTap = false}) => Stack(
+  Widget _mainTopOverlay({
+    bool enableDevCoinTap = false,
+    bool showCoinAddButton = false,
+  }) =>
+      Stack(
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: GestureDetector(
-              key: const ValueKey('home-coin-dev-tap-target'),
-              behavior: HitTestBehavior.opaque,
-              onTap: enableDevCoinTap ? _onDevCoinTap : null,
-              child: _homeCoinHud(_coinBalance),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  key: const ValueKey('home-coin-dev-tap-target'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: enableDevCoinTap ? _onDevCoinTap : null,
+                  child: _homeCoinHud(_coinBalance),
+                ),
+                if (showCoinAddButton) ...[
+                  const SizedBox(width: 5),
+                  _coinAddButton(),
+                ],
+              ],
             ),
           ),
           Align(alignment: Alignment.centerRight, child: _homeSettingsButton()),
         ],
       );
+
+  Widget _coinAddButton() => Material(
+        color: const Color(0xFFFF6B9D),
+        elevation: 3,
+        shadowColor: const Color(0x44B71E5C),
+        shape: const CircleBorder(),
+        child: InkWell(
+          key: const ValueKey('home-coin-add-button'),
+          onTap: _openCoinPurchasePage,
+          customBorder: const CircleBorder(),
+          child: const SizedBox(
+            width: 36,
+            height: 36,
+            child: Icon(Icons.add_rounded, color: Colors.white, size: 24),
+          ),
+        ),
+      );
+
+  // C-01 코인 충전 화면
+  Future<void> _openCoinPurchasePage() async {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (context) => const CoinPurchasePage()),
+    );
+    if (!mounted) return;
+    setState(() => _coinBalance = CoinService.balance);
+  }
 
   // TEMP DEV TOOL - remove before production release.
   void _onDevCoinTap() {

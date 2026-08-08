@@ -5,6 +5,8 @@ import 'package:balloon_pop_game/dev/dev_coin_tool.dart';
 import 'package:balloon_pop_game/audio/pop_sound.dart';
 import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
+import 'package:balloon_pop_game/coin/coin_package.dart';
+import 'package:balloon_pop_game/coin_purchase_page.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/onboarding_page.dart';
 import 'package:balloon_pop_game/ranking/mock_ranking_repository.dart';
@@ -12,6 +14,7 @@ import 'package:balloon_pop_game/ranking/ranking_entry.dart';
 import 'package:balloon_pop_game/ranking/ranking_page.dart';
 import 'package:balloon_pop_game/ranking/ranking_repository.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
+import 'package:balloon_pop_game/services/coin_purchase_service.dart';
 import 'package:balloon_pop_game/services/haptic_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
 import 'package:balloon_pop_game/services/settings_service.dart';
@@ -116,6 +119,13 @@ Future<void> openSettings(WidgetTester tester) async {
   expect(find.byType(SettingsPage), findsOneWidget);
 }
 
+Future<void> openCoinPurchase(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('home-coin-add-button')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 350));
+  expect(find.byType(CoinPurchasePage), findsOneWidget);
+}
+
 class _LoadingRankingRepository implements RankingRepository {
   final Completer<List<RankingEntry>> _top20 = Completer<List<RankingEntry>>();
 
@@ -198,6 +208,7 @@ void main() {
     expect(ScreenIds.names[ScreenIds.dataReset], '데이터 초기화 확인 팝업');
     expect(ScreenIds.names[ScreenIds.gameplay], '게임 플레이 화면');
     expect(ScreenIds.names[ScreenIds.gameResult], '게임 완료 및 게임오버 화면');
+    expect(ScreenIds.names[ScreenIds.coinPurchase], '코인 충전 화면');
   });
 
   setUp(() {
@@ -861,6 +872,35 @@ void main() {
     expect(CoinService.balance, 32);
   });
 
+  test('coin packages and disabled purchase service never grant coins',
+      () async {
+    expect(
+      coinPackages.map((package) => package.id),
+      orderedEquals(['coin_300', 'coin_700', 'coin_1500', 'coin_3500']),
+    );
+    expect(
+      coinPackages.map((package) => package.coinAmount),
+      orderedEquals([300, 700, 1500, 3500]),
+    );
+    expect(
+      coinPackages.map((package) => package.priceWon),
+      orderedEquals([1500, 3000, 5900, 11900]),
+    );
+    expect(
+      coinPackages.map((package) => package.displayPrice),
+      orderedEquals(['₩1,500', '₩3,000', '₩5,900', '₩11,900']),
+    );
+
+    ProgressStorage.addCoins(9133);
+    final before = CoinService.balance;
+    final result = await const DisabledCoinPurchaseService().purchase(
+      coinPackages.first,
+    );
+    expect(result.status, CoinPurchaseStatus.unavailable);
+    expect(result.message, '결제 기능 준비 중입니다.');
+    expect(CoinService.balance, before);
+  });
+
   test('purchase service charges once and persists ownership', () {
     ProgressStorage.addCoins(320);
 
@@ -999,6 +1039,62 @@ void main() {
     expect(find.text('1,234'), findsOneWidget);
   });
 
+  testWidgets('home coin add opens C-01 without granting local coins',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    ProgressStorage.addCoins(9133);
+
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    expect(find.text('9,133'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-coin-add-button')), findsOneWidget);
+
+    await openCoinPurchase(tester);
+    expect(find.text('코인 충전'), findsOneWidget);
+    expect(find.byKey(const ValueKey('coin-purchase-balance')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('coin-purchase-balance')),
+        matching: find.text('9,133'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('coin-package-list')), findsOneWidget);
+    for (final package in coinPackages) {
+      expect(
+        find.byKey(ValueKey('coin-package-${package.id}')),
+        findsOneWidget,
+      );
+      expect(find.text(package.displayPrice), findsOneWidget);
+    }
+    expect(find.text('300 코인'), findsOneWidget);
+    expect(find.text('700 코인'), findsOneWidget);
+    expect(find.text('1,500 코인'), findsOneWidget);
+    expect(find.text('3,500 코인'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('coin-package-coin_300')));
+    await tester.pump();
+    expect(find.text('결제 기능 준비 중입니다.'), findsWidgets);
+    expect(CoinService.balance, 9133);
+
+    tester
+        .widget<IconButton>(
+          find.byKey(const ValueKey('coin-purchase-back')),
+        )
+        .onPressed!();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(CoinPurchasePage), findsNothing);
+    expect(find.byKey(const ValueKey('home-coin-hud')), findsOneWidget);
+    expect(find.text('9,133'), findsOneWidget);
+    expect(CoinService.balance, 9133);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('home uses shared top controls and four-item navigation',
       (tester) async {
     ProgressStorage.saveScore(128);
@@ -1016,6 +1112,7 @@ void main() {
     expect(find.text('추천!'), findsNothing);
     expect(find.text('v0.6 UI REFRESH'), findsOneWidget);
     expect(find.byKey(const ValueKey('home-coin-hud')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-coin-add-button')), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('home-coin-hud')),
