@@ -3429,7 +3429,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Color _bossColor(BossBalloon boss, BalloonSkinDefinition skin) {
     final maxHp = _currentBossMaxHp(boss);
     final progress = (maxHp - _currentBossHp(boss)) / maxHp;
-    if (skin.rendererType == BalloonRendererType.image) {
+    if (skin.rendererType != BalloonRendererType.painted) {
       return boss.skinColor ?? skin.previewColor;
     }
     return Color.lerp(
@@ -3776,21 +3776,21 @@ extension BalloonRarityStyle on BalloonRarity {
   String get label => switch (this) {
         BalloonRarity.common => '일반',
         BalloonRarity.rare => '희귀',
-        BalloonRarity.epic => '에픽',
+        BalloonRarity.heroic => '영웅',
         BalloonRarity.legendary => '전설',
       };
 
   String get symbol => switch (this) {
         BalloonRarity.common => '⭐',
         BalloonRarity.rare => '🔵',
-        BalloonRarity.epic => '🟣',
+        BalloonRarity.heroic => '🟣',
         BalloonRarity.legendary => '🟠',
       };
 
   Color get color => switch (this) {
         BalloonRarity.common => const Color(0xFF49A969),
         BalloonRarity.rare => const Color(0xFF378DE5),
-        BalloonRarity.epic => const Color(0xFF8A55D8),
+        BalloonRarity.heroic => const Color(0xFF8A55D8),
         BalloonRarity.legendary => const Color(0xFFF09136),
       };
 }
@@ -4671,16 +4671,40 @@ class BalloonSkinRenderer extends StatelessWidget {
             : BalloonPainter(color: displayColor),
       );
     } else {
-      final image = BalloonSkinArtwork(
-        definition: definition,
-        color: color,
-        isFake: isFake,
-      );
+      final displayColor = isFake ? fakeBalloonColor(color) : color;
+      final skinVisual = switch (definition.rendererType) {
+        BalloonRendererType.image => BalloonSkinArtwork(
+            definition: definition,
+            color: color,
+            isFake: isFake,
+          ),
+        BalloonRendererType.star => CustomPaint(
+            painter: ShapedBalloonPainter(
+              shape: BalloonShape.star,
+              color: displayColor,
+            ),
+          ),
+        BalloonRendererType.rabbit => CustomPaint(
+            painter: ShapedBalloonPainter(
+              shape: BalloonShape.rabbit,
+              color: displayColor,
+            ),
+          ),
+        BalloonRendererType.painted => throw StateError(
+            'Painted balloons are handled by the common painted branch.',
+          ),
+      };
       visual = !isBoss
-          ? image
+          ? skinVisual
           : Stack(
               children: [
-                Positioned(left: 0, right: 0, top: 0, bottom: 32, child: image),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: 32,
+                  child: skinVisual,
+                ),
                 if (showBossHealthBar)
                   Positioned(
                     left: 0,
@@ -4898,6 +4922,243 @@ class _BossHealthBar extends StatelessWidget {
 double bossHealthFraction(int hp, int maxHp) {
   if (maxHp <= 0) return 0;
   return (hp / maxHp).clamp(0.0, 1.0);
+}
+
+enum BalloonShape { star, rabbit }
+
+/// Lightweight vector artwork shared by shop, preview, gameplay, Boss, and
+/// Fake rendering. Gameplay bounds and hit testing stay outside this painter.
+class ShapedBalloonPainter extends CustomPainter {
+  const ShapedBalloonPainter({required this.shape, required this.color});
+
+  final BalloonShape shape;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bodyBottom = size.height * 0.86;
+    final bodyPath = switch (shape) {
+      BalloonShape.star => _starPath(size.width, bodyBottom),
+      BalloonShape.rabbit => _rabbitPath(size.width, bodyBottom),
+    };
+    final bodyBounds = bodyPath.getBounds();
+
+    canvas.save();
+    canvas.translate(2, 3);
+    canvas.drawPath(
+      bodyPath,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.16)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    canvas.restore();
+
+    final bodyPaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.34, -0.42),
+        radius: 0.92,
+        colors: [
+          Color.lerp(color, Colors.white, 0.43)!,
+          color,
+          Color.lerp(color, Colors.black, 0.22)!,
+        ],
+        stops: const [0, 0.61, 1],
+      ).createShader(bodyBounds);
+    canvas.drawPath(bodyPath, bodyPaint);
+    canvas.drawPath(
+      bodyPath,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.30)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = max(1.2, size.width * 0.018),
+    );
+
+    if (shape == BalloonShape.star) {
+      final neck = Path()
+        ..moveTo(size.width * 0.46, bodyBottom * 0.70)
+        ..lineTo(size.width * 0.54, bodyBottom * 0.70)
+        ..lineTo(size.width * 0.53, bodyBottom * 0.87)
+        ..lineTo(size.width * 0.47, bodyBottom * 0.87)
+        ..close();
+      canvas.drawPath(neck, Paint()..color = color);
+    } else {
+      _paintRabbitDetails(canvas, size, bodyBottom);
+    }
+
+    final shine = Paint()..color = Colors.white.withValues(alpha: 0.72);
+    canvas.drawOval(
+      Rect.fromLTWH(
+        size.width * 0.25,
+        bodyBottom * 0.20,
+        size.width * 0.11,
+        bodyBottom * 0.16,
+      ),
+      shine,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.38, bodyBottom * 0.18),
+      size.width * 0.025,
+      Paint()..color = Colors.white.withValues(alpha: 0.94),
+    );
+
+    final knotTop = bodyBottom * 0.84;
+    final knot = Path()
+      ..moveTo(size.width / 2, knotTop)
+      ..lineTo(size.width * 0.42, bodyBottom * 0.97)
+      ..lineTo(size.width * 0.58, bodyBottom * 0.97)
+      ..close();
+    canvas.drawPath(knot, Paint()..color = color);
+
+    final stringPath = Path()
+      ..moveTo(size.width / 2, bodyBottom * 0.97)
+      ..quadraticBezierTo(
+        size.width * 0.65,
+        size.height * 0.93,
+        size.width * 0.48,
+        size.height,
+      );
+    canvas.drawPath(
+      stringPath,
+      Paint()
+        ..color = const Color(0xFF666666)
+        ..strokeWidth = max(1.0, size.width * 0.012)
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  Path _starPath(double width, double height) {
+    final center = Offset(width / 2, height * 0.43);
+    final outerRadius = min(width * 0.46, height * 0.45);
+    final innerRadius = outerRadius * 0.47;
+    final path = Path();
+    for (var index = 0; index < 10; index++) {
+      final radius = index.isEven ? outerRadius : innerRadius;
+      final angle = -pi / 2 + index * pi / 5;
+      final point = center + Offset(cos(angle), sin(angle)) * radius;
+      if (index == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    return path..close();
+  }
+
+  Path _rabbitPath(double width, double height) => Path()
+    ..moveTo(width * 0.50, height * 0.86)
+    ..cubicTo(
+      width * 0.24,
+      height * 0.86,
+      width * 0.10,
+      height * 0.70,
+      width * 0.13,
+      height * 0.51,
+    )
+    ..cubicTo(
+      width * 0.15,
+      height * 0.39,
+      width * 0.23,
+      height * 0.34,
+      width * 0.31,
+      height * 0.31,
+    )
+    ..cubicTo(
+      width * 0.23,
+      height * 0.18,
+      width * 0.22,
+      height * 0.02,
+      width * 0.31,
+      height * 0.01,
+    )
+    ..cubicTo(
+      width * 0.41,
+      0,
+      width * 0.42,
+      height * 0.20,
+      width * 0.40,
+      height * 0.34,
+    )
+    ..cubicTo(
+      width * 0.46,
+      height * 0.31,
+      width * 0.54,
+      height * 0.31,
+      width * 0.60,
+      height * 0.34,
+    )
+    ..cubicTo(
+      width * 0.58,
+      height * 0.20,
+      width * 0.59,
+      0,
+      width * 0.69,
+      height * 0.01,
+    )
+    ..cubicTo(
+      width * 0.78,
+      height * 0.02,
+      width * 0.77,
+      height * 0.18,
+      width * 0.69,
+      height * 0.31,
+    )
+    ..cubicTo(
+      width * 0.77,
+      height * 0.34,
+      width * 0.85,
+      height * 0.39,
+      width * 0.87,
+      height * 0.51,
+    )
+    ..cubicTo(
+      width * 0.90,
+      height * 0.70,
+      width * 0.76,
+      height * 0.86,
+      width * 0.50,
+      height * 0.86,
+    )
+    ..close();
+
+  void _paintRabbitDetails(Canvas canvas, Size size, double bodyBottom) {
+    final innerEar = Paint()
+      ..color = Color.lerp(color, Colors.white, 0.48)!.withValues(alpha: 0.65)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = max(2.0, size.width * 0.045)
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(size.width * 0.315, bodyBottom * 0.08),
+      Offset(size.width * 0.35, bodyBottom * 0.27),
+      innerEar,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.685, bodyBottom * 0.08),
+      Offset(size.width * 0.65, bodyBottom * 0.27),
+      innerEar,
+    );
+
+    final facePaint = Paint()..color = const Color(0xFF584454);
+    canvas.drawCircle(
+      Offset(size.width * 0.40, bodyBottom * 0.56),
+      max(1.2, size.width * 0.025),
+      facePaint,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.60, bodyBottom * 0.56),
+      max(1.2, size.width * 0.025),
+      facePaint,
+    );
+    final nose = Path()
+      ..moveTo(size.width * 0.50, bodyBottom * 0.62)
+      ..lineTo(size.width * 0.47, bodyBottom * 0.66)
+      ..lineTo(size.width * 0.53, bodyBottom * 0.66)
+      ..close();
+    canvas.drawPath(nose, Paint()..color = const Color(0xFFB95B78));
+  }
+
+  @override
+  bool shouldRepaint(covariant ShapedBalloonPainter oldDelegate) =>
+      oldDelegate.shape != shape || oldDelegate.color != color;
 }
 
 class BalloonPainter extends CustomPainter {

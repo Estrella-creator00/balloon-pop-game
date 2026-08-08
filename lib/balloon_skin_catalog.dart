@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'balloon_background.dart';
 
-enum BalloonRarity { common, rare, epic, legendary }
+enum BalloonRarity { common, rare, heroic, legendary }
 
-enum BalloonRendererType { painted, image }
+enum BalloonRendererType { painted, image, star, rabbit }
 
 enum BalloonPopEffectType { shards, hearts }
 
@@ -91,6 +91,15 @@ abstract final class BalloonSkinCatalog {
     Color(0xFFFFD75A),
   ];
 
+  static const _rabbitPalette = <Color>[
+    Color(0xFFFF91B8),
+    Color(0xFFC5A0FF),
+    Color(0xFFFFA3A3),
+    Color(0xFF8FE1D0),
+    Color(0xFF91CAFF),
+    Color(0xFFFFD982),
+  ];
+
   static const definitions = <BalloonSkinDefinition>[
     BalloonSkinDefinition(
       id: defaultId,
@@ -126,35 +135,34 @@ abstract final class BalloonSkinCatalog {
       avoidImmediateColorRepeat: true,
       background: BalloonBackgroundType.none,
     ),
-    // Existing products retain their IDs and initial ownership behavior.
     BalloonSkinDefinition(
-      id: 'balloon-a',
-      displayName: '특별 풍선 A',
-      price: 500,
+      id: 'balloon-star',
+      displayName: '별 풍선',
+      price: 300,
       rarity: BalloonRarity.common,
-      rendererType: BalloonRendererType.painted,
+      rendererType: BalloonRendererType.star,
       colorPalette: _basicPalette,
       popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic,
       isDefault: false,
-      supportsBossSkin: false,
+      supportsBossSkin: true,
       shopOrder: 2,
-      previewColor: Color(0xFF54A8FF),
+      previewColor: Color(0xFFFFC857),
     ),
     BalloonSkinDefinition(
-      id: 'balloon-b',
-      displayName: '특별 풍선 B',
-      price: 700,
-      rarity: BalloonRarity.common,
-      rendererType: BalloonRendererType.painted,
-      colorPalette: _basicPalette,
+      id: 'balloon-rabbit',
+      displayName: '토끼 풍선',
+      price: 500,
+      rarity: BalloonRarity.rare,
+      rendererType: BalloonRendererType.rabbit,
+      colorPalette: _rabbitPalette,
       popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic,
       isDefault: false,
-      supportsBossSkin: false,
+      supportsBossSkin: true,
       shopOrder: 3,
-      previewColor: Color(0xFF8B7CF6),
-      initiallyOwned: true,
+      previewColor: Color(0xFFFF91B8),
+      avoidImmediateColorRepeat: true,
     ),
   ];
 
