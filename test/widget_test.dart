@@ -46,8 +46,43 @@ Future<void> tapGameTargetThroughPointer(
   final target = key is int
       ? find.byKey(ValueKey<int>(key))
       : find.byKey(ValueKey<String>(key as String));
-  await tester.tap(target);
-  await tester.pump();
+  final targetKey = tester.widget<Positioned>(target).key;
+
+  bool isMovingGameTarget(Key? candidateKey) {
+    if (candidateKey is ValueKey<int>) return true;
+    if (candidateKey is! ValueKey<String>) return false;
+    return candidateKey.value.startsWith('fake-balloon-') ||
+        candidateKey.value.startsWith('boss-balloon-');
+  }
+
+  for (var attempt = 0; attempt < 30; attempt++) {
+    final targetRect = tester.getRect(target);
+    final blockingRects = tester
+        .widgetList<Positioned>(find.byType(Positioned))
+        .where(
+          (positioned) =>
+              positioned.key != targetKey && isMovingGameTarget(positioned.key),
+        )
+        .map((positioned) => tester.getRect(find.byWidget(positioned)))
+        .toList(growable: false);
+    const fractions = <double>[0.5, 0.2, 0.8, 0.35, 0.65];
+    for (final yFraction in fractions) {
+      for (final xFraction in fractions) {
+        final point = Offset(
+          targetRect.left + targetRect.width * xFraction,
+          targetRect.top + targetRect.height * yFraction,
+        );
+        if (blockingRects.every((rect) => !rect.contains(point))) {
+          await tester.tapAt(point);
+          await tester.pump();
+          return;
+        }
+      }
+    }
+    await tester.pump(gameLoopInterval);
+  }
+
+  throw TestFailure('Could not find an unobscured tap point for target $key.');
 }
 
 Future<void> openBalloonPreview(WidgetTester tester, String productId) async {
@@ -194,6 +229,11 @@ void main() {
     expect(stage29.requiredHits, 1);
     expect(stage29.duration, const Duration(seconds: 24));
     expect(stage29.fakeBalloonCount, 2);
+    expect(StageConfig.nextStageAfter(9), 10);
+    expect(StageConfig.nextStageAfter(10), 11);
+    expect(StageConfig.nextStageAfter(20), 21);
+    expect(StageConfig.nextStageAfter(28), 29);
+    expect(StageConfig.nextStageAfter(29), isNull);
     for (var stage = 1; stage <= 20; stage++) {
       expect(StageConfig.forStage(stage).fakeBalloonCount, 0);
     }
@@ -2716,10 +2756,40 @@ void main() {
         .whereType<String>()
         .singleWhere((text) => text.startsWith('시간  '));
     final remainingTime = int.parse(timeText.substring('시간  '.length));
-    final expectedFinalScore = 326 + remainingTime;
-    expect(find.text('점수  $expectedFinalScore'), findsOneWidget);
+    final scoreAtStage20Clear = 326 + remainingTime;
+    expect(find.text('점수  $scoreAtStage20Clear'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 1));
+    expect(find.text('21 STAGE'), findsOneWidget);
+    expect(find.text('점수  $scoreAtStage20Clear'), findsOneWidget);
+    expect(find.text('게임 완료!'), findsNothing);
+    expect(find.byKey(ValueKey(nextBalloonId)), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('fake-balloon-${nextBalloonId + 2}')),
+      findsOneWidget,
+    );
+
+    for (var stage = 21; stage <= 29; stage++) {
+      final config = StageConfig.forStage(stage);
+      for (var index = 0; index < config.balloonCount; index++) {
+        await tapGameTarget(tester, nextBalloonId + index);
+      }
+      nextBalloonId += config.balloonCount + config.fakeBalloonCount;
+      if (stage < StageConfig.lastImplementedStage) {
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+    }
+
+    final finalScoreText = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data)
+        .whereType<String>()
+        .singleWhere((text) => text.startsWith('점수  '));
+    final expectedFinalScore =
+        int.parse(finalScoreText.substring('점수  '.length));
+    expect(expectedFinalScore, greaterThan(scoreAtStage20Clear));
+
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('게임 완료!'), findsOneWidget);
     expect(find.text('$expectedFinalScore점'), findsOneWidget);
     final firstReward = expectedFinalScore ~/ 10;
@@ -2750,20 +2820,18 @@ void main() {
     await tester.tap(retryButton);
     await tester.pump();
     await tester.pump();
-    expect(find.text('20 STAGE'), findsOneWidget);
-    expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
+    expect(find.text('29 STAGE'), findsOneWidget);
 
-    for (var hit = 0; hit < 15; hit++) {
-      await tapGameTarget(tester, 'boss-balloon-0');
-      await tapGameTarget(tester, 'boss-balloon-1');
+    final retryConfig = StageConfig.forStage(29);
+    for (var id = 0; id < retryConfig.balloonCount; id++) {
+      await tapGameTarget(tester, id);
     }
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(homeButton, findsOneWidget);
     await tester.tap(homeButton);
     await tester.pump();
     expect(find.text('1~10 STAGE 시작'), findsOneWidget);
-    expect(find.text('20 STAGE'), findsNothing);
+    expect(find.text('29 STAGE'), findsNothing);
   });
 
   testWidgets('home hides progress reset and preserves second-section unlock',

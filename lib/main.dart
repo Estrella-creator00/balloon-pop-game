@@ -272,6 +272,13 @@ class StageConfig {
   static const lastImplementedStage = 29;
   static const fakeBalloonRequiredHits = 1;
 
+  /// Returns the next contiguous playable stage, or `null` when the current
+  /// run has reached the last implemented stage. Boss stages use this same
+  /// progression rule, so adding Stage 30/31 only requires extending the
+  /// implemented range and stage configuration.
+  static int? nextStageAfter(int currentStage) =>
+      currentStage < lastImplementedStage ? currentStage + 1 : null;
+
   static int normalBalloonRequiredHitsForStage(int stage) {
     if (stage >= 11 && stage <= 19) return 2;
     if ((stage >= 1 && stage <= 9) ||
@@ -722,7 +729,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   int _stage = 1;
   int _secondsLeft = 15;
   Duration _stageTimePenalty = Duration.zero;
-  int _sectionStartStage = 1;
   GamePhase _phase = GamePhase.menu;
   final List<BossBalloon> _bosses = [];
   bool _secondSectionUnlocked = false;
@@ -822,7 +828,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _coinRewardSession.reset();
     _resultSaved = false;
     _isNewBest = false;
-    _sectionStartStage = startStage;
     _stage = startStage;
     _secondsLeft = StageConfig.forStage(startStage).duration.inSeconds;
     _phase = GamePhase.playing;
@@ -1263,15 +1268,19 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stageTimer?.cancel();
     _stageTimer = Timer(_stageClearDelay, () {
       if (!mounted || _phase != GamePhase.stageClear) return;
-      if (_stage == StageConfig.lastImplementedStage) {
-        setState(_completeGame);
-        return;
-      }
-      setState(() {
-        _stage++;
-        _startStage();
-      });
+      setState(_advanceRunAfterClear);
     });
+  }
+
+  void _advanceRunAfterClear() {
+    final nextStage = StageConfig.nextStageAfter(_stage);
+    if (nextStage == null) {
+      _completeGame();
+      return;
+    }
+
+    _stage = nextStage;
+    _startStage();
   }
 
   void _hitBoss(BossBalloon boss) {
@@ -1326,14 +1335,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stageTimer?.cancel();
     _stageTimer = Timer(_bossClearDelay, () {
       if (!mounted || _phase != GamePhase.bossClear) return;
-      setState(() {
-        if (_stage == 10 && _sectionStartStage == 1) {
-          _stage = 11;
-          _startStage();
-        } else {
-          _completeGame();
-        }
-      });
+      setState(_advanceRunAfterClear);
     });
   }
 
@@ -1466,7 +1468,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _isNewBest = false;
       _score = 0;
       _stage = 1;
-      _sectionStartStage = 1;
       _secondsLeft = 10;
       _phase = GamePhase.menu;
     });
@@ -4527,7 +4528,7 @@ class BalloonSkinArtwork extends StatelessWidget {
 
 const fakeBalloonSaturationFactor = 0.78;
 const fakeBalloonBrightnessFactor = 0.97;
-const fakeBalloonOpacity = 0.78;
+const fakeBalloonOpacity = 0.63;
 
 List<double> saturationBrightnessColorMatrix({
   required double saturation,

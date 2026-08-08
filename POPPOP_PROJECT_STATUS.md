@@ -49,12 +49,13 @@
 - Stage 20은 독립적으로 움직이는 보스 2개다.
 - Stage 21~29는 1-hit 정상 풍선 2~10개와 Fake Balloon 2개가 함께 등장한다. 이 구간은 HP가 아니라 Fake 구별이 핵심 난이도다.
 - Stage 21~29의 Fake Balloon 수는 스테이지와 무관하게 항상 정확히 2개다.
-- Fake Balloon은 장착 중인 `BalloonSkinDefinition`, 공통 렌더러와 팔레트를 그대로 사용하고 최종 출력에서 채도를 뚜렷하게, 밝기를 약간 낮춰 바랜 느낌을 낸다.
+- Fake Balloon은 장착 중인 `BalloonSkinDefinition`, 공통 렌더러와 팔레트를 그대로 사용한다. 최종 출력은 opacity `0.63`을 우선 적용하고 채도와 밝기를 약간 낮춰, 어둡기보다 반투명하고 힘이 빠진 느낌으로 구분한다.
 - Fake Balloon을 누르면 점수와 코인 없이 남은 시간이 2초 감소하며 `-2초` 피드백과 전용 실패 사운드가 재생된 후 제거된다.
 - Stage 21~29는 정상 풍선이 모두 제거되는 즉시 클리어되며 남아 있는 Fake Balloon은 조용히 자동 제거된다.
 - 새 풍선은 별도의 Fake 구현 없이 공통 `BalloonSkinRenderer`의 `isFake` 상태를 통해 자동 호환된다.
 - 홈의 스테이지 페이지에서 `21 ~ 29` 구간을 직접 시작할 수 있으며 Stage 29 클리어 후 현재 게임 완료 화면으로 이어진다.
-- Stage 1에서 시작한 연속 플레이는 Stage 10 클리어 후 Stage 11로 이어지며 점수를 유지한다.
+- 게임은 구현된 Stage 사이를 하나의 run으로 연속 진행한다. 일반 및 Boss Stage 모두 다음 Stage가 구현되어 있으면 공통 progression 규칙에 따라 `currentStage + 1`로 자동 진행하며 Boss Stage 자체는 run 종료 지점이 아니다.
+- Stage 1에서 시작한 연속 플레이는 Stage 10→11과 Stage 20→21을 포함해 Stage 29까지 이어지며, 점수는 `_startGame()`을 다시 호출하지 않고 run 전체에서 누적된다.
 - Stage 11 구간을 홈에서 직접 시작하면 해당 플레이 점수는 0부터 시작한다.
 
 ### HP, 속도 및 시간
