@@ -287,8 +287,7 @@ void main() {
     expect(state.isFakeBoss(1), false);
   });
 
-  test('stage 30 allows partial overlap and gently separates severe overlap',
-      () {
+  test('stage 30 bosses pass through without peer collision changes', () {
     expect(
       stage30AcceleratedBossVelocity(const Offset(100, 0)).distance,
       closeTo(107.5, 0.001),
@@ -301,57 +300,39 @@ void main() {
       closeTo(stage30BossMaxSpeed, 0.001),
     );
 
-    const sizeA = 200.0;
-    const sizeB = 200.0;
-    const playArea = Size(800, 700);
-    const partialPositionA = Offset(100, 220);
-    const partialPositionB = Offset(220, 220);
-    const partialVelocityA = Offset(70, 18);
-    const partialVelocityB = Offset(-55, -24);
-    final partial = separateStage30BossPair(
-      positionA: partialPositionA,
-      positionB: partialPositionB,
-      velocityA: partialVelocityA,
-      velocityB: partialVelocityB,
-      sizeA: sizeA,
-      sizeB: sizeB,
-      playArea: playArea,
+    final bossA = BossBalloon(
+      id: 0,
+      position: const Offset(100, 200),
+      velocity: const Offset(100, 0),
+      size: 200,
+      maxHp: 12,
+      turnIntervalOffset: -0.055,
+      initialTurnCooldown: 0.54,
     );
-    expect(partial.positionA, partialPositionA);
-    expect(partial.positionB, partialPositionB);
-    expect(partial.velocityA, partialVelocityA);
-    expect(partial.velocityB, partialVelocityB);
+    final bossB = BossBalloon(
+      id: 1,
+      position: const Offset(300, 200),
+      velocity: const Offset(-100, 0),
+      size: 200,
+      maxHp: 12,
+      isFake: true,
+      turnIntervalOffset: 0.055,
+      initialTurnCooldown: 0.73,
+    );
+    final velocityA = bossA.velocity;
+    final velocityB = bossB.velocity;
 
-    var positionA = const Offset(180, 220);
-    var positionB = const Offset(250, 220);
-    var velocityA = const Offset(90, 22);
-    var velocityB = const Offset(-75, -31);
-    var previousDistance = (positionB - positionA).distance;
-    for (var frame = 0; frame < 20; frame++) {
-      final result = separateStage30BossPair(
-        positionA: positionA,
-        positionB: positionB,
-        velocityA: velocityA,
-        velocityB: velocityB,
-        sizeA: sizeA,
-        sizeB: sizeB,
-        playArea: playArea,
-      );
-      positionA = result.positionA + result.velocityA * 0.033;
-      positionB = result.positionB + result.velocityB * 0.033;
-      velocityA = result.velocityA;
-      velocityB = result.velocityB;
-      final distance = (positionB - positionA).distance;
-      expect(distance, greaterThanOrEqualTo(previousDistance - 0.01));
-      previousDistance = distance;
-    }
-    expect(previousDistance, greaterThan(70));
-    expect(velocityA, isNot(velocityB));
-    expect(velocityA.dy, isNot(velocityB.dy));
-    for (final position in [positionA, positionB]) {
-      expect(position.dx, inInclusiveRange(0, playArea.width - sizeA));
-      expect(position.dy, inInclusiveRange(0, playArea.height - sizeA - 26));
-    }
+    // Both centers meet at 0.5 seconds and pass completely through by 1.5
+    // seconds. Movement has no peer position, distance, or collision input.
+    bossA.position = nextBossPosition(bossA, 1.5);
+    bossB.position = nextBossPosition(bossB, 1.5);
+    expect(bossA.position.dx, 250);
+    expect(bossB.position.dx, 150);
+    expect(bossA.velocity, velocityA);
+    expect(bossB.velocity, velocityB);
+    expect(bossA.velocity, isNot(bossB.velocity));
+    expect(bossA.turnCooldown, isNot(bossB.turnCooldown));
+    expect(bossA.turnIntervalOffset, isNot(bossB.turnIntervalOffset));
   });
 
   test('stage 30 role swaps preserve entities and overlap taps choose nearest',
@@ -389,6 +370,10 @@ void main() {
     expect(
       closestStage30BossForTap(bosses, const Offset(230, 190))?.id,
       0,
+    );
+    expect(
+      closestStage30BossForTap(bosses, const Offset(250, 190))?.id,
+      1,
     );
     expect(
       closestStage30BossForTap(bosses, const Offset(20, 20)),

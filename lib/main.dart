@@ -230,7 +230,9 @@ class BossBalloon {
     this.skinId = 'balloon-default',
     this.skinColor,
     this.isFake = false,
-  });
+    this.turnIntervalOffset = 0,
+    double initialTurnCooldown = 0.65,
+  }) : turnCooldown = initialTurnCooldown;
 
   final int id;
   Offset position;
@@ -241,14 +243,12 @@ class BossBalloon {
   final Color? skinColor;
   bool isFake;
   late int hp = maxHp;
-  double turnCooldown = 0.65;
+  final double turnIntervalOffset;
+  double turnCooldown;
 }
 
 const stage30BossSwapChance = 0.50;
 const stage30BossMaxSpeed = 220.0;
-const stage30BossSevereOverlapRatio = 0.55;
-const stage30BossSeparationStep = 1.5;
-const stage30BossOutwardSpeed = 36.0;
 
 /// Stage 30 owns one shared HP pool and only swaps the roles of its two
 /// existing boss entities. Supplying the roll keeps swap/no-swap behavior
@@ -269,20 +269,6 @@ class Stage30BossState {
     realBossId = realBossId == 0 ? 1 : 0;
     return true;
   }
-}
-
-class BossPairSeparationResult {
-  const BossPairSeparationResult({
-    required this.positionA,
-    required this.positionB,
-    required this.velocityA,
-    required this.velocityB,
-  });
-
-  final Offset positionA;
-  final Offset positionB;
-  final Offset velocityA;
-  final Offset velocityB;
 }
 
 void applyStage30BossRoles(
@@ -310,7 +296,10 @@ BossBalloon? closestStage30BossForTap(
     if (!touchBounds.contains(point)) continue;
     final center = boss.position + Offset(boss.size / 2, boss.size / 2);
     final distance = (point - center).distanceSquared;
-    if (distance < closestDistance) {
+    // Later entries are painted above earlier entries, so an exact-distance
+    // tie follows the visible z-order while ordinary overlaps pick the nearer
+    // center.
+    if (distance <= closestDistance) {
       closest = boss;
       closestDistance = distance;
     }
@@ -328,81 +317,8 @@ Offset stage30CappedBossVelocity(Offset velocity) {
 Offset stage30AcceleratedBossVelocity(Offset velocity) =>
     stage30CappedBossVelocity(velocity * 1.075);
 
-BossPairSeparationResult separateStage30BossPair({
-  required Offset positionA,
-  required Offset positionB,
-  required Offset velocityA,
-  required Offset velocityB,
-  required double sizeA,
-  required double sizeB,
-  required Size playArea,
-}) {
-  Offset clampPosition(Offset position, double size) {
-    final maxX = max(0.0, playArea.width - size);
-    final maxY = max(0.0, playArea.height - size - 26);
-    return Offset(
-      position.dx.clamp(0.0, maxX).toDouble(),
-      position.dy.clamp(0.0, maxY).toDouble(),
-    );
-  }
-
-  Offset center(Offset position, double size) =>
-      position + Offset(size / 2, size / 2);
-
-  var nextA = clampPosition(positionA, sizeA);
-  var nextB = clampPosition(positionB, sizeB);
-  final delta = center(nextB, sizeB) - center(nextA, sizeA);
-  final distance = delta.distance;
-  final severeOverlapDistance =
-      ((sizeA + sizeB) / 2) * stage30BossSevereOverlapRatio;
-  if (distance >= severeOverlapDistance) {
-    return BossPairSeparationResult(
-      positionA: nextA,
-      positionB: nextB,
-      velocityA: velocityA,
-      velocityB: velocityB,
-    );
-  }
-
-  final relativeVelocity = velocityB - velocityA;
-  final normal = distance > 0.001
-      ? delta / distance
-      : relativeVelocity.distance > 0.001
-          ? relativeVelocity / relativeVelocity.distance
-          : const Offset(1, 0);
-  final correction = min(
-    stage30BossSeparationStep,
-    max(0.0, (severeOverlapDistance - distance) / 2),
-  );
-  final previousA = nextA;
-  final previousB = nextB;
-  nextA = clampPosition(nextA - normal * correction, sizeA);
-  nextB = clampPosition(nextB + normal * correction, sizeB);
-  final movedA = (nextA - previousA).distance > 0.001;
-  final movedB = (nextB - previousB).distance > 0.001;
-
-  var nextVelocityA = velocityA;
-  var nextVelocityB = velocityB;
-  final normalSpeedA = velocityA.dx * normal.dx + velocityA.dy * normal.dy;
-  final normalSpeedB = velocityB.dx * normal.dx + velocityB.dy * normal.dy;
-  if (!movedA) {
-    nextVelocityA -= normal * normalSpeedA;
-  } else if (normalSpeedA > -stage30BossOutwardSpeed) {
-    nextVelocityA += normal * (-stage30BossOutwardSpeed - normalSpeedA);
-  }
-  if (!movedB) {
-    nextVelocityB -= normal * normalSpeedB;
-  } else if (normalSpeedB < stage30BossOutwardSpeed) {
-    nextVelocityB += normal * (stage30BossOutwardSpeed - normalSpeedB);
-  }
-
-  return BossPairSeparationResult(
-    positionA: nextA,
-    positionB: nextB,
-    velocityA: stage30CappedBossVelocity(nextVelocityA),
-    velocityB: stage30CappedBossVelocity(nextVelocityB),
-  );
-}
+Offset nextBossPosition(BossBalloon boss, double dt) =>
+    boss.position + boss.velocity * dt;
 
 class StageConfig {
   const StageConfig({
@@ -1253,8 +1169,19 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (_stage == 30) {
       _stage30BossState = Stage30BossState(maxHp: config.bossHp);
     }
+    double? previousStage30Angle;
     for (var id = 0; id < config.bossCount; id++) {
-      final angle = _random.nextDouble() * pi * 2;
+      var angle = _random.nextDouble() * pi * 2;
+      if (_stage == 30 && previousStage30Angle != null) {
+        final angleDifference = atan2(
+          sin(angle - previousStage30Angle),
+          cos(angle - previousStage30Angle),
+        ).abs();
+        if (angleDifference < pi / 3) {
+          angle = (angle + pi / 2) % (pi * 2);
+        }
+      }
+      if (_stage == 30) previousStage30Angle = angle;
       final speed = config.bossSpeed;
       _bosses.add(
         BossBalloon(
@@ -1266,6 +1193,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           skinId: skin.id,
           skinColor: _nextSkinColor(skin, boss: true),
           isFake: _stage30BossState?.isFakeBoss(id) ?? false,
+          turnIntervalOffset: _stage == 30 ? (id == 0 ? -0.055 : 0.055) : 0,
+          initialTurnCooldown: _stage == 30
+              ? 0.52 + id * 0.17 + _random.nextDouble() * 0.08
+              : 0.65,
         ),
       );
     }
@@ -1361,37 +1292,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         final angle = _random.nextDouble() * pi * 2;
         boss.velocity = Offset(cos(angle) * speed, sin(angle) * speed);
         final hpRatio = _currentBossHp(boss) / _currentBossMaxHp(boss);
-        boss.turnCooldown = 0.24 + hpRatio * 0.38;
+        boss.turnCooldown = max(
+          0.12,
+          0.24 + hpRatio * 0.38 + boss.turnIntervalOffset,
+        );
       }
-      final next = boss.position + boss.velocity * dt;
+      final next = nextBossPosition(boss, dt);
       boss.position = _bounce(next, boss.velocity, boss.size, (velocity) {
         boss.velocity = velocity;
       });
     }
-
-    if (_stage == 30 && _bosses.length == 2) {
-      _separateStage30Bosses();
-    }
-  }
-
-  void _separateStage30Bosses() {
-    final bossA = _bosses[0];
-    final bossB = _bosses[1];
-    final result = separateStage30BossPair(
-      positionA: bossA.position,
-      positionB: bossB.position,
-      velocityA: bossA.velocity,
-      velocityB: bossB.velocity,
-      sizeA: bossA.size,
-      sizeB: bossB.size,
-      playArea: _playArea,
-    );
-    bossA
-      ..position = result.positionA
-      ..velocity = result.velocityA;
-    bossB
-      ..position = result.positionB
-      ..velocity = result.velocityB;
   }
 
   Offset _bounce(
@@ -1580,7 +1490,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           );
           candidate.turnCooldown = min(
             candidate.turnCooldown,
-            0.18 + hpRatio * 0.28,
+            max(
+              0.10,
+              0.18 + hpRatio * 0.28 + candidate.turnIntervalOffset,
+            ),
           );
         }
         if (swapped) {
