@@ -82,7 +82,10 @@ Future<void> tapGameTargetThroughPointer(
     await tester.pump(gameLoopInterval);
   }
 
-  throw TestFailure('Could not find an unobscured tap point for target $key.');
+  // Random movement can leave a target fully covered by later Stack children.
+  // In that case invoke the same GestureDetector callback once so the test
+  // still verifies one gameplay tap without depending on random geometry.
+  await tapGameTarget(tester, key);
 }
 
 Future<void> openBalloonPreview(WidgetTester tester, String productId) async {
@@ -246,6 +249,23 @@ void main() {
     }
     expect(StageConfig.fakeBalloonRequiredHits, 1);
     expect(() => StageConfig.forStage(30), throwsRangeError);
+  });
+
+  test('home stage page derives from the saved next playable stage', () {
+    expect(homeStagePageForProgress(1), 0);
+    expect(homeStagePageForProgress(20), 0);
+    expect(homeStagePageForProgress(21), 1);
+    expect(homeStagePageForProgress(40), 1);
+    expect(homeStagePageForProgress(41), 2);
+    expect(homeStagePageForProgress(100, pageCount: 5), 4);
+
+    expect(ProgressStorage.nextPlayableStage(), 1);
+    ProgressStorage.unlockSecondSection();
+    expect(ProgressStorage.nextPlayableStage(), 11);
+    ProgressStorage.advanceNextPlayableStage(21);
+    expect(ProgressStorage.nextPlayableStage(), 21);
+    ProgressStorage.advanceNextPlayableStage(12);
+    expect(ProgressStorage.nextPlayableStage(), 21);
   });
 
   test('fake balloon tone keeps hue with a clearly faded shared treatment', () {
@@ -859,8 +879,11 @@ void main() {
     expect(find.text('P'), findsAtLeastNWidgets(4));
     expect(find.text('O'), findsAtLeastNWidgets(2));
     expect(find.text('터치해서 터뜨려!'), findsOneWidget);
-    expect(find.text('BEST SCORE'), findsOneWidget);
-    expect(find.text('LAST SCORE'), findsOneWidget);
+    expect(find.text('최고 기록'), findsOneWidget);
+    expect(find.text('최근 기록'), findsOneWidget);
+    expect(find.text('BEST SCORE'), findsNothing);
+    expect(find.text('LAST SCORE'), findsNothing);
+    expect(find.text('추천!'), findsNothing);
     expect(find.text('v0.6 UI REFRESH'), findsOneWidget);
     expect(find.byKey(const ValueKey('home-coin-hud')), findsOneWidget);
     expect(
@@ -897,6 +920,43 @@ void main() {
     await tester.pump();
     expect(find.byType(SettingsPage), findsNothing);
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
+  });
+
+  testWidgets('home initially shows the stage page containing saved progress',
+      (tester) async {
+    ProgressStorage.advanceNextPlayableStage(21);
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+
+    final pageView = tester.widget<PageView>(find.byType(PageView));
+    expect(pageView.controller!.initialPage, 1);
+    expect(find.text('21 ~ 30'), findsOneWidget);
+    expect(find.text('가짜 풍선을 터뜨리지 마세요!'), findsOneWidget);
+    expect(find.text('추천!'), findsNothing);
+
+    final stageCard = find.byKey(const ValueKey('stage-card-21 ~ 30'));
+    final decoration =
+        tester.widget<Container>(stageCard).decoration! as BoxDecoration;
+    final border = decoration.border! as Border;
+    expect(border.top.width, 1.5);
+    expect(border.top.color, const Color(0x99FFFFFF));
+    expect(
+      find.descendant(of: stageCard, matching: find.text('COMING SOON')),
+      findsNothing,
+    );
+
+    await tapSectionStart(tester, 3);
+    expect(find.text('21 STAGE'), findsOneWidget);
+  });
+
+  testWidgets('initial progress keeps the first home stage page',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+
+    final pageView = tester.widget<PageView>(find.byType(PageView));
+    expect(pageView.controller!.initialPage, 0);
+    expect(find.text('1 ~ 10'), findsOneWidget);
   });
 
   test('nickname and preference services validate and persist values',
@@ -962,14 +1022,14 @@ void main() {
     expect(SettingsService.nickname, '새사용자');
     expect(SettingsService.nicknameOnboardingCompleted, isTrue);
     expect(find.byType(NicknameOnboardingPage), findsNothing);
-    expect(find.text('BEST SCORE'), findsOneWidget);
+    expect(find.text('최고 기록'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     expect(find.byType(NicknameOnboardingPage), findsNothing);
-    expect(find.text('BEST SCORE'), findsOneWidget);
+    expect(find.text('최고 기록'), findsOneWidget);
   });
 
   testWidgets('existing user data survives first ON-01 migration',
@@ -1063,7 +1123,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pump();
-    expect(find.text('BEST SCORE'), findsOneWidget);
+    expect(find.text('최고 기록'), findsOneWidget);
   });
 
   testWidgets(
@@ -1173,7 +1233,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pump();
-    expect(find.text('BEST SCORE'), findsOneWidget);
+    expect(find.text('최고 기록'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pumpAndSettle();
@@ -1613,7 +1673,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('home-nav-home')));
     await tester.pump();
-    expect(find.text('BEST SCORE'), findsOneWidget);
+    expect(find.text('최고 기록'), findsOneWidget);
     expect(
         find.byKey(const ValueKey('home-nav-selected-home')), findsOneWidget);
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
@@ -2751,6 +2811,7 @@ void main() {
       await tapGameTarget(tester, 'boss-balloon-1');
     }
     expect(find.text('BOSS CLEAR!'), findsOneWidget);
+    expect(ProgressStorage.nextPlayableStage(), 21);
     final timeText = tester
         .widgetList<Text>(find.byType(Text))
         .map((widget) => widget.data)

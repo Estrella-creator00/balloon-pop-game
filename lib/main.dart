@@ -319,6 +319,21 @@ class StageConfig {
   }
 }
 
+const homeStageCardsPerPage = 2;
+const homeStagesPerCard = 10;
+const homeStagePageCount = 3;
+
+int homeStagePageForProgress(
+  int nextPlayableStage, {
+  int pageCount = homeStagePageCount,
+}) {
+  if (pageCount <= 1) return 0;
+  final normalizedStage = max(1, nextPlayableStage);
+  final page =
+      (normalizedStage - 1) ~/ (homeStagesPerCard * homeStageCardsPerPage);
+  return page.clamp(0, pageCount - 1).toInt();
+}
+
 enum EffectPieceShape { shard, heart }
 
 class PopPiece {
@@ -763,7 +778,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     SettingsService.applyStoredPreferences();
     _ownedProductIds = PurchaseService.ownedProductIds;
     _equippedProductIds = _loadEquippedProductIds();
-    _stagePageController = PageController();
+    _stagePage = homeStagePageForProgress(ProgressStorage.nextPlayableStage());
+    _stagePageController = PageController(initialPage: _stagePage);
     _headerData = ValueNotifier(_createHeaderData());
     _gameHeader = GameHeader(
       data: _headerData,
@@ -862,6 +878,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
+    final stagePage =
+        homeStagePageForProgress(ProgressStorage.nextPlayableStage());
     setState(() {
       _score = 0;
       _stage = 1;
@@ -870,13 +888,22 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _mainTab = MainTab.home;
       _storeProductFilter = StoreProductFilter.all;
       _storeNavigationVisible = true;
+      _stagePage = stagePage;
       _balloons.clear();
       _pieces.clear();
       _rings.clear();
       _feedbacks.clear();
       _bosses.clear();
     });
+    _scheduleStagePageJump(stagePage);
     _publishHeader();
+  }
+
+  void _scheduleStagePageJump(int page) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_stagePageController.hasClients) return;
+      _stagePageController.jumpToPage(page);
+    });
   }
 
   void _recordResult() {
@@ -1263,6 +1290,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopGameLoop();
     _stopwatch.stop();
     _score += _secondsLeft;
+    _saveNextPlayableStage();
     _phase = GamePhase.stageClear;
     _publishHeader();
     _stageTimer?.cancel();
@@ -1270,6 +1298,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       if (!mounted || _phase != GamePhase.stageClear) return;
       setState(_advanceRunAfterClear);
     });
+  }
+
+  void _saveNextPlayableStage() {
+    final nextStage = StageConfig.nextStageAfter(_stage);
+    if (nextStage != null) {
+      ProgressStorage.advanceNextPlayableStage(nextStage);
+    }
   }
 
   void _advanceRunAfterClear() {
@@ -1331,6 +1366,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondSectionUnlocked = true;
       ProgressStorage.unlockSecondSection();
     }
+    _saveNextPlayableStage();
     _publishHeader();
     _stageTimer?.cancel();
     _stageTimer = Timer(_bossClearDelay, () {
@@ -1470,7 +1506,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _stage = 1;
       _secondsLeft = 10;
       _phase = GamePhase.menu;
+      _stagePage = 0;
     });
+    _scheduleStagePageJump(0);
   }
 
   // H-01 홈 화면
@@ -1576,7 +1614,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 rightLocked: !_secondSectionUnlocked,
                               ),
                               _stagePair(
-                                leftTitle: '21 ~ 29',
+                                leftTitle: '21 ~ 30',
                                 rightTitle: '31 ~ 40',
                                 leftColor: const Color(0xFF42B883),
                                 rightColor: const Color(0xFF4D8EF7),
@@ -2045,8 +2083,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           Expanded(
             child: _stagePanel(
               title: leftTitle,
-              subtitle:
-                  leftTitle.startsWith('1 ') ? '기본 풍선 · 보스 도전!' : 'COMING SOON',
+              subtitle: leftTitle.startsWith('1 ')
+                  ? '기본 풍선 · 보스 도전!'
+                  : leftTitle.startsWith('21 ')
+                      ? '가짜 풍선을 터뜨리지 마세요!'
+                      : 'COMING SOON',
               color: leftColor,
               locked: leftLocked,
               onTap: leftTap,
@@ -2079,6 +2120,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       clipBehavior: Clip.none,
       children: [
         Container(
+          key: ValueKey('stage-card-$title'),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -2091,7 +2133,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     ],
             ),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white, width: 4),
+            border: Border.all(color: const Color(0x99FFFFFF), width: 1.5),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x5525495C),
@@ -2106,7 +2148,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22.5),
             child: Stack(
               children: [
                 Positioned.fill(
@@ -2149,7 +2191,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Color(0xFF244F68),
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -2264,33 +2306,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             ),
           ),
         ),
-        if (title.startsWith('1 '))
-          Positioned(
-            top: -7,
-            left: -9,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF416C),
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x55391B2B),
-                    blurRadius: 4,
-                    offset: Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: const Text(
-                '추천!',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -2315,14 +2330,20 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
         child: Row(
           children: [
-            _recordTile('BEST SCORE', _bestScore, _isNewBest),
+            _recordTile('최고 기록', _bestScore, _isNewBest, isBest: true),
             Container(width: 1.5, height: 54, color: const Color(0xFFE6D8CB)),
-            _recordTile('LAST SCORE', _lastScore, false),
+            _recordTile('최근 기록', _lastScore, false, isBest: false),
           ],
         ),
       );
 
-  Widget _recordTile(String label, int score, bool isNew) => Expanded(
+  Widget _recordTile(
+    String label,
+    int score,
+    bool isNew, {
+    required bool isBest,
+  }) =>
+      Expanded(
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -2334,7 +2355,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                   height: 52,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: label.startsWith('BEST')
+                      colors: isBest
                           ? const [Color(0xFFFFED58), Color(0xFFFF9800)]
                           : const [Color(0xFF8DEBFF), Color(0xFF2688E8)],
                     ),
@@ -2348,7 +2369,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     ],
                   ),
                   child: Icon(
-                    label.startsWith('BEST')
+                    isBest
                         ? Icons.emoji_events_rounded
                         : Icons.assignment_rounded,
                     color: Colors.white,
@@ -2371,7 +2392,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     Text(
                       '$score',
                       style: const TextStyle(
-                        fontSize: 32,
+                        fontSize: 30,
                         height: 1.05,
                         color: Color(0xFF244C67),
                         fontWeight: FontWeight.w900,
@@ -2558,10 +2579,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _onHomeMenuTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     if (_mainTab != MainTab.home) {
+      final stagePage =
+          homeStagePageForProgress(ProgressStorage.nextPlayableStage());
       setState(() {
         _mainTab = MainTab.home;
         _storeProductFilter = StoreProductFilter.all;
+        _stagePage = stagePage;
       });
+      _scheduleStagePageJump(stagePage);
     }
   }
 

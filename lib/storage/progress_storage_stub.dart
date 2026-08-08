@@ -1,5 +1,6 @@
 abstract final class ProgressStorage {
   static bool _secondSectionUnlocked = false;
+  static int _nextPlayableStage = 1;
   static int _bestScore = 0;
   static int _lastScore = 0;
   static int _coinBalance = 0;
@@ -14,6 +15,15 @@ abstract final class ProgressStorage {
 
   static void unlockSecondSection() {
     _secondSectionUnlocked = true;
+    advanceNextPlayableStage(11);
+  }
+
+  static int nextPlayableStage() => _nextPlayableStage > 1
+      ? _nextPlayableStage
+      : (_secondSectionUnlocked ? 11 : 1);
+
+  static void advanceNextPlayableStage(int stage) {
+    if (stage > _nextPlayableStage) _nextPlayableStage = stage;
   }
 
   static int bestScore() => _bestScore;
@@ -81,6 +91,7 @@ abstract final class ProgressStorage {
 
   static void clear() {
     _secondSectionUnlocked = false;
+    _nextPlayableStage = 1;
     _bestScore = 0;
     _lastScore = 0;
     _coinBalance = 0;

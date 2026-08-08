@@ -36,6 +36,13 @@
 
 메인 탭 상태는 `MainTab.home`, `store`, `event`, `ranking`으로 구분한다. 홈의 랭킹 버튼은 현재 `WeeklyRankingPage`를 별도 route로 열고 뒤로가기로 원래 화면에 복귀한다.
 
+### H-01 홈 UI
+
+- 기록 보드는 `최고 기록`과 `최근 기록`을 한글로 표시하며 기존 저장 점수를 그대로 사용한다.
+- Stage 카드는 얇은 반투명 외곽선과 기존의 약한 그림자를 사용하고 `추천!` 배지는 표시하지 않는다.
+- 세 번째 구간 카드는 `21 ~ 30`으로 표시하고 `가짜 풍선을 터뜨리지 마세요!` 안내를 보여준다. 실제 gameplay 구현 범위는 현재 Stage 29까지이며 Stage 30 Boss는 아직 미구현이다.
+- 홈 Stage 페이지는 `ProgressStorage.nextPlayableStage()`가 속한 20개 Stage 단위 페이지를 초기 위치로 사용한다. 카드당 10개 Stage, 페이지당 카드 2개라는 계산을 사용하므로 향후 구간 추가 시 특정 Stage 예외 분기가 필요 없다.
+
 ## 3. 게임 기본 구조
 
 게임 규칙은 주로 `lib/main.dart`의 `StageConfig`, `BalloonGamePage`에서 관리한다.
@@ -53,7 +60,7 @@
 - Fake Balloon을 누르면 점수와 코인 없이 남은 시간이 2초 감소하며 `-2초` 피드백과 전용 실패 사운드가 재생된 후 제거된다.
 - Stage 21~29는 정상 풍선이 모두 제거되는 즉시 클리어되며 남아 있는 Fake Balloon은 조용히 자동 제거된다.
 - 새 풍선은 별도의 Fake 구현 없이 공통 `BalloonSkinRenderer`의 `isFake` 상태를 통해 자동 호환된다.
-- 홈의 스테이지 페이지에서 `21 ~ 29` 구간을 직접 시작할 수 있으며 Stage 29 클리어 후 현재 게임 완료 화면으로 이어진다.
+- 홈의 스테이지 페이지에서 `21 ~ 30` 카드로 Stage 21 구간을 직접 시작할 수 있으며 Stage 29 클리어 후 현재 게임 완료 화면으로 이어진다. Stage 30은 표시 범위에만 포함되며 아직 실행하지 않는다.
 - 게임은 구현된 Stage 사이를 하나의 run으로 연속 진행한다. 일반 및 Boss Stage 모두 다음 Stage가 구현되어 있으면 공통 progression 규칙에 따라 `currentStage + 1`로 자동 진행하며 Boss Stage 자체는 run 종료 지점이 아니다.
 - Stage 1에서 시작한 연속 플레이는 Stage 10→11과 Stage 20→21을 포함해 Stage 29까지 이어지며, 점수는 `_startGame()`을 다시 호출하지 않고 run 전체에서 누적된다.
 - Stage 11 구간을 홈에서 직접 시작하면 해당 플레이 점수는 0부터 시작한다.
@@ -339,6 +346,7 @@ Flutter Web에서는 브라우저 `window.localStorage`를 사용한다. 실제 
 | 키 | 저장 내용 |
 |---|---|
 | `balloon_pop_game_second_section_unlocked` | Stage 11~20 구간 해금 여부 |
+| `poppop_next_playable_stage` | 완료 기록에 따라 단조 증가하는 다음 플레이 가능 Stage. 홈 Stage 페이지 초기 위치 계산에 사용 |
 | `poppop_best_score` | 최고 점수 |
 | `poppop_last_score` | 직전 점수 |
 | `poppop_coin_balance` | 보유 코인 |

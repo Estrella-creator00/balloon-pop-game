@@ -11,6 +11,7 @@ extension type _LocalStorage._(JSObject _) implements JSObject {
 
 abstract final class ProgressStorage {
   static const _key = 'balloon_pop_game_second_section_unlocked';
+  static const _nextPlayableStageKey = 'poppop_next_playable_stage';
   static const _bestKey = 'poppop_best_score';
   static const _lastKey = 'poppop_last_score';
   static const _coinKey = 'poppop_coin_balance';
@@ -33,8 +34,24 @@ abstract final class ProgressStorage {
   static void unlockSecondSection() {
     try {
       _localStorage.setItem(_key.toJS, 'true'.toJS);
+      advanceNextPlayableStage(11);
     } catch (_) {
       // Storage failure must not interrupt the game.
+    }
+  }
+
+  static int nextPlayableStage() {
+    final stored = _readInt(_nextPlayableStageKey);
+    if (stored >= 1) return stored;
+    return isSecondSectionUnlocked() ? 11 : 1;
+  }
+
+  static void advanceNextPlayableStage(int stage) {
+    if (stage < 1 || stage <= nextPlayableStage()) return;
+    try {
+      _localStorage.setItem(_nextPlayableStageKey.toJS, '$stage'.toJS);
+    } catch (_) {
+      // Storage failure must not interrupt stage completion.
     }
   }
 
@@ -204,6 +221,7 @@ abstract final class ProgressStorage {
   static void clear() {
     try {
       _localStorage.removeItem(_key.toJS);
+      _localStorage.removeItem(_nextPlayableStageKey.toJS);
       _localStorage.removeItem(_bestKey.toJS);
       _localStorage.removeItem(_lastKey.toJS);
       _localStorage.removeItem(_coinKey.toJS);
