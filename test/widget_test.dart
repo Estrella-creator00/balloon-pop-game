@@ -499,7 +499,7 @@ void main() {
               of: find.byKey(key),
               matching: find.byType(ColorFiltered),
             ),
-            findsOneWidget,
+            findsWidgets,
           );
         case BalloonRendererType.star:
         case BalloonRendererType.flower:
@@ -621,7 +621,10 @@ void main() {
     expect(rabbit.displayName, '모찌');
     expect(rabbit.price, 500);
     expect(rabbit.rarity, BalloonRarity.rare);
-    expect(rabbit.rendererType, BalloonRendererType.rabbit);
+    expect(rabbit.rendererType, BalloonRendererType.image);
+    expect(rabbit.assetPath, 'assets/images/mochi_balloon.png');
+    expect(rabbit.imageDetailMask, BalloonImageDetailMask.mochiFace);
+    expect(rabbit.colorPalette, hasLength(5));
     expect(rabbit.supportsBossSkin, isTrue);
     expect(rabbit.description, '겁은 많지만 호기심은 누구보다 많아요.');
 
@@ -773,7 +776,7 @@ void main() {
     }
   });
 
-  testWidgets('star and rabbit share normal boss and fake render paths',
+  testWidgets('star and image mochi share normal boss and fake render paths',
       (tester) async {
     for (final id in ['balloon-star', 'balloon-rabbit']) {
       final definition = BalloonSkinCatalog.byIdOrDefault(id);
@@ -802,14 +805,27 @@ void main() {
 
       for (final contextName in ['normal', 'boss', 'fake', 'fake-boss']) {
         final scope = find.byKey(ValueKey('$id-$contextName'));
-        final painter = tester.widget<CustomPaint>(
-          find.descendant(of: scope, matching: find.byType(CustomPaint)).first,
-        );
-        final shaped = painter.painter! as ShapedBalloonPainter;
-        expect(
-          shaped.shape,
-          id == 'balloon-star' ? BalloonShape.star : BalloonShape.rabbit,
-        );
+        if (id == 'balloon-star') {
+          final painter = tester.widget<CustomPaint>(
+            find
+                .descendant(of: scope, matching: find.byType(CustomPaint))
+                .first,
+          );
+          expect((painter.painter! as ShapedBalloonPainter).shape,
+              BalloonShape.star);
+        } else {
+          expect(
+            find.descendant(
+              of: scope,
+              matching: find.byType(BalloonSkinArtwork),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: scope, matching: find.byType(Image)),
+            findsWidgets,
+          );
+        }
         if (contextName.contains('fake')) {
           expect(
             tester
@@ -917,6 +933,66 @@ void main() {
       image.dispose();
       codec.dispose();
     });
+  });
+
+  testWidgets('mochi uses one optimized transparent image asset',
+      (tester) async {
+    await tester.runAsync(() async {
+      final asset = await rootBundle.load('assets/images/mochi_balloon.png');
+      final codec = await ui.instantiateImageCodec(
+        asset.buffer.asUint8List(asset.offsetInBytes, asset.lengthInBytes),
+      );
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      expect(image.width, 398);
+      expect(image.height, 512);
+      expect(rgba, isNotNull);
+
+      int alphaAt(int x, int y) =>
+          rgba!.getUint8(((y * image.width) + x) * 4 + 3);
+      expect(alphaAt(0, 0), 0);
+      expect(alphaAt(image.width - 1, 0), 0);
+      expect(alphaAt(0, image.height - 1), 0);
+      expect(alphaAt(image.width - 1, image.height - 1), 0);
+
+      image.dispose();
+      codec.dispose();
+    });
+  });
+
+  testWidgets('mochi five colors preserve original facial detail overlay',
+      (tester) async {
+    final mochi = BalloonSkinCatalog.byIdOrDefault('balloon-rabbit');
+    expect(mochi.colorPalette, hasLength(5));
+    for (var index = 0; index < mochi.colorPalette.length; index++) {
+      await tester.pumpWidget(MaterialApp(
+        home: SizedBox(
+          width: 120,
+          height: 160,
+          child: BalloonSkinRenderer(
+            definition: mochi,
+            color: mochi.colorPalette[index],
+          ),
+        ),
+      ));
+      expect(find.byType(BalloonSkinArtwork), findsOneWidget);
+      expect(
+        tester
+            .widgetList<CustomPaint>(find.byType(CustomPaint))
+            .where((paint) => paint.painter is ShapedBalloonPainter),
+        isEmpty,
+      );
+      if (index == 0) {
+        expect(find.byKey(const ValueKey('mochi-tinted-body')), findsNothing);
+      } else {
+        expect(find.byKey(const ValueKey('mochi-tinted-body')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('mochi-detail-overlay')),
+          findsOneWidget,
+        );
+      }
+    }
   });
 
   testWidgets('all six heart colors preserve the asset alpha mask',
@@ -2040,33 +2116,24 @@ void main() {
     expect(find.byKey(const ValueKey('store-filter-unowned')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-limited')), findsOneWidget);
     expect(find.byType(StoreProductCard), findsAtLeastNWidgets(4));
-    final storeScrollable = find
-        .descendant(
-          of: find.byKey(const ValueKey('store-product-grid')),
-          matching: find.byType(Scrollable),
-        )
-        .first;
-    for (final rarity in BalloonRarity.values) {
-      await tester.scrollUntilVisible(
-        find.byKey(ValueKey('store-rarity-list-${rarity.name}')),
-        180,
-        scrollable: storeScrollable,
-      );
-      expect(
-        find.byKey(ValueKey('store-rarity-header-${rarity.name}')),
-        findsOneWidget,
-      );
-      expect(find.text(rarity.label), findsAtLeastNWidgets(1));
-      final list = tester.widget<ListView>(
-        find.byKey(ValueKey('store-rarity-list-${rarity.name}')),
-      );
-      expect(list.scrollDirection, Axis.horizontal);
-    }
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('store-product-balloon-default')),
-      -220,
-      scrollable: storeScrollable,
+    expect(storeProductPageCount(0), 1);
+    expect(storeProductPageCount(8), 1);
+    expect(storeProductPageCount(9), 2);
+    expect(storeProductPageCount(17), 3);
+    expect(storeProductPageCount(BalloonSkinCatalog.shopDefinitions.length), 2);
+    expect(
+        find.byKey(const ValueKey('store-product-pages-all')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-product-page-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-page-indicator')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-page-dot-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-page-dot-1')), findsOneWidget);
+    final firstGrid = tester.widget<GridView>(
+      find.byKey(const ValueKey('store-product-page-0')),
     );
+    final firstDelegate =
+        firstGrid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(firstDelegate.crossAxisCount, 4);
+    expect(firstGrid.childrenDelegate.estimatedChildCount, 8);
 
     expect(
       tester
@@ -2104,40 +2171,39 @@ void main() {
     expect(cardRects[1].top, cardRects[2].top);
     expect(cardRects[0].left, lessThan(cardRects[1].left));
     expect(cardRects[1].left, lessThan(cardRects[2].left));
-    final commonList = find.byKey(const ValueKey('store-rarity-list-common'));
-    await tester.drag(commonList, const Offset(-90, 0));
-    await tester.pump();
-    final commonScrollable = find.descendant(
-      of: commonList,
-      matching: find.byType(Scrollable),
-    );
-    expect(
-      tester.state<ScrollableState>(commonScrollable).position.pixels,
-      greaterThan(0),
-    );
     final rabbitRect = tester.getRect(
       find.byKey(const ValueKey('store-product-balloon-rabbit')),
     );
     expect(rabbitRect.top, greaterThan(cardRects[0].bottom));
 
+    await tester.drag(
+      find.byKey(const ValueKey('store-product-pages-all')),
+      const Offset(-500, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('store-product-page-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('store-product-balloon-jello')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('store-product-balloon-lumen')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('store-product-balloon-chouchou')),
+        findsOneWidget);
+    expect(find.byType(StoreComingSoonCard), findsNWidgets(5));
+
+    await tester.drag(
+      find.byKey(const ValueKey('store-product-pages-all')),
+      const Offset(500, 0),
+    );
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('store-filter-owned')));
     await tester.pump();
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('store-product-balloon-default')),
-      -220,
-      scrollable: storeScrollable,
-    );
     expect(find.byType(StoreProductCard), findsOneWidget);
     expect(find.byKey(const ValueKey('store-product-balloon-default')),
         findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('store-filter-unowned')));
     await tester.pump();
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('store-product-balloon-heart')),
-      -220,
-      scrollable: storeScrollable,
-    );
     expect(find.byType(StoreProductCard), findsAtLeastNWidgets(3));
     expect(find.byKey(const ValueKey('store-product-balloon-heart')),
         findsOneWidget);
@@ -2149,15 +2215,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('store-filter-limited')));
     await tester.pump();
     expect(find.byType(StoreProductCard), findsNothing);
-    expect(find.text('해당 상품이 없습니다.'), findsAtLeastNWidgets(3));
+    expect(find.byType(StoreComingSoonCard), findsNWidgets(8));
 
     await tester.tap(find.byKey(const ValueKey('store-filter-all')));
     await tester.pump();
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('store-product-balloon-default')),
-      -220,
-      scrollable: storeScrollable,
-    );
     expect(find.byType(StoreProductCard), findsAtLeastNWidgets(4));
 
     await tester.pump(const Duration(milliseconds: 300));

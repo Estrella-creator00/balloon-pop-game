@@ -33,6 +33,8 @@ enum BalloonIdleAnimationType {
 
 enum BalloonSpecialBehavior { none, watermelonVariant, onePercentSpin }
 
+enum BalloonImageDetailMask { none, mochiFace }
+
 enum BalloonBadge { none, newItem, popular, event, recommended }
 
 @immutable
@@ -63,6 +65,7 @@ class BalloonSkinDefinition {
     this.specialBehavior = BalloonSpecialBehavior.none,
     this.visualVariantCount = 1,
     this.specialSpawnChance = 0,
+    this.imageDetailMask = BalloonImageDetailMask.none,
   });
 
   final String id;
@@ -79,6 +82,7 @@ class BalloonSkinDefinition {
   final BalloonSpecialBehavior specialBehavior;
   final int visualVariantCount;
   final double specialSpawnChance;
+  final BalloonImageDetailMask imageDetailMask;
   final bool isDefault;
   final BalloonBadge badge;
   final bool supportsBossSkin;
@@ -134,11 +138,10 @@ abstract final class BalloonSkinCatalog {
   ];
   static const _rabbitPalette = <Color>[
     Color(0xFFFF91B8),
-    Color(0xFFC5A0FF),
-    Color(0xFFFFA3A3),
-    Color(0xFF8FE1D0),
-    Color(0xFF91CAFF),
     Color(0xFFFFD982),
+    Color(0xFF91CAFF),
+    Color(0xFFC5A0FF),
+    Color(0xFF8FE1D0),
   ];
   static const _ghostPalette = <Color>[
     Color(0xFFC9B7FF),
@@ -226,11 +229,13 @@ abstract final class BalloonSkinCatalog {
       // Keep the legacy rabbit ID so existing ownership/equipment survives.
       id: 'balloon-rabbit', displayName: '모찌', price: 500,
       description: '겁은 많지만 호기심은 누구보다 많아요.',
-      rarity: BalloonRarity.rare, rendererType: BalloonRendererType.rabbit,
+      rarity: BalloonRarity.rare, rendererType: BalloonRendererType.image,
+      assetPath: 'assets/images/mochi_balloon.png',
       colorPalette: _rabbitPalette, popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic, isDefault: false,
       supportsBossSkin: true, shopOrder: 4, previewColor: Color(0xFFFF91B8),
       avoidImmediateColorRepeat: true,
+      imageDetailMask: BalloonImageDetailMask.mochiFace,
     ),
     BalloonSkinDefinition(
       id: 'balloon-wari',

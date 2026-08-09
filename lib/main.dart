@@ -131,6 +131,11 @@ enum StorePreviewType { balloon, effect, background, sound, music }
 
 enum StoreProductFilter { all, owned, unowned, limited }
 
+const storeProductsPerPage = 8;
+
+int storeProductPageCount(int productCount) =>
+    max(1, (productCount + storeProductsPerPage - 1) ~/ storeProductsPerPage);
+
 class StoreProduct {
   const StoreProduct({
     required this.id,
@@ -963,6 +968,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   MainTab _mainTab = MainTab.home;
   bool _storeNavigationVisible = true;
   StoreProductFilter _storeProductFilter = StoreProductFilter.all;
+  int _storeCatalogPage = 0;
   late final PageController _stagePageController;
   late final ValueNotifier<GameHeaderData> _headerData;
   late final Widget _gameHeader;
@@ -2953,6 +2959,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       setState(() {
         _mainTab = MainTab.store;
         _storeProductFilter = StoreProductFilter.all;
+        _storeCatalogPage = 0;
         _storeNavigationVisible = true;
       });
     }
@@ -3101,6 +3108,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                   selected: _storeProductFilter,
                   onSelected: (filter) => setState(() {
                     _storeProductFilter = filter;
+                    _storeCatalogPage = 0;
                     _storeNavigationVisible = true;
                   }),
                 ),
@@ -3192,66 +3200,84 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
     }
 
-    final productsByRarity = <BalloonRarity, List<StoreProduct>>{
-      for (final rarity in BalloonRarity.values)
-        rarity: products
-            .where((product) => product.rarity == rarity)
-            .toList(growable: false),
-    };
-    return ListView(
+    final pageCount = storeProductPageCount(products.length);
+    final placeholderRarity =
+        products.isEmpty ? BalloonRarity.common : products.last.rarity;
+    return Column(
       key: const ValueKey('store-product-grid'),
-      padding: EdgeInsets.fromLTRB(6, 6, 6, bottomPadding),
       children: [
-        for (final rarity in BalloonRarity.values) ...[
-          BalloonRaritySectionHeader(rarity: rarity),
+        Expanded(
+          child: ScrollConfiguration(
+            behavior: const MaterialScrollBehavior().copyWith(
+              dragDevices: const {
+                ui.PointerDeviceKind.touch,
+                ui.PointerDeviceKind.mouse,
+                ui.PointerDeviceKind.trackpad,
+                ui.PointerDeviceKind.stylus,
+              },
+            ),
+            child: PageView.builder(
+              key: ValueKey('store-product-pages-${_storeProductFilter.name}'),
+              physics: const PageScrollPhysics(),
+              itemCount: pageCount,
+              onPageChanged: (page) => setState(() {
+                _storeCatalogPage = page;
+                _storeNavigationVisible = true;
+              }),
+              itemBuilder: (context, pageIndex) => GridView.builder(
+                key: ValueKey('store-product-page-$pageIndex'),
+                padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 0.78,
+                ),
+                itemCount: storeProductsPerPage,
+                itemBuilder: (context, slot) {
+                  final productIndex = pageIndex * storeProductsPerPage + slot;
+                  if (productIndex >= products.length) {
+                    return StoreComingSoonCard(
+                      rarity: placeholderRarity,
+                      slot: productIndex,
+                    );
+                  }
+                  final product = products[productIndex];
+                  return StoreProductCard(
+                    product: product,
+                    onPressed: () => _showBalloonPreview(product),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+        if (pageCount > 1)
           SizedBox(
-            height: 150,
-            child: productsByRarity[rarity]!.isEmpty
-                ? const Align(
-                    alignment: Alignment.topLeft,
-                    child: Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text(
-                        '해당 상품이 없습니다.',
-                        style: TextStyle(
-                          color: Color(0xFF87949C),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  )
-                : ScrollConfiguration(
-                    behavior: const MaterialScrollBehavior().copyWith(
-                      dragDevices: const {
-                        ui.PointerDeviceKind.touch,
-                        ui.PointerDeviceKind.mouse,
-                        ui.PointerDeviceKind.trackpad,
-                        ui.PointerDeviceKind.stylus,
-                      },
-                    ),
-                    child: ListView.separated(
-                      key: ValueKey('store-rarity-list-${rarity.name}'),
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(2, 0, 14, 2),
-                      itemCount: productsByRarity[rarity]!.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (context, index) {
-                        final product = productsByRarity[rarity]![index];
-                        return SizedBox(
-                          width: 108,
-                          child: StoreProductCard(
-                            product: product,
-                            onPressed: () => _showBalloonPreview(product),
-                          ),
-                        );
-                      },
+            key: const ValueKey('store-page-indicator'),
+            height: 20,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var page = 0; page < pageCount; page++)
+                  AnimatedContainer(
+                    key: ValueKey('store-page-dot-$page'),
+                    duration: const Duration(milliseconds: 160),
+                    width: page == _storeCatalogPage ? 15 : 6,
+                    height: 6,
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    decoration: BoxDecoration(
+                      color: page == _storeCatalogPage
+                          ? const Color(0xFFFF5C8A)
+                          : const Color(0xFFB9C9D2),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-        ],
+        SizedBox(height: bottomPadding),
       ],
     );
   }
@@ -5016,12 +5042,52 @@ class BalloonSkinArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(
-      definition.assetPath!,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.medium,
-      gaplessPlayback: true,
-    );
+    Widget assetImage() => Image.asset(
+          definition.assetPath!,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+        );
+
+    if (definition.imageDetailMask == BalloonImageDetailMask.mochiFace) {
+      if (usesOriginalAsset(definition, color) && !isFake) {
+        return Center(
+          child: AspectRatio(aspectRatio: 398 / 512, child: assetImage()),
+        );
+      }
+      final tintedBody = ColorFiltered(
+        key: const ValueKey('mochi-tinted-body'),
+        colorFilter: ColorFilter.matrix(
+          visualColorMatrix(definition, color, isFake: isFake),
+        ),
+        child: assetImage(),
+      );
+      Widget originalDetails = assetImage();
+      if (isFake) {
+        originalDetails = ColorFiltered(
+          colorFilter: ColorFilter.matrix(_fakeToneMatrix),
+          child: originalDetails,
+        );
+      }
+      return Center(
+        child: AspectRatio(
+          aspectRatio: 398 / 512,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              tintedBody,
+              ClipPath(
+                key: const ValueKey('mochi-detail-overlay'),
+                clipper: const _MochiDetailClipper(),
+                child: originalDetails,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final image = assetImage();
     if (usesOriginalAsset(definition, color) && !isFake) return image;
     return ColorFiltered(
       colorFilter: ColorFilter.matrix(
@@ -5110,6 +5176,40 @@ class BalloonSkinArtwork extends StatelessWidget {
       0,
     ];
   }
+}
+
+/// Preserves the supplied artwork's inner ears and facial details while the
+/// underlying body layer receives a hue-only color variant. Coordinates are
+/// normalized to the optimized 398x512 asset and never affect hit testing.
+class _MochiDetailClipper extends CustomClipper<Path> {
+  const _MochiDetailClipper();
+
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    void oval(double left, double top, double width, double height) {
+      path.addOval(Rect.fromLTWH(
+        size.width * left,
+        size.height * top,
+        size.width * width,
+        size.height * height,
+      ));
+    }
+
+    // Pink inner-ear inserts.
+    oval(0.14, 0.10, 0.23, 0.25);
+    oval(0.64, 0.10, 0.23, 0.25);
+    // Eyes, nose and blush remain identical to the reference artwork.
+    oval(0.31, 0.50, 0.14, 0.14);
+    oval(0.57, 0.50, 0.14, 0.14);
+    oval(0.44, 0.57, 0.13, 0.10);
+    oval(0.20, 0.56, 0.22, 0.12);
+    oval(0.60, 0.56, 0.22, 0.12);
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant _MochiDetailClipper oldClipper) => false;
 }
 
 const fakeBalloonSaturationFactor = 0.78;
