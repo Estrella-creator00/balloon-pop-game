@@ -133,7 +133,7 @@ enum StoreProductFilter { all, owned, unowned, limited }
 
 const storeProductsPerPage = 8;
 
-int storeProductPageCount(int productCount) =>
+int storeRarityPageCount(int productCount) =>
     max(1, (productCount + storeProductsPerPage - 1) ~/ storeProductsPerPage);
 
 class StoreProduct {
@@ -968,7 +968,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   MainTab _mainTab = MainTab.home;
   bool _storeNavigationVisible = true;
   StoreProductFilter _storeProductFilter = StoreProductFilter.all;
-  int _storeCatalogPage = 0;
   late final PageController _stagePageController;
   late final ValueNotifier<GameHeaderData> _headerData;
   late final Widget _gameHeader;
@@ -2959,7 +2958,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       setState(() {
         _mainTab = MainTab.store;
         _storeProductFilter = StoreProductFilter.all;
-        _storeCatalogPage = 0;
         _storeNavigationVisible = true;
       });
     }
@@ -3108,7 +3106,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                   selected: _storeProductFilter,
                   onSelected: (filter) => setState(() {
                     _storeProductFilter = filter;
-                    _storeCatalogPage = 0;
                     _storeNavigationVisible = true;
                   }),
                 ),
@@ -3200,13 +3197,87 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
     }
 
-    final pageCount = storeProductPageCount(products.length);
-    final placeholderRarity =
-        products.isEmpty ? BalloonRarity.common : products.last.rarity;
-    return Column(
+    final productsByRarity = <BalloonRarity, List<StoreProduct>>{
+      for (final rarity in BalloonRarity.values)
+        rarity: products
+            .where((product) => product.rarity == rarity)
+            .toList(growable: false),
+    };
+    return ListView(
       key: const ValueKey('store-product-grid'),
+      padding: EdgeInsets.fromLTRB(6, 6, 6, bottomPadding),
       children: [
-        Expanded(
+        for (final rarity in BalloonRarity.values) ...[
+          BalloonRaritySectionHeader(rarity: rarity),
+          _buildStoreRarityProducts(rarity, productsByRarity[rarity]!),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStoreRarityProducts(
+    BalloonRarity rarity,
+    List<StoreProduct> products,
+  ) {
+    if (products.isEmpty) {
+      return const SizedBox(
+        height: 48,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              '해당 상품이 없습니다.',
+              style: TextStyle(
+                color: Color(0xFF87949C),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget productGrid(List<StoreProduct> pageProducts, String keySuffix) =>
+        GridView.builder(
+          key: ValueKey('store-rarity-grid-${rarity.name}-$keySuffix'),
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            crossAxisSpacing: 6,
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.78,
+          ),
+          itemCount: pageProducts.length,
+          itemBuilder: (context, index) {
+            final product = pageProducts[index];
+            return StoreProductCard(
+              product: product,
+              onPressed: () => _showBalloonPreview(product),
+            );
+          },
+        );
+
+    if (products.length <= storeProductsPerPage) {
+      return productGrid(products, 'single');
+    }
+
+    final pageCount = storeRarityPageCount(products.length);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const horizontalSpacing = 6.0;
+        const verticalSpacing = 8.0;
+        const horizontalPadding = 4.0;
+        final cardWidth =
+            (constraints.maxWidth - horizontalPadding - horizontalSpacing * 3) /
+                4;
+        final pageHeight = cardWidth / 0.78 * 2 + verticalSpacing + 2;
+        return SizedBox(
+          height: pageHeight,
           child: ScrollConfiguration(
             behavior: const MaterialScrollBehavior().copyWith(
               dragDevices: const {
@@ -3217,68 +3288,21 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               },
             ),
             child: PageView.builder(
-              key: ValueKey('store-product-pages-${_storeProductFilter.name}'),
+              key: ValueKey('store-rarity-pages-${rarity.name}'),
               physics: const PageScrollPhysics(),
               itemCount: pageCount,
-              onPageChanged: (page) => setState(() {
-                _storeCatalogPage = page;
-                _storeNavigationVisible = true;
-              }),
-              itemBuilder: (context, pageIndex) => GridView.builder(
-                key: ValueKey('store-product-page-$pageIndex'),
-                padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  crossAxisSpacing: 6,
-                  mainAxisSpacing: 8,
-                  childAspectRatio: 0.78,
-                ),
-                itemCount: storeProductsPerPage,
-                itemBuilder: (context, slot) {
-                  final productIndex = pageIndex * storeProductsPerPage + slot;
-                  if (productIndex >= products.length) {
-                    return StoreComingSoonCard(
-                      rarity: placeholderRarity,
-                      slot: productIndex,
-                    );
-                  }
-                  final product = products[productIndex];
-                  return StoreProductCard(
-                    product: product,
-                    onPressed: () => _showBalloonPreview(product),
-                  );
-                },
-              ),
+              itemBuilder: (context, pageIndex) {
+                final start = pageIndex * storeProductsPerPage;
+                final end = min(start + storeProductsPerPage, products.length);
+                return productGrid(
+                  products.sublist(start, end),
+                  'page-$pageIndex',
+                );
+              },
             ),
           ),
-        ),
-        if (pageCount > 1)
-          SizedBox(
-            key: const ValueKey('store-page-indicator'),
-            height: 20,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var page = 0; page < pageCount; page++)
-                  AnimatedContainer(
-                    key: ValueKey('store-page-dot-$page'),
-                    duration: const Duration(milliseconds: 160),
-                    width: page == _storeCatalogPage ? 15 : 6,
-                    height: 6,
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    decoration: BoxDecoration(
-                      color: page == _storeCatalogPage
-                          ? const Color(0xFFFF5C8A)
-                          : const Color(0xFFB9C9D2),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        SizedBox(height: bottomPadding),
-      ],
+        );
+      },
     );
   }
 
@@ -5178,9 +5202,10 @@ class BalloonSkinArtwork extends StatelessWidget {
   }
 }
 
-/// Preserves the supplied artwork's inner ears and facial details while the
-/// underlying body layer receives a hue-only color variant. Coordinates are
-/// normalized to the optimized 398x512 asset and never affect hit testing.
+/// Preserves only the eyes and pink nose from the supplied artwork. The body,
+/// inner ears, and cheeks stay on the hue-shifted layer so they change as one
+/// color family, while source-white highlights remain white through the hue
+/// matrix. Coordinates never affect hit testing.
 class _MochiDetailClipper extends CustomClipper<Path> {
   const _MochiDetailClipper();
 
@@ -5196,15 +5221,18 @@ class _MochiDetailClipper extends CustomClipper<Path> {
       ));
     }
 
-    // Pink inner-ear inserts.
-    oval(0.14, 0.10, 0.23, 0.25);
-    oval(0.64, 0.10, 0.23, 0.25);
-    // Eyes, nose and blush remain identical to the reference artwork.
-    oval(0.31, 0.50, 0.14, 0.14);
-    oval(0.57, 0.50, 0.14, 0.14);
-    oval(0.44, 0.57, 0.13, 0.10);
-    oval(0.20, 0.56, 0.22, 0.12);
-    oval(0.60, 0.56, 0.22, 0.12);
+    // Dark eyes, including their white catchlights.
+    oval(0.33, 0.52, 0.08, 0.09);
+    oval(0.59, 0.52, 0.08, 0.09);
+    // Keep the original pink nose without restoring nearby cheek/body pixels.
+    path.addPolygon(
+      [
+        Offset(size.width * 0.47, size.height * 0.59),
+        Offset(size.width * 0.53, size.height * 0.59),
+        Offset(size.width * 0.50, size.height * 0.63),
+      ],
+      true,
+    );
     return path;
   }
 

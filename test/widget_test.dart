@@ -991,6 +991,20 @@ void main() {
           find.byKey(const ValueKey('mochi-detail-overlay')),
           findsOneWidget,
         );
+        final detailClip = tester
+            .widget<ClipPath>(
+              find.byKey(const ValueKey('mochi-detail-overlay')),
+            )
+            .clipper!
+            .getClip(const Size(398, 512));
+        expect(detailClip.contains(const Offset(100, 100)), isFalse,
+            reason: 'inner ears must follow the body color variant');
+        expect(detailClip.contains(const Offset(110, 305)), isFalse,
+            reason: 'cheeks must follow the body color variant');
+        expect(detailClip.contains(const Offset(148, 286)), isTrue,
+            reason: 'eyes must keep their original detail colors');
+        expect(detailClip.contains(const Offset(199, 307)), isTrue,
+            reason: 'the pink nose must keep its original color');
       }
     }
   });
@@ -2116,24 +2130,22 @@ void main() {
     expect(find.byKey(const ValueKey('store-filter-unowned')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-limited')), findsOneWidget);
     expect(find.byType(StoreProductCard), findsAtLeastNWidgets(4));
-    expect(storeProductPageCount(0), 1);
-    expect(storeProductPageCount(8), 1);
-    expect(storeProductPageCount(9), 2);
-    expect(storeProductPageCount(17), 3);
-    expect(storeProductPageCount(BalloonSkinCatalog.shopDefinitions.length), 2);
-    expect(
-        find.byKey(const ValueKey('store-product-pages-all')), findsOneWidget);
-    expect(find.byKey(const ValueKey('store-product-page-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('store-page-indicator')), findsOneWidget);
-    expect(find.byKey(const ValueKey('store-page-dot-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('store-page-dot-1')), findsOneWidget);
+    expect(storeRarityPageCount(0), 1);
+    expect(storeRarityPageCount(8), 1);
+    expect(storeRarityPageCount(9), 2);
+    expect(storeRarityPageCount(17), 3);
+    expect(find.byKey(const ValueKey('store-rarity-header-common')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('store-rarity-grid-common-single')),
+        findsOneWidget);
+    expect(find.byType(PageView), findsNothing);
     final firstGrid = tester.widget<GridView>(
-      find.byKey(const ValueKey('store-product-page-0')),
+      find.byKey(const ValueKey('store-rarity-grid-common-single')),
     );
     final firstDelegate =
         firstGrid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
     expect(firstDelegate.crossAxisCount, 4);
-    expect(firstGrid.childrenDelegate.estimatedChildCount, 8);
+    expect(firstGrid.childrenDelegate.estimatedChildCount, 4);
 
     expect(
       tester
@@ -2151,6 +2163,35 @@ void main() {
           .onTap,
       isNotNull,
     );
+    final cardRects = [
+      'balloon-default',
+      'balloon-heart',
+      'balloon-star',
+      'balloon-flower',
+    ]
+        .map((id) => tester.getRect(find.byKey(ValueKey('store-product-$id'))))
+        .toList();
+    expect(cardRects[0].top, cardRects[1].top);
+    expect(cardRects[1].top, cardRects[2].top);
+    expect(cardRects[2].top, cardRects[3].top);
+    expect(cardRects[0].left, lessThan(cardRects[1].left));
+    expect(cardRects[1].left, lessThan(cardRects[2].left));
+    expect(cardRects[2].left, lessThan(cardRects[3].left));
+
+    final storeScrollable = find
+        .descendant(
+          of: find.byKey(const ValueKey('store-product-grid')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('store-rarity-header-rare')),
+      180,
+      scrollable: storeScrollable,
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('store-rarity-grid-rare-single')),
+        findsOneWidget);
     expect(
       tester
           .widget<InkWell>(
@@ -2159,42 +2200,22 @@ void main() {
           .onTap,
       isNotNull,
     );
-
-    final cardRects = [
-      'balloon-default',
-      'balloon-heart',
-      'balloon-star',
-    ]
-        .map((id) => tester.getRect(find.byKey(ValueKey('store-product-$id'))))
-        .toList();
-    expect(cardRects[0].top, cardRects[1].top);
-    expect(cardRects[1].top, cardRects[2].top);
-    expect(cardRects[0].left, lessThan(cardRects[1].left));
-    expect(cardRects[1].left, lessThan(cardRects[2].left));
-    final rabbitRect = tester.getRect(
-      find.byKey(const ValueKey('store-product-balloon-rabbit')),
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('store-rarity-header-heroic')),
+      180,
+      scrollable: storeScrollable,
     );
-    expect(rabbitRect.top, greaterThan(cardRects[0].bottom));
-
-    await tester.drag(
-      find.byKey(const ValueKey('store-product-pages-all')),
-      const Offset(-500, 0),
+    await tester.pump();
+    expect(find.byKey(const ValueKey('store-rarity-grid-heroic-single')),
+        findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('store-rarity-header-legendary')),
+      180,
+      scrollable: storeScrollable,
     );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('store-product-page-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('store-product-balloon-jello')),
+    await tester.pump();
+    expect(find.byKey(const ValueKey('store-rarity-grid-legendary-single')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('store-product-balloon-lumen')),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('store-product-balloon-chouchou')),
-        findsOneWidget);
-    expect(find.byType(StoreComingSoonCard), findsNWidgets(5));
-
-    await tester.drag(
-      find.byKey(const ValueKey('store-product-pages-all')),
-      const Offset(500, 0),
-    );
-    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('store-filter-owned')));
     await tester.pump();
@@ -2215,7 +2236,6 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('store-filter-limited')));
     await tester.pump();
     expect(find.byType(StoreProductCard), findsNothing);
-    expect(find.byType(StoreComingSoonCard), findsNWidgets(8));
 
     await tester.tap(find.byKey(const ValueKey('store-filter-all')));
     await tester.pump();
