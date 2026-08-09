@@ -208,6 +208,9 @@ class Balloon {
     required this.maxHp,
     this.skinId = 'balloon-default',
     this.isFake = false,
+    this.visualVariant = 0,
+    this.specialVisual = false,
+    this.impactVisual = 0,
   });
 
   final int id;
@@ -221,6 +224,9 @@ class Balloon {
   final int maxHp;
   final String skinId;
   final bool isFake;
+  final int visualVariant;
+  final bool specialVisual;
+  double impactVisual;
 }
 
 class BossBalloon {
@@ -235,6 +241,10 @@ class BossBalloon {
     this.isFake = false,
     this.turnIntervalOffset = 0,
     double initialTurnCooldown = 0.65,
+    this.visualVariant = 0,
+    this.specialVisual = false,
+    this.visualPhase = 0,
+    this.impactVisual = 0,
   }) : turnCooldown = initialTurnCooldown;
 
   final int id;
@@ -248,6 +258,10 @@ class BossBalloon {
   late int hp = maxHp;
   final double turnIntervalOffset;
   double turnCooldown;
+  final int visualVariant;
+  final bool specialVisual;
+  double visualPhase;
+  double impactVisual;
 }
 
 const stage30BossSwapChance = 0.50;
@@ -427,7 +441,7 @@ int homeStagePageForProgress(
   return page.clamp(0, pageCount - 1).toInt();
 }
 
-enum EffectPieceShape { shard, heart }
+enum EffectPieceShape { shard, heart, mist, gel, pickaxe, fork }
 
 class PopPiece {
   PopPiece({
@@ -548,6 +562,86 @@ void addBalloonPopEffect({
         sourceSize: sourceSize,
         big: big,
       );
+    case BalloonPopEffectType.mist:
+      addThemedPieces(
+        pieces: pieces,
+        random: random,
+        center: center,
+        color: color.withValues(alpha: 0.72),
+        big: big,
+        shape: EffectPieceShape.mist,
+      );
+    case BalloonPopEffectType.gel:
+      addThemedPieces(
+        pieces: pieces,
+        random: random,
+        center: center,
+        color: color,
+        big: big,
+        shape: EffectPieceShape.gel,
+      );
+    case BalloonPopEffectType.crystal:
+      addThemedPieces(
+        pieces: pieces,
+        random: random,
+        center: center,
+        color: color,
+        big: big,
+        shape: EffectPieceShape.shard,
+        tool: EffectPieceShape.pickaxe,
+      );
+    case BalloonPopEffectType.cream:
+      addThemedPieces(
+        pieces: pieces,
+        random: random,
+        center: center,
+        color: const Color(0xFFFFE47A),
+        big: big,
+        shape: EffectPieceShape.gel,
+        tool: EffectPieceShape.fork,
+      );
+  }
+}
+
+void addThemedPieces({
+  required List<PopPiece> pieces,
+  required Random random,
+  required Offset center,
+  required Color color,
+  required bool big,
+  required EffectPieceShape shape,
+  EffectPieceShape? tool,
+}) {
+  final count = big ? 18 : 7;
+  for (var i = 0; i < count; i++) {
+    final angle = pi * 2 * i / count + (random.nextDouble() - 0.5) * 0.45;
+    final speed = (big ? 230 : 120) + random.nextDouble() * (big ? 180 : 95);
+    pieces.add(PopPiece(
+      position: center,
+      velocity: Offset(cos(angle) * speed, sin(angle) * speed - 55),
+      color: color,
+      size: (big ? 12 : 8) + random.nextDouble() * (big ? 13 : 7),
+      rotation: random.nextDouble() * pi,
+      spin: (random.nextDouble() - 0.5) * 9,
+      life: big ? 1.15 : 0.72,
+      maxLife: big ? 1.15 : 0.72,
+      shape: shape,
+    ));
+  }
+  if (tool != null) {
+    pieces.add(PopPiece(
+      position: center - const Offset(44, 20),
+      velocity: const Offset(145, 25),
+      color: tool == EffectPieceShape.pickaxe
+          ? const Color(0xFF785548)
+          : const Color(0xFFB0BEC5),
+      size: big ? 29 : 22,
+      rotation: -0.7,
+      spin: 4.5,
+      life: 0.28,
+      maxLife: 0.28,
+      shape: tool,
+    ));
   }
 }
 
@@ -648,6 +742,18 @@ void playBalloonPopSound(
       boss ? PopSound.playBossExplosion() : PopSound.play();
     case BalloonPopSoundType.heart:
       PopSound.playHeart();
+      if (boss) PopSound.playBossExplosion();
+    case BalloonPopSoundType.ghost:
+      PopSound.playGhost();
+      if (boss) PopSound.playBossExplosion();
+    case BalloonPopSoundType.crackle:
+      PopSound.playCrackle();
+      if (boss) PopSound.playBossExplosion();
+    case BalloonPopSoundType.crystal:
+      PopSound.playCrystal();
+      if (boss) PopSound.playBossExplosion();
+    case BalloonPopSoundType.cream:
+      PopSound.playCream();
       if (boss) PopSound.playBossExplosion();
   }
 }
@@ -1126,6 +1232,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           maxHp: requiredHits,
           skinId: skin.id,
           isFake: isFake,
+          visualVariant: skin.chooseVisualVariant(_random.nextDouble()),
+          specialVisual: skin.chooseSpecialSpawn(_random.nextDouble()),
         ),
       );
     }
@@ -1200,6 +1308,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           initialTurnCooldown: _stage == 30
               ? 0.52 + id * 0.17 + _random.nextDouble() * 0.08
               : 0.65,
+          visualVariant: skin.chooseVisualVariant(_random.nextDouble()),
+          specialVisual: skin.chooseSpecialSpawn(_random.nextDouble()),
+          visualPhase: _random.nextDouble() * pi * 2,
         ),
       );
     }
@@ -1276,10 +1387,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (_phase != GamePhase.playing || _playArea == Size.zero) return;
 
     for (final balloon in _balloons) {
+      balloon.impactVisual = max(0, balloon.impactVisual - dt * 6);
       balloon.floatPhase += dt * 2.4;
       final drift = Offset(0, sin(balloon.floatPhase) * balloon.floatPower);
       final next = balloon.position + (balloon.velocity * dt) + (drift * dt);
       balloon.position = _bounce(next, balloon.velocity, balloon.size, (v) {
+        if (v != balloon.velocity) balloon.impactVisual = 1;
         balloon.velocity = v;
       });
     }
@@ -1289,6 +1402,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (_phase != GamePhase.playing) return;
 
     for (final boss in _bosses) {
+      boss.visualPhase += dt * 2.2;
+      boss.impactVisual = max(0, boss.impactVisual - dt * 6);
       boss.turnCooldown -= dt;
       if (boss.turnCooldown <= 0) {
         final speed = boss.velocity.distance;
@@ -1302,6 +1417,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       }
       final next = nextBossPosition(boss, dt);
       boss.position = _bounce(next, boss.velocity, boss.size, (velocity) {
+        if (velocity != boss.velocity) boss.impactVisual = 1;
         boss.velocity = velocity;
       });
     }
@@ -2854,6 +2970,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   bool _onStoreScrollNotification(ScrollNotification notification) {
     if (_mainTab != MainTab.store) return false;
+    if (notification.metrics.axis != Axis.vertical) return false;
     if (notification.metrics.pixels <= notification.metrics.minScrollExtent) {
       _setStoreNavigationVisible(true);
       return false;
@@ -3087,28 +3204,51 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       children: [
         for (final rarity in BalloonRarity.values) ...[
           BalloonRaritySectionHeader(rarity: rarity),
-          GridView.builder(
-            key: ValueKey('store-rarity-grid-${rarity.name}'),
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              crossAxisSpacing: 6,
-              mainAxisSpacing: 8,
-              childAspectRatio: 0.78,
-            ),
-            itemCount: 8,
-            itemBuilder: (context, index) {
-              final rarityProducts = productsByRarity[rarity]!;
-              if (index < rarityProducts.length) {
-                final product = rarityProducts[index];
-                return StoreProductCard(
-                  product: product,
-                  onPressed: () => _showBalloonPreview(product),
-                );
-              }
-              return StoreComingSoonCard(rarity: rarity, slot: index);
-            },
+          SizedBox(
+            height: 150,
+            child: productsByRarity[rarity]!.isEmpty
+                ? const Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                        '해당 상품이 없습니다.',
+                        style: TextStyle(
+                          color: Color(0xFF87949C),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  )
+                : ScrollConfiguration(
+                    behavior: const MaterialScrollBehavior().copyWith(
+                      dragDevices: const {
+                        ui.PointerDeviceKind.touch,
+                        ui.PointerDeviceKind.mouse,
+                        ui.PointerDeviceKind.trackpad,
+                        ui.PointerDeviceKind.stylus,
+                      },
+                    ),
+                    child: ListView.separated(
+                      key: ValueKey('store-rarity-list-${rarity.name}'),
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(2, 0, 14, 2),
+                      itemCount: productsByRarity[rarity]!.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final product = productsByRarity[rarity]![index];
+                        return SizedBox(
+                          width: 108,
+                          child: StoreProductCard(
+                            product: product,
+                            onPressed: () => _showBalloonPreview(product),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
           ),
           const SizedBox(height: 12),
         ],
@@ -3378,6 +3518,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               definition: skin,
               color: _balloonColor(balloon, skin),
               isFake: balloon.isFake,
+              visualVariant: balloon.visualVariant,
+              specialVisual: balloon.specialVisual,
+              animationPhase: balloon.floatPhase,
+              collisionImpact: balloon.impactVisual,
             ),
           ),
         ),
@@ -3408,6 +3552,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               maxHp: _currentBossMaxHp(boss),
               isFake: boss.isFake,
               showBossHealthBar: !boss.isFake,
+              visualVariant: boss.visualVariant,
+              specialVisual: boss.specialVisual,
+              animationPhase: boss.visualPhase,
+              collisionImpact: boss.impactVisual,
             ),
           ),
         ),
@@ -3938,7 +4086,7 @@ class BalloonPreviewDialog extends StatefulWidget {
 }
 
 class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _previewSize = Size(250, 220);
   static const _balloonSize = Size(150, 176);
   static const _visibleDuration = Duration(milliseconds: 1000);
@@ -3948,20 +4096,30 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
   final List<PopPiece> _pieces = [];
   final List<BurstRing> _rings = [];
   late final AnimationController _effectController;
+  late final AnimationController _idleController;
   Timer? _cycleTimer;
   Duration _lastEffectElapsed = Duration.zero;
   late Color _color;
   bool _balloonVisible = true;
   int _effectsRevision = 0;
+  late int _visualVariant;
+  late bool _specialVisual;
 
   @override
   void initState() {
     super.initState();
     _color = widget.definition.previewColor;
+    _visualVariant =
+        widget.definition.chooseVisualVariant(_random.nextDouble());
+    _specialVisual = widget.definition.chooseSpecialSpawn(_random.nextDouble());
     _effectController =
         AnimationController(vsync: this, duration: _effectDuration)
           ..addListener(_advanceEffects)
           ..addStatusListener(_onEffectStatus);
+    _idleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
     _schedulePop();
   }
 
@@ -4013,6 +4171,10 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     setState(() {
       _effectsRevision++;
       _color = _nextPaletteColor();
+      _visualVariant =
+          widget.definition.chooseVisualVariant(_random.nextDouble());
+      _specialVisual =
+          widget.definition.chooseSpecialSpawn(_random.nextDouble());
       _balloonVisible = true;
     });
     _schedulePop();
@@ -4041,6 +4203,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
       ..removeListener(_advanceEffects)
       ..removeStatusListener(_onEffectStatus)
       ..dispose();
+    _idleController.dispose();
     _pieces.clear();
     _rings.clear();
     super.dispose();
@@ -4101,6 +4264,34 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                       fontWeight: FontWeight.w900,
                     ),
                   ),
+                  if (widget.definition.showsDescription) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      widget.definition.description!,
+                      key: const ValueKey('balloon-preview-description'),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF526B79),
+                        fontSize: 12,
+                        height: 1.25,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 3),
+                  Text(
+                    widget.definition.price == 0
+                        ? '기본 보유'
+                        : '${widget.definition.price} coin',
+                    key: const ValueKey('balloon-preview-price'),
+                    style: const TextStyle(
+                      color: Color(0xFFD99000),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   SizedBox(
                     width: _previewSize.width,
@@ -4126,9 +4317,16 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                             width: _balloonSize.width,
                             height: _balloonSize.height,
                             child: RepaintBoundary(
-                              child: BalloonSkinRenderer(
-                                definition: widget.definition,
-                                color: _color,
+                              child: AnimatedBuilder(
+                                animation: _idleController,
+                                builder: (context, _) => BalloonSkinRenderer(
+                                  definition: widget.definition,
+                                  color: _color,
+                                  visualVariant: _visualVariant,
+                                  specialVisual: _specialVisual,
+                                  animationPhase:
+                                      _idleController.value * pi * 2,
+                                ),
                               ),
                             ),
                           ),
@@ -4645,6 +4843,10 @@ class BalloonSkinRenderer extends StatelessWidget {
     this.maxHp = 1,
     this.isFake = false,
     this.showBossHealthBar = true,
+    this.visualVariant = 0,
+    this.specialVisual = false,
+    this.animationPhase = 0,
+    this.collisionImpact = 0,
   });
 
   final BalloonSkinDefinition definition;
@@ -4654,6 +4856,10 @@ class BalloonSkinRenderer extends StatelessWidget {
   final int maxHp;
   final bool isFake;
   final bool showBossHealthBar;
+  final int visualVariant;
+  final bool specialVisual;
+  final double animationPhase;
+  final double collisionImpact;
 
   @override
   Widget build(BuildContext context) {
@@ -4672,7 +4878,7 @@ class BalloonSkinRenderer extends StatelessWidget {
       );
     } else {
       final displayColor = isFake ? fakeBalloonColor(color) : color;
-      final skinVisual = switch (definition.rendererType) {
+      Widget skinVisual = switch (definition.rendererType) {
         BalloonRendererType.image => BalloonSkinArtwork(
             definition: definition,
             color: color,
@@ -4684,16 +4890,87 @@ class BalloonSkinRenderer extends StatelessWidget {
               color: displayColor,
             ),
           ),
+        BalloonRendererType.flower => CustomPaint(
+            painter: ShapedBalloonPainter(
+              shape: BalloonShape.flower,
+              color: displayColor,
+            ),
+          ),
         BalloonRendererType.rabbit => CustomPaint(
             painter: ShapedBalloonPainter(
               shape: BalloonShape.rabbit,
               color: displayColor,
             ),
           ),
+        BalloonRendererType.watermelon => CustomPaint(
+            painter: ShapedBalloonPainter(
+              shape: BalloonShape.watermelon,
+              color: displayColor,
+              variant: visualVariant,
+            ),
+          ),
+        BalloonRendererType.soccer => CustomPaint(
+            painter: ShapedBalloonPainter(
+              shape: BalloonShape.soccer,
+              color: displayColor,
+            ),
+          ),
+        BalloonRendererType.ghost => CustomPaint(
+            painter: ShapedBalloonPainter(
+              shape: BalloonShape.ghost,
+              color: displayColor,
+              phase: animationPhase,
+            ),
+          ),
+        BalloonRendererType.slime => CustomPaint(
+            painter: ShapedBalloonPainter(
+              shape: BalloonShape.slime,
+              color: displayColor,
+              phase: animationPhase,
+            ),
+          ),
+        BalloonRendererType.crystal => CustomPaint(
+            painter: ShapedBalloonPainter(
+              shape: BalloonShape.crystal,
+              color: displayColor,
+              phase: animationPhase,
+              damageProgress: isBoss && maxHp > 0 ? 1 - hp / maxHp : 0,
+            ),
+          ),
+        BalloonRendererType.creamPuff => CustomPaint(
+            painter: ShapedBalloonPainter(
+              shape: BalloonShape.creamPuff,
+              color: displayColor,
+              phase: animationPhase,
+              damageProgress: isBoss && maxHp > 0 ? 1 - hp / maxHp : 0,
+            ),
+          ),
         BalloonRendererType.painted => throw StateError(
             'Painted balloons are handled by the common painted branch.',
           ),
       };
+      final shouldSpin =
+          definition.idleAnimation == BalloonIdleAnimationType.spin &&
+              specialVisual;
+      if (shouldSpin) {
+        skinVisual = Transform.rotate(angle: animationPhase, child: skinVisual);
+      } else if (definition.idleAnimation ==
+          BalloonIdleAnimationType.slimeSquish) {
+        final squash = sin(animationPhase) * 0.045 + collisionImpact * 0.10;
+        skinVisual = Transform.scale(
+          scaleX: 1 + squash,
+          scaleY: 1 - squash,
+          child: skinVisual,
+        );
+      } else if (definition.idleAnimation == BalloonIdleAnimationType.breathe) {
+        skinVisual = Transform.scale(
+          scale: 1 + sin(animationPhase) * 0.018,
+          child: skinVisual,
+        );
+      }
+      if (definition.rendererType == BalloonRendererType.ghost) {
+        skinVisual = Opacity(opacity: 0.86, child: skinVisual);
+      }
       visual = !isBoss
           ? skinVisual
           : Stack(
@@ -4924,22 +5201,49 @@ double bossHealthFraction(int hp, int maxHp) {
   return (hp / maxHp).clamp(0.0, 1.0);
 }
 
-enum BalloonShape { star, rabbit }
+enum BalloonShape {
+  star,
+  flower,
+  rabbit,
+  watermelon,
+  soccer,
+  ghost,
+  slime,
+  crystal,
+  creamPuff,
+}
 
 /// Lightweight vector artwork shared by shop, preview, gameplay, Boss, and
 /// Fake rendering. Gameplay bounds and hit testing stay outside this painter.
 class ShapedBalloonPainter extends CustomPainter {
-  const ShapedBalloonPainter({required this.shape, required this.color});
+  const ShapedBalloonPainter({
+    required this.shape,
+    required this.color,
+    this.variant = 0,
+    this.phase = 0,
+    this.damageProgress = 0,
+  });
 
   final BalloonShape shape;
   final Color color;
+  final int variant;
+  final double phase;
+  final double damageProgress;
 
   @override
   void paint(Canvas canvas, Size size) {
     final bodyBottom = size.height * 0.86;
     final bodyPath = switch (shape) {
       BalloonShape.star => _starPath(size.width, bodyBottom),
+      BalloonShape.flower => _flowerPath(size.width, bodyBottom),
       BalloonShape.rabbit => _rabbitPath(size.width, bodyBottom),
+      BalloonShape.watermelon =>
+        _watermelonPath(size.width, bodyBottom, variant),
+      BalloonShape.soccer => _soccerPath(size.width, bodyBottom),
+      BalloonShape.ghost => _ghostPath(size.width, bodyBottom, phase),
+      BalloonShape.slime => _slimePath(size.width, bodyBottom),
+      BalloonShape.crystal => _crystalPath(size.width, bodyBottom),
+      BalloonShape.creamPuff => _creamPuffPath(size.width, bodyBottom),
     };
     final bodyBounds = bodyPath.getBounds();
 
@@ -4973,16 +5277,29 @@ class ShapedBalloonPainter extends CustomPainter {
         ..strokeWidth = max(1.2, size.width * 0.018),
     );
 
-    if (shape == BalloonShape.star) {
-      final neck = Path()
-        ..moveTo(size.width * 0.46, bodyBottom * 0.70)
-        ..lineTo(size.width * 0.54, bodyBottom * 0.70)
-        ..lineTo(size.width * 0.53, bodyBottom * 0.87)
-        ..lineTo(size.width * 0.47, bodyBottom * 0.87)
-        ..close();
-      canvas.drawPath(neck, Paint()..color = color);
-    } else {
-      _paintRabbitDetails(canvas, size, bodyBottom);
+    // Details and highlights are clipped to the silhouette. This fixes the
+    // previous star/rabbit white highlights protruding beyond their outlines.
+    canvas.save();
+    canvas.clipPath(bodyPath);
+    switch (shape) {
+      case BalloonShape.rabbit:
+        _paintRabbitDetails(canvas, size, bodyBottom);
+      case BalloonShape.flower:
+        _paintFlowerDetails(canvas, size, bodyBottom);
+      case BalloonShape.watermelon:
+        _paintWatermelonDetails(canvas, size, bodyBottom, variant);
+      case BalloonShape.soccer:
+        _paintSoccerDetails(canvas, size, bodyBottom);
+      case BalloonShape.ghost:
+        _paintFace(canvas, size, bodyBottom, mouth: false);
+      case BalloonShape.slime:
+        _paintFace(canvas, size, bodyBottom, mouth: true);
+      case BalloonShape.crystal:
+        _paintCrystalFacets(canvas, size, bodyBottom);
+      case BalloonShape.creamPuff:
+        _paintCreamDetails(canvas, size, bodyBottom);
+      case BalloonShape.star:
+        break;
     }
 
     final shine = Paint()..color = Colors.white.withValues(alpha: 0.72);
@@ -5000,6 +5317,7 @@ class ShapedBalloonPainter extends CustomPainter {
       size.width * 0.025,
       Paint()..color = Colors.white.withValues(alpha: 0.94),
     );
+    canvas.restore();
 
     final knotTop = bodyBottom * 0.84;
     final knot = Path()
@@ -5030,19 +5348,120 @@ class ShapedBalloonPainter extends CustomPainter {
     final center = Offset(width / 2, height * 0.43);
     final outerRadius = min(width * 0.46, height * 0.45);
     final innerRadius = outerRadius * 0.47;
-    final path = Path();
+    final points = <Offset>[];
     for (var index = 0; index < 10; index++) {
       final radius = index.isEven ? outerRadius : innerRadius;
       final angle = -pi / 2 + index * pi / 5;
       final point = center + Offset(cos(angle), sin(angle)) * radius;
-      if (index == 0) {
-        path.moveTo(point.dx, point.dy);
-      } else {
-        path.lineTo(point.dx, point.dy);
-      }
+      points.add(point);
+    }
+    final path = Path();
+    final firstMidpoint = Offset.lerp(points.last, points.first, 0.5)!;
+    path.moveTo(firstMidpoint.dx, firstMidpoint.dy);
+    for (var index = 0; index < points.length; index++) {
+      final point = points[index];
+      final next = points[(index + 1) % points.length];
+      final midpoint = Offset.lerp(point, next, 0.5)!;
+      path.quadraticBezierTo(point.dx, point.dy, midpoint.dx, midpoint.dy);
     }
     return path..close();
   }
+
+  Path _flowerPath(double width, double height) {
+    final path = Path();
+    final center = Offset(width * 0.5, height * 0.45);
+    final petalRadius = width * 0.19;
+    for (var i = 0; i < 5; i++) {
+      final angle = -pi / 2 + i * pi * 2 / 5;
+      final petal = center + Offset(cos(angle), sin(angle)) * width * 0.25;
+      path.addOval(Rect.fromCircle(center: petal, radius: petalRadius));
+    }
+    path.addOval(Rect.fromCircle(center: center, radius: width * 0.22));
+    return path;
+  }
+
+  Path _watermelonPath(double width, double height, int variant) {
+    switch (variant % 3) {
+      case 0:
+        return Path()
+          ..moveTo(width * 0.12, height * 0.42)
+          ..quadraticBezierTo(
+              width * 0.5, height * 0.90, width * 0.88, height * 0.42)
+          ..quadraticBezierTo(
+              width * 0.5, height * 0.18, width * 0.12, height * 0.42)
+          ..close();
+      case 1:
+        return Path()
+          ..moveTo(width * 0.50, height * 0.10)
+          ..quadraticBezierTo(
+              width * 0.54, height * 0.10, width * 0.88, height * 0.75)
+          ..quadraticBezierTo(
+              width * 0.50, height * 0.91, width * 0.12, height * 0.75)
+          ..quadraticBezierTo(
+              width * 0.46, height * 0.10, width * 0.50, height * 0.10)
+          ..close();
+      default:
+        return Path()
+          ..addOval(Rect.fromLTWH(
+              width * 0.10, height * 0.08, width * 0.80, height * 0.78));
+    }
+  }
+
+  Path _soccerPath(double width, double height) => Path()
+    ..addOval(Rect.fromLTWH(
+        width * 0.08, height * 0.05, width * 0.84, height * 0.82));
+
+  Path _ghostPath(double width, double height, double phase) {
+    final wave = sin(phase) * width * 0.018;
+    return Path()
+      ..moveTo(width * 0.14, height * 0.78)
+      ..lineTo(width * 0.14, height * 0.40)
+      ..cubicTo(width * 0.14, height * 0.12, width * 0.32, height * 0.02,
+          width * 0.50, height * 0.02)
+      ..cubicTo(width * 0.72, height * 0.02, width * 0.86, height * 0.19,
+          width * 0.86, height * 0.42)
+      ..lineTo(width * 0.86, height * 0.79)
+      ..quadraticBezierTo(
+          width * 0.75, height * 0.68 + wave, width * 0.65, height * 0.82)
+      ..quadraticBezierTo(
+          width * 0.53, height * 0.69 - wave, width * 0.43, height * 0.82)
+      ..quadraticBezierTo(
+          width * 0.31, height * 0.69 + wave, width * 0.14, height * 0.78)
+      ..close();
+  }
+
+  Path _slimePath(double width, double height) => Path()
+    ..moveTo(width * 0.11, height * 0.78)
+    ..cubicTo(width * 0.13, height * 0.48, width * 0.24, height * 0.12,
+        width * 0.50, height * 0.08)
+    ..cubicTo(width * 0.76, height * 0.12, width * 0.87, height * 0.48,
+        width * 0.89, height * 0.78)
+    ..quadraticBezierTo(
+        width * 0.50, height * 0.91, width * 0.11, height * 0.78)
+    ..close();
+
+  Path _crystalPath(double width, double height) => Path()
+    ..moveTo(width * 0.50, height * 0.02)
+    ..lineTo(width * 0.82, height * 0.25)
+    ..lineTo(width * 0.72, height * 0.76)
+    ..lineTo(width * 0.50, height * 0.91)
+    ..lineTo(width * 0.24, height * 0.73)
+    ..lineTo(width * 0.16, height * 0.27)
+    ..close();
+
+  Path _creamPuffPath(double width, double height) => Path()
+    ..moveTo(width * 0.12, height * 0.63)
+    ..cubicTo(width * 0.08, height * 0.43, width * 0.20, height * 0.28,
+        width * 0.34, height * 0.30)
+    ..cubicTo(width * 0.36, height * 0.12, width * 0.58, height * 0.07,
+        width * 0.65, height * 0.27)
+    ..cubicTo(width * 0.82, height * 0.22, width * 0.94, height * 0.43,
+        width * 0.87, height * 0.61)
+    ..cubicTo(width * 0.93, height * 0.79, width * 0.69, height * 0.88,
+        width * 0.51, height * 0.83)
+    ..cubicTo(width * 0.31, height * 0.90, width * 0.06, height * 0.79,
+        width * 0.12, height * 0.63)
+    ..close();
 
   Path _rabbitPath(double width, double height) => Path()
     ..moveTo(width * 0.50, height * 0.86)
@@ -5120,6 +5539,205 @@ class ShapedBalloonPainter extends CustomPainter {
     )
     ..close();
 
+  void _paintFlowerDetails(Canvas canvas, Size size, double bodyBottom) {
+    final center = Offset(size.width * 0.5, bodyBottom * 0.45);
+    canvas.drawCircle(
+      center,
+      size.width * 0.17,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: [Color(0xFFFFF5A3), Color(0xFFFFC94D)],
+        ).createShader(
+            Rect.fromCircle(center: center, radius: size.width * 0.17)),
+    );
+  }
+
+  void _paintWatermelonDetails(
+    Canvas canvas,
+    Size size,
+    double bodyBottom,
+    int variant,
+  ) {
+    final green = Paint()
+      ..color = const Color(0xFF43A85B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = max(4, size.width * 0.08)
+      ..strokeCap = StrokeCap.round;
+    if (variant % 3 == 0) {
+      canvas.drawArc(
+        Rect.fromLTWH(size.width * 0.12, bodyBottom * 0.18, size.width * 0.76,
+            bodyBottom * 0.62),
+        0.18,
+        pi - 0.36,
+        false,
+        green,
+      );
+    } else if (variant % 3 == 1) {
+      canvas.drawLine(
+        Offset(size.width * 0.18, bodyBottom * 0.74),
+        Offset(size.width * 0.82, bodyBottom * 0.74),
+        green,
+      );
+    } else {
+      canvas.drawOval(
+        Rect.fromLTWH(size.width * 0.12, bodyBottom * 0.10, size.width * 0.76,
+            bodyBottom * 0.72),
+        green,
+      );
+    }
+    final seedPaint = Paint()..color = const Color(0xFF3C2529);
+    for (final point in const [
+      Offset(0.38, 0.42),
+      Offset(0.58, 0.39),
+      Offset(0.48, 0.58),
+    ]) {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(size.width * point.dx, bodyBottom * point.dy),
+          width: size.width * 0.04,
+          height: size.width * 0.075,
+        ),
+        seedPaint,
+      );
+    }
+  }
+
+  void _paintSoccerDetails(Canvas canvas, Size size, double bodyBottom) {
+    final center = Offset(size.width * 0.5, bodyBottom * 0.43);
+    final radius = size.width * 0.13;
+    final black = Paint()..color = const Color(0xFF263238);
+    Path pentagon(Offset c, double r) {
+      final path = Path();
+      for (var i = 0; i < 5; i++) {
+        final angle = -pi / 2 + i * pi * 2 / 5;
+        final point = c + Offset(cos(angle), sin(angle)) * r;
+        i == 0
+            ? path.moveTo(point.dx, point.dy)
+            : path.lineTo(point.dx, point.dy);
+      }
+      return path..close();
+    }
+
+    canvas.drawPath(pentagon(center, radius), black);
+    for (var i = 0; i < 5; i++) {
+      final angle = -pi / 2 + i * pi * 2 / 5;
+      final edge = center + Offset(cos(angle), sin(angle)) * size.width * 0.33;
+      canvas.drawPath(pentagon(edge, radius * 0.62), black);
+      canvas.drawLine(
+        center + Offset(cos(angle), sin(angle)) * radius,
+        edge - Offset(cos(angle), sin(angle)) * radius * 0.55,
+        Paint()
+          ..color = const Color(0xFF455A64)
+          ..strokeWidth = max(1.2, size.width * 0.018),
+      );
+    }
+  }
+
+  void _paintFace(Canvas canvas, Size size, double bodyBottom,
+      {required bool mouth}) {
+    final face = Paint()..color = const Color(0xFF4C4358);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.39, bodyBottom * 0.43),
+        width: size.width * 0.045,
+        height: size.width * 0.075,
+      ),
+      face,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.61, bodyBottom * 0.43),
+        width: size.width * 0.045,
+        height: size.width * 0.075,
+      ),
+      face,
+    );
+    if (mouth) {
+      canvas.drawArc(
+        Rect.fromCenter(
+          center: Offset(size.width * 0.5, bodyBottom * 0.54),
+          width: size.width * 0.15,
+          height: size.width * 0.09,
+        ),
+        0.15,
+        pi - 0.3,
+        false,
+        Paint()
+          ..color = const Color(0xFF4C4358)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = max(1.4, size.width * 0.018),
+      );
+    }
+  }
+
+  void _paintCrystalFacets(Canvas canvas, Size size, double bodyBottom) {
+    final center = Offset(size.width * 0.5, bodyBottom * 0.46);
+    final line = Paint()
+      ..color = Colors.white.withValues(alpha: 0.38 + sin(phase).abs() * 0.14)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = max(1.2, size.width * 0.018);
+    canvas.drawLine(Offset(size.width * 0.5, bodyBottom * 0.03), center, line);
+    canvas.drawLine(Offset(size.width * 0.18, bodyBottom * 0.27), center, line);
+    canvas.drawLine(Offset(size.width * 0.73, bodyBottom * 0.75), center, line);
+    if (damageProgress > 0) {
+      final crack = Paint()
+        ..color = Colors.white.withValues(alpha: 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = max(1, size.width * 0.012);
+      final branches = (damageProgress * 5).ceil().clamp(1, 5);
+      for (var i = 0; i < branches; i++) {
+        final start = center + Offset((i - 2) * size.width * 0.018, i * 2);
+        canvas.drawLine(
+          start,
+          start +
+              Offset((i.isEven ? -1 : 1) * size.width * 0.12,
+                  bodyBottom * (0.10 + i * 0.025)),
+          crack,
+        );
+      }
+    }
+  }
+
+  void _paintCreamDetails(Canvas canvas, Size size, double bodyBottom) {
+    final cream = Paint()..color = const Color(0xFFFFF0A8);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.20, bodyBottom * 0.57, size.width * 0.60,
+            bodyBottom * 0.17),
+        Radius.circular(size.width * 0.08),
+      ),
+      cream,
+    );
+    final crease = Paint()
+      ..color = const Color(0xFF9C5B29).withValues(alpha: 0.38)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = max(1.2, size.width * 0.018);
+    for (final x in const [0.32, 0.5, 0.68]) {
+      canvas.drawArc(
+        Rect.fromCenter(
+          center: Offset(size.width * x, bodyBottom * 0.40),
+          width: size.width * 0.18,
+          height: bodyBottom * 0.24,
+        ),
+        0.4,
+        1.8,
+        false,
+        crease,
+      );
+    }
+    if (damageProgress > 0) {
+      final drops = (damageProgress * 4).ceil().clamp(1, 4);
+      for (var i = 0; i < drops; i++) {
+        canvas.drawCircle(
+          Offset(size.width * (0.34 + i * 0.11),
+              bodyBottom * (0.72 + (i.isEven ? 0.02 : 0.06))),
+          size.width * 0.025,
+          Paint()..color = const Color(0xFFFFE88F),
+        );
+      }
+    }
+  }
+
   void _paintRabbitDetails(Canvas canvas, Size size, double bodyBottom) {
     final innerEar = Paint()
       ..color = Color.lerp(color, Colors.white, 0.48)!.withValues(alpha: 0.65)
@@ -5158,7 +5776,13 @@ class ShapedBalloonPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant ShapedBalloonPainter oldDelegate) =>
-      oldDelegate.shape != shape || oldDelegate.color != color;
+      oldDelegate.shape != shape ||
+      oldDelegate.color != color ||
+      oldDelegate.variant != variant ||
+      ((shape == BalloonShape.ghost || shape == BalloonShape.crystal) &&
+          oldDelegate.phase != phase) ||
+      ((shape == BalloonShape.crystal || shape == BalloonShape.creamPuff) &&
+          oldDelegate.damageProgress != damageProgress);
 }
 
 class BalloonPainter extends CustomPainter {
@@ -5350,21 +5974,46 @@ class EffectsPainter extends CustomPainter {
       final opacity = (piece.life / piece.maxLife).clamp(0.0, 1.0);
       final pieceSize = Size(piece.size, piece.size * 1.3);
       final center = piece.position + pieceSize.center(Offset.zero);
-      final path = piece.shape == EffectPieceShape.heart
-          ? _heartPath(pieceSize)
-          : (Path()
-            ..moveTo(pieceSize.width * 0.50, 0)
-            ..lineTo(pieceSize.width, pieceSize.height * 0.32)
-            ..lineTo(pieceSize.width * 0.72, pieceSize.height)
-            ..lineTo(pieceSize.width * 0.22, pieceSize.height * 0.82)
-            ..lineTo(0, pieceSize.height * 0.24)
-            ..close());
+      final path = switch (piece.shape) {
+        EffectPieceShape.heart => _heartPath(pieceSize),
+        EffectPieceShape.mist || EffectPieceShape.gel => Path()
+          ..addOval(Offset.zero & pieceSize),
+        EffectPieceShape.pickaxe => Path()
+          ..addRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH(pieceSize.width * 0.42, 0, pieceSize.width * 0.16,
+                pieceSize.height),
+            const Radius.circular(2),
+          ))
+          ..addRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH(0, 0, pieceSize.width, pieceSize.height * 0.20),
+            const Radius.circular(3),
+          )),
+        EffectPieceShape.fork => Path()
+          ..addRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH(pieceSize.width * 0.42, pieceSize.height * 0.20,
+                pieceSize.width * 0.16, pieceSize.height * 0.80),
+            const Radius.circular(2),
+          ))
+          ..addRect(Rect.fromLTWH(
+              0, 0, pieceSize.width * 0.18, pieceSize.height * 0.42))
+          ..addRect(Rect.fromLTWH(pieceSize.width * 0.41, 0,
+              pieceSize.width * 0.18, pieceSize.height * 0.42))
+          ..addRect(Rect.fromLTWH(pieceSize.width * 0.82, 0,
+              pieceSize.width * 0.18, pieceSize.height * 0.42)),
+        EffectPieceShape.shard => Path()
+          ..moveTo(pieceSize.width * 0.50, 0)
+          ..lineTo(pieceSize.width, pieceSize.height * 0.32)
+          ..lineTo(pieceSize.width * 0.72, pieceSize.height)
+          ..lineTo(pieceSize.width * 0.22, pieceSize.height * 0.82)
+          ..lineTo(0, pieceSize.height * 0.24)
+          ..close(),
+      };
 
       canvas.save();
       canvas.translate(center.dx, center.dy);
       canvas.rotate(piece.rotation);
       canvas.translate(-pieceSize.width / 2, -pieceSize.height / 2);
-      fillPaint.color = piece.color.withValues(alpha: opacity);
+      fillPaint.color = piece.color.withValues(alpha: opacity * piece.color.a);
       highlightPaint.color = Colors.white.withValues(alpha: opacity * 0.28);
       canvas.drawPath(path, fillPaint);
       canvas.drawPath(path, highlightPaint);

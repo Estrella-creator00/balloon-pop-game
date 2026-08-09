@@ -192,5 +192,53 @@ abstract final class PopSound {
     }
   }
 
+  static void playGhost() => _playTone('sine', 330, 92, 0.22, 0.16);
+
+  static void playCrackle() {
+    _playTone('square', 880, 235, 0.085, 0.11);
+    _playTone('triangle', 1240, 390, 0.055, 0.065);
+  }
+
+  static void playCrystal() {
+    _playTone('triangle', 1380, 510, 0.15, 0.14);
+    _playTone('sine', 1760, 920, 0.19, 0.07);
+  }
+
+  static void playCream() {
+    _playTone('sine', 270, 115, 0.12, 0.16);
+    _playTone('triangle', 520, 310, 0.09, 0.07);
+  }
+
+  static void _playTone(
+    String type,
+    double startFrequency,
+    double endFrequency,
+    double duration,
+    double volume,
+  ) {
+    if (!enabled) return;
+    try {
+      final context = _context ??= _AudioContext();
+      context.resume();
+      final now = context.currentTime;
+      final oscillator = context.createOscillator();
+      final gain = context.createGain();
+      oscillator
+        ..type = type
+        ..frequency.setValueAtTime(startFrequency, now)
+        ..frequency.exponentialRampToValueAtTime(endFrequency, now + duration)
+        ..connect(gain);
+      gain
+        ..gain.setValueAtTime(volume, now)
+        ..gain.exponentialRampToValueAtTime(0.001, now + duration)
+        ..connect(context.destination);
+      oscillator
+        ..start(now)
+        ..stop(now + duration + 0.01);
+    } catch (_) {
+      // Unsupported audio must never alter gameplay.
+    }
+  }
+
   static void resetDebug() {}
 }

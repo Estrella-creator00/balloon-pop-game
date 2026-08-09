@@ -20,6 +20,8 @@ class DevCoinTapGate {
 
     _tapCount++;
     if (_tapCount < tempDevCoinRequiredTaps) return false;
+    // Deliberately reset instead of persisting a one-time claim flag. Each
+    // fresh 7-tap + password flow may grant another local test balance.
     reset();
     return true;
   }

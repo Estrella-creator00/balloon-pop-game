@@ -124,8 +124,9 @@ H-01 홈 → 상점 → S-02 풍선 상점
 
 - 기존 카테고리형 S-01 상점 메인 화면은 현재 사용자 흐름에서 사용하지 않는다.
 - 풍선 상점은 `일반`, `희귀`, `영웅`, `전설` 등급 섹션으로 구성한다. 내부 enum도 `heroic`을 사용하며 희귀도는 저장 키로 사용하지 않아 기존 구매·장착 ID에 영향이 없다.
-- 각 등급은 8칸이며 4열 그리드다.
-- 등록된 실제 상품을 먼저 표시하고 남는 칸은 클릭할 수 없는 `Coming Soon` 카드로 채운다.
+- 등급 제목 아래 상품만 독립적인 가로 `ListView`로 스크롤한다. 모바일 swipe와 Web mouse/trackpad drag를 지원하며 상점 전체 세로 스크롤과 축을 분리한다.
+- 상품 수는 하드코딩하지 않는다. `shopDefinitions`를 rarity별로 그룹화하므로 카탈로그에 상품을 추가하면 해당 등급 가로 목록에 자동으로 나타난다.
+- 카드 폭은 고정해 좁은 모바일에서 약 2~3개가 보이며, 상품 수가 늘어나도 카드가 축소되지 않는다.
 - 상단 필터는 `전체`, `보유`, `미보유`, `한정`이다.
 - 실제 상품 카드를 누르면 직접 구매하지 않고 공통 풍선 미리보기 팝업을 연다.
 
@@ -150,6 +151,7 @@ H-01 홈 → 상점 → S-02 풍선 상점
 
 - `id`
 - `displayName`
+- `description`
 - `price`
 - `rarity`
 - `rendererType`
@@ -157,6 +159,10 @@ H-01 홈 → 상점 → S-02 풍선 상점
 - `colorPalette`
 - `popEffectType`
 - `popSoundType`
+- `idleAnimation`
+- `specialBehavior`
+- `visualVariantCount`
+- `specialSpawnChance`
 - `isDefault`
 - `badge`
 - `supportsBossSkin`
@@ -187,7 +193,7 @@ H-01 홈 → 상점 → S-02 풍선 상점
 
 ## 6. 현재 풍선 상품
 
-현재 `BalloonSkinCatalog`에는 4개 정의가 있다.
+현재 `BalloonSkinCatalog`에는 출시 라인업 11개 정의가 있다.
 
 ### 기본 풍선 (`balloon-default`)
 
@@ -210,29 +216,52 @@ H-01 홈 → 상점 → S-02 풍선 상점
 - `NEW` 배지
 - 배경 `none`
 
-### 별 풍선 (`balloon-star`)
+### 별 (`balloon-star`)
 
-- 일반 등급, 가격 300코인
-- 단순한 5각 별 실루엣, 고무 광택, 작은 매듭과 끈을 `ShapedBalloonPainter`로 렌더링
+- 일반 등급, 가격 200코인
+- 둥글고 통통한 5각 별 실루엣이며 광택을 실루엣 내부로 clip한다.
 - 기본 파편 효과와 기본 팝 사운드 사용
 - 초기 미보유, 보스 스킨 지원
 - 배경 `none`
 
-### 토끼 풍선 (`balloon-rabbit`)
+### 꽃 (`balloon-flower`)
+
+- 일반 등급, 가격 200코인
+- 통통한 다섯 꽃잎과 둥근 꽃 중심을 벡터로 렌더링한다.
+- 기본 효과와 기본 사운드, 공통 색 variation을 사용한다.
+
+### 모찌 (`balloon-rabbit`)
 
 - 첫 희귀 등급 상품, 가격 500코인
-- 둥근 머리와 긴 귀가 이어진 고무풍선 실루엣, 작은 눈·코, 귀 안쪽과 광택을 `ShapedBalloonPainter`로 렌더링
+- 기존 구매·장착 데이터 보존을 위해 `balloon-rabbit` ID를 유지한다.
+- 둥근 머리와 긴 귀가 이어진 기존 토끼 실루엣을 유지하고 모든 하이라이트를 내부로 clip한다.
 - 밝은 핑크·라벤더 중심 팔레트, 기본 파편 효과와 기본 팝 사운드 사용
 - 초기 미보유, 보스 스킨 지원
 - 배경 `none`
 
-임시 상품 `balloon-a`, `balloon-b`는 카탈로그와 상점에서 제거했다. 영웅·전설 등급에는 아직 실제 상품이 없으며 남은 슬롯은 `Coming Soon`이다.
+### 와리 / 킥스
+
+- 와리(`balloon-wari`): 희귀, 600코인. 생성 시 반달·삼각 조각·둥근 단면 중 하나를 한 번 선택하며 수박 고유색을 유지한다.
+- 킥스(`balloon-kicks`): 희귀, 700코인. 축구공 고유색을 유지하고 생성 시 1%로 결정된 개체만 공통 game loop phase로 회전한다.
+
+### 부우 / 젤로
+
+- 부우(`balloon-boo`): 영웅, 1000코인. 부드러운 다색 고스트, 꼬리 idle, 안개 pop, 고스트 합성음을 사용한다.
+- 젤로(`balloon-jello`): 영웅, 1500코인. 다색 슬라임, 공통 phase squish와 벽 충돌 시 짧은 시각 압축, 젤 조각 pop, crackle 합성음을 사용한다.
+
+### 루멘 / 슈슈
+
+- 루멘(`balloon-lumen`): 전설, 5000코인. 보석색 수정, 은은한 내부광, 보스 피해 crack, 곡괭이·수정 파편 효과, crystal 합성음, `crystalCave` 배경을 사용한다.
+- 슈슈(`balloon-chouchou`): 전설, 5000코인. 황금빛 슈와 크림, 은은한 breathe, 보스 피해 cream leak, 포크·크림 효과, cream 합성음, `creamCafe` 배경을 사용한다.
+
+임시 상품 `balloon-a`, `balloon-b`는 카탈로그와 상점에서 제거된 상태다.
 
 ## 7. 풍선 미리보기 시스템
 
 공통 팝업은 `lib/main.dart`의 `BalloonPreviewDialog`다.
 
 - 실제 풍선 이름과 한국어 등급을 표시한다.
+- 희귀 이상은 카탈로그의 한 줄 `description`과 실제 가격을 최대 2줄 범위로 표시한다.
 - 큰 풍선은 게임과 같은 `BalloonSkinRenderer`로 렌더링한다.
 - 상품의 실제 `colorPalette`를 순환하며 같은 색의 즉시 반복을 피한다.
 - 풍선을 약 1초 표시한 뒤 실제 공통 효과와 효과음을 재생한다.
@@ -241,8 +270,7 @@ H-01 홈 → 상점 → S-02 풍선 상점
 - 구매와 장착은 기존 `PurchaseService`를 재사용하며 팝업과 뒤쪽 카드 상태가 함께 갱신된다.
 - 미리보기에서는 점수, 코인 보상, 스테이지, HP, 게임 상태를 변경하지 않는다.
 - 미리보기에서는 진동을 호출하지 않는다.
-- `Coming Soon` 카드는 미리보기를 열지 않는다.
-- 팝업을 닫으면 일회성 순환 `Timer`, 효과 `AnimationController`, 파편과 링을 정리한다.
+- 팝업을 닫으면 일회성 순환 `Timer`, 효과/idle `AnimationController`, 파편과 링을 정리한다.
 
 새 풍선을 카탈로그에 등록하면 상품 카드가 해당 정의를 전달하므로 별도 Preview 위젯 없이 자동 연결된다.
 
@@ -251,7 +279,7 @@ H-01 홈 → 상점 → S-02 풍선 상점
 선택형 전용 배경 구조는 `lib/balloon_background.dart`에 있다.
 
 - 타입: `BalloonBackgroundType`
-- 현재 타입 값: `none`, `galaxy`, `halloween`, `winter`, `underwater`
+- 현재 타입 값에는 `none`, 기존 확장 타입, `crystalCave`, `creamCafe`가 있다.
 - 정의: `BalloonBackgroundSpec`
 - registry: `BalloonBackgroundRegistry`
 - 공통 렌더러: `BalloonBackgroundRenderer`
@@ -262,8 +290,9 @@ H-01 홈 → 상점 → S-02 풍선 상점
 
 - 기본 풍선 → `none`
 - 하트 풍선 → `none`
-- 그 외 현재 등록 풍선 → 기본값 `none`
-- 향후 타입 이름은 준비되어 있지만 실제 전용 배경 에셋 경로는 아직 등록되지 않았다.
+- 루멘 → 정적 저비용 `crystalCave` gradient
+- 슈슈 → 정적 저비용 `creamCafe` gradient
+- 나머지 상품 → `none`
 
 배경이 등록되면 동일한 `BalloonBackgroundRenderer`를 다음 두 곳에서 재사용하도록 설계되어 있다.
 
@@ -282,7 +311,7 @@ H-01 홈 → 상점 → S-02 풍선 상점
 - 설정 연결: `lib/services/settings_service.dart`
 - 게임과 미리보기의 풍선별 dispatch: `lib/main.dart`의 `playBalloonPopSound()`
 
-`BalloonPopSoundType.basic`과 `heart`가 있으며 Web Audio API로 소리를 합성한다. 설정의 효과음이 OFF면 `PopSound` 진입점에서 게임, 보스, 미리보기 소리를 모두 차단한다.
+`BalloonPopSoundType`은 `basic`, `heart`, `ghost`, `crackle`, `crystal`, `cream`을 제공하며 Web Audio API로 짧게 합성한다. 설정의 효과음이 OFF면 `PopSound` 진입점에서 게임, 보스, 미리보기 소리를 모두 차단한다.
 
 ### 진동
 
@@ -346,6 +375,7 @@ SET-03, SET-04, SET-05는 화면과 이동 구조만 구현되어 있으며 정�
 - 구매 성공 시 상품 가격만큼 즉시 차감한다.
 - 홈과 상점은 같은 저장 잔액을 표시한다.
 - 숨겨진 개발자 테스트 코인 기능이 `lib/dev/dev_coin_tool.dart`와 홈 상단 코인 터치 흐름에 존재한다.
+- 7회 터치와 기존 인증을 매번 다시 수행하면 10,000코인을 반복 지급할 수 있다. 영구적인 1회 지급 플래그는 저장하지 않는다.
 - 이 기능은 현재 브라우저/기기의 로컬 테스트 코인을 추가하기 위한 임시 개발 도구다.
 - 실제 비밀번호는 이 문서에 기록하지 않는다.
 - 출시 전 `TEMP DEV TOOL`, `DEV_COIN` 관련 코드를 검색해 제거 여부를 검토해야 한다.
@@ -421,7 +451,7 @@ GitHub Pages의 Source는 **GitHub Actions**를 사용해야 하며, `github-pag
 - 밝고 둥글고 깔끔한 캐주얼 모바일 게임 UI를 유지한다.
 - 모바일 세로 화면을 우선하며 SafeArea를 고려한다.
 - 충분한 여백, 둥근 카드, 부드러운 그림자와 기존 포인트 컬러를 사용한다.
-- 상점은 작은 4열 상품 카드, 미리보기는 큰 풍선 중심으로 대비한다.
+- 상점은 등급별 작은 가로 스크롤 카드, 미리보기는 큰 풍선 중심으로 대비한다.
 - 설정 화면은 단순하고 읽기 쉽게 유지한다.
 - 새 화면도 기존 색상, 폰트, radius, shadow와 컴포넌트 언어를 재사용한다.
 - 요청 없이 임의의 새 디자인 시스템을 만들지 않는다.
@@ -441,8 +471,10 @@ GitHub Pages의 Source는 **GitHub Actions**를 사용해야 하며, `github-pag
 
 등급 방향:
 
-- 일반: 기본적인 풍선 실루엣 변형. 현재 기본·하트·별 풍선
-- 희귀: 실루엣 자체가 특별한 풍선. 첫 상품은 동물 모양의 토끼 풍선
+- 일반: 기본적인 풍선 실루엣 변형. 기본·하트·별·꽃
+- 희귀: 고유 이름과 성격, 특별한 실루엣. 모찌·와리·킥스
+- 영웅: 고유 idle/effect/sound. 부우·젤로. 게임 배경은 바꾸지 않는다.
+- 전설: 고유 animation/effect/sound와 데이터로 지정된 전용 배경. 루멘·슈슈
 - 영웅: 구체적인 디자인 규칙은 아직 확정하지 않음
 - 전설: 구체적인 디자인 규칙은 아직 확정하지 않음
 

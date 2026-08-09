@@ -4,6 +4,7 @@ abstract final class PopSound {
   static int heartPlayCount = 0;
   static int bossExplosionPlayCount = 0;
   static int fakePlayCount = 0;
+  static int themedPlayCount = 0;
 
   static void setEnabled(bool value) => enabled = value;
 
@@ -25,10 +26,27 @@ abstract final class PopSound {
     if (enabled) bossExplosionPlayCount++;
   }
 
+  static void playGhost() {
+    if (enabled) themedPlayCount++;
+  }
+
+  static void playCrackle() {
+    if (enabled) themedPlayCount++;
+  }
+
+  static void playCrystal() {
+    if (enabled) themedPlayCount++;
+  }
+
+  static void playCream() {
+    if (enabled) themedPlayCount++;
+  }
+
   static void resetDebug() {
     basicPlayCount = 0;
     heartPlayCount = 0;
     bossExplosionPlayCount = 0;
     fakePlayCount = 0;
+    themedPlayCount = 0;
   }
 }

@@ -474,10 +474,13 @@ void main() {
 
       final renderer = tester.widget<BalloonSkinRenderer>(find.byKey(key));
       expect(renderer.isFake, isTrue);
-      final opacity = tester.widget<Opacity>(
+      final opacities = tester.widgetList<Opacity>(
         find.descendant(of: find.byKey(key), matching: find.byType(Opacity)),
       );
-      expect(opacity.opacity, fakeBalloonOpacity);
+      expect(
+        opacities.any((opacity) => opacity.opacity == fakeBalloonOpacity),
+        isTrue,
+      );
       switch (definition.rendererType) {
         case BalloonRendererType.painted:
           final paint = tester.widget<CustomPaint>(
@@ -499,7 +502,14 @@ void main() {
             findsOneWidget,
           );
         case BalloonRendererType.star:
+        case BalloonRendererType.flower:
         case BalloonRendererType.rabbit:
+        case BalloonRendererType.watermelon:
+        case BalloonRendererType.soccer:
+        case BalloonRendererType.ghost:
+        case BalloonRendererType.slime:
+        case BalloonRendererType.crystal:
+        case BalloonRendererType.creamPuff:
           final paint = tester.widget<CustomPaint>(
             find
                 .descendant(
@@ -570,7 +580,7 @@ void main() {
     expect(bossHealthFraction(1, 0), 0);
   });
 
-  test('balloon catalog defines the final common and rare products', () {
+  test('balloon catalog defines the final eleven-product lineup', () {
     expect(BalloonSkinCatalog.hasUniqueIds, isTrue);
     expect(
       BalloonSkinCatalog.definitions.map((skin) => skin.id).toSet().length,
@@ -578,7 +588,7 @@ void main() {
     );
     expect(
       BalloonSkinCatalog.shopDefinitions.map((skin) => skin.shopOrder),
-      orderedEquals([0, 1, 2, 3]),
+      orderedEquals(List.generate(11, (index) => index)),
     );
 
     final basic = BalloonSkinCatalog.byIdOrDefault('balloon-default');
@@ -601,24 +611,166 @@ void main() {
     expect(heart.background, BalloonBackgroundType.none);
 
     final star = BalloonSkinCatalog.byIdOrDefault('balloon-star');
-    expect(star.displayName, '별 풍선');
-    expect(star.price, 300);
+    expect(star.displayName, '별');
+    expect(star.price, 200);
     expect(star.rarity, BalloonRarity.common);
     expect(star.rendererType, BalloonRendererType.star);
     expect(star.supportsBossSkin, isTrue);
 
     final rabbit = BalloonSkinCatalog.byIdOrDefault('balloon-rabbit');
-    expect(rabbit.displayName, '토끼 풍선');
+    expect(rabbit.displayName, '모찌');
     expect(rabbit.price, 500);
     expect(rabbit.rarity, BalloonRarity.rare);
     expect(rabbit.rendererType, BalloonRendererType.rabbit);
     expect(rabbit.supportsBossSkin, isTrue);
+    expect(rabbit.description, '겁은 많지만 호기심은 누구보다 많아요.');
+
+    final expected = <String, (BalloonRarity, int)>{
+      'balloon-flower': (BalloonRarity.common, 200),
+      'balloon-wari': (BalloonRarity.rare, 600),
+      'balloon-kicks': (BalloonRarity.rare, 700),
+      'balloon-boo': (BalloonRarity.heroic, 1000),
+      'balloon-jello': (BalloonRarity.heroic, 1500),
+      'balloon-lumen': (BalloonRarity.legendary, 5000),
+      'balloon-chouchou': (BalloonRarity.legendary, 5000),
+    };
+    for (final entry in expected.entries) {
+      final definition = BalloonSkinCatalog.byIdOrDefault(entry.key);
+      expect(definition.id, entry.key);
+      expect(definition.rarity, entry.value.$1);
+      expect(definition.price, entry.value.$2);
+      expect(definition.supportsBossSkin, isTrue);
+    }
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-wari').visualVariantCount,
+      3,
+    );
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-kicks').specialSpawnChance,
+      0.01,
+    );
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-lumen').background,
+      BalloonBackgroundType.crystalCave,
+    );
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-chouchou').background,
+      BalloonBackgroundType.creamCafe,
+    );
 
     expect(
       BalloonSkinCatalog.definitions.map((skin) => skin.id),
       isNot(containsAll(['balloon-a', 'balloon-b'])),
     );
     expect(BalloonRarity.heroic.label, '영웅');
+  });
+
+  test(
+      'rarity grouping, descriptions, variants, and special spawn are data driven',
+      () {
+    final counts = <BalloonRarity, int>{
+      for (final rarity in BalloonRarity.values)
+        rarity: BalloonSkinCatalog.shopDefinitions
+            .where((definition) => definition.rarity == rarity)
+            .length,
+    };
+    expect(counts, {
+      BalloonRarity.common: 4,
+      BalloonRarity.rare: 3,
+      BalloonRarity.heroic: 2,
+      BalloonRarity.legendary: 2,
+    });
+    expect(
+      BalloonSkinCatalog.definitions
+          .where((definition) => definition.rarity != BalloonRarity.common)
+          .every((definition) => definition.showsDescription),
+      isTrue,
+    );
+
+    final wari = BalloonSkinCatalog.byIdOrDefault('balloon-wari');
+    expect(wari.chooseVisualVariant(0), 0);
+    expect(wari.chooseVisualVariant(0.34), 1);
+    expect(wari.chooseVisualVariant(0.99), 2);
+
+    final kicks = BalloonSkinCatalog.byIdOrDefault('balloon-kicks');
+    expect(kicks.chooseSpecialSpawn(0.009), isTrue);
+    expect(kicks.chooseSpecialSpawn(0.01), isFalse);
+    expect(kicks.chooseSpecialSpawn(0.5), isFalse);
+  });
+
+  test('skin metadata does not alter any stage rule', () {
+    final baseline = [
+      for (var stage = 1; stage <= StageConfig.lastImplementedStage; stage++)
+        StageConfig.forStage(stage),
+    ];
+    for (final definition in BalloonSkinCatalog.definitions) {
+      expect(definition.supportsBossSkin, isTrue);
+      for (var index = 0; index < baseline.length; index++) {
+        final config = StageConfig.forStage(index + 1);
+        expect(config.requiredHits, baseline[index].requiredHits);
+        expect(config.duration, baseline[index].duration);
+        expect(config.bossHp, baseline[index].bossHp);
+        expect(config.bossSpeed, baseline[index].bossSpeed);
+        expect(config.fakeBalloonCount, baseline[index].fakeBalloonCount);
+      }
+    }
+  });
+
+  testWidgets(
+      'kicks spin is instance data and legendary backgrounds are shared',
+      (tester) async {
+    final kicks = BalloonSkinCatalog.byIdOrDefault('balloon-kicks');
+    await tester.pumpWidget(MaterialApp(
+      home: Row(children: [
+        SizedBox(
+          key: const ValueKey('kicks-normal'),
+          width: 100,
+          height: 120,
+          child: BalloonSkinRenderer(
+            definition: kicks,
+            color: kicks.previewColor,
+            specialVisual: false,
+            animationPhase: 1,
+          ),
+        ),
+        SizedBox(
+          key: const ValueKey('kicks-spin'),
+          width: 100,
+          height: 120,
+          child: BalloonSkinRenderer(
+            definition: kicks,
+            color: kicks.previewColor,
+            specialVisual: true,
+            animationPhase: 1,
+          ),
+        ),
+      ]),
+    ));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('kicks-normal')),
+        matching: find.byType(Transform),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('kicks-spin')),
+        matching: find.byType(Transform),
+      ),
+      findsOneWidget,
+    );
+
+    for (final entry in const [
+      ('balloon-lumen', ValueKey('background-crystal-cave')),
+      ('balloon-chouchou', ValueKey('background-cream-cafe')),
+    ]) {
+      final definition = BalloonSkinCatalog.byIdOrDefault(entry.$1);
+      await tester.pumpWidget(MaterialApp(
+        home: GameBalloonBackground(definition: definition),
+      ));
+      expect(find.byKey(entry.$2), findsOneWidget);
+    }
   });
 
   testWidgets('star and rabbit share normal boss and fake render paths',
@@ -1800,7 +1952,7 @@ void main() {
     expect(CoinService.balance, 0);
   });
 
-  testWidgets('hidden developer coin flow grants once and updates shared HUD',
+  testWidgets('hidden developer coin flow can grant repeatedly and updates HUD',
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
@@ -1834,12 +1986,24 @@ void main() {
       findsOneWidget,
     );
 
+    for (var tap = 0; tap < 7; tap++) {
+      await tester.tap(coinTarget);
+    }
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.enterText(
+      find.byKey(const ValueKey('dev-coin-password-input')),
+      tempDevCoinPassword,
+    );
+    await tester.tap(find.byKey(const ValueKey('dev-coin-confirm')));
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(CoinService.balance, tempDevCoinGrantAmount * 2);
+
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pumpAndSettle();
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('home-coin-hud')),
-        matching: find.text('10,000'),
+        matching: find.text('20,000'),
       ),
       findsOneWidget,
     );
@@ -1866,7 +2030,7 @@ void main() {
     expect(find.byType(HomeFloatingBalloons), findsNothing);
     expect(find.byKey(const ValueKey('store-category-grid')), findsNothing);
     expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
-    expect(find.byType(StoreProductCard), findsNWidgets(4));
+    expect(find.byType(StoreProductCard), findsAtLeastNWidgets(4));
     expect(find.byKey(const ValueKey('store-vertical-scroll')), findsNothing);
     expect(find.byKey(const ValueKey('store-detail-scroll')), findsOneWidget);
     expect(
@@ -1875,7 +2039,7 @@ void main() {
     expect(find.byKey(const ValueKey('store-filter-owned')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-unowned')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-limited')), findsOneWidget);
-    expect(find.byType(StoreProductCard), findsNWidgets(4));
+    expect(find.byType(StoreProductCard), findsAtLeastNWidgets(4));
     final storeScrollable = find
         .descendant(
           of: find.byKey(const ValueKey('store-product-grid')),
@@ -1884,7 +2048,7 @@ void main() {
         .first;
     for (final rarity in BalloonRarity.values) {
       await tester.scrollUntilVisible(
-        find.byKey(ValueKey('store-rarity-grid-${rarity.name}')),
+        find.byKey(ValueKey('store-rarity-list-${rarity.name}')),
         180,
         scrollable: storeScrollable,
       );
@@ -1893,13 +2057,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.text(rarity.label), findsAtLeastNWidgets(1));
-      final grid = tester.widget<GridView>(
-        find.byKey(ValueKey('store-rarity-grid-${rarity.name}')),
+      final list = tester.widget<ListView>(
+        find.byKey(ValueKey('store-rarity-list-${rarity.name}')),
       );
-      final gridDelegate =
-          grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-      expect(gridDelegate.crossAxisCount, 4);
-      expect(grid.childrenDelegate.estimatedChildCount, 8);
+      expect(list.scrollDirection, Axis.horizontal);
     }
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('store-product-balloon-default')),
@@ -1943,6 +2104,17 @@ void main() {
     expect(cardRects[1].top, cardRects[2].top);
     expect(cardRects[0].left, lessThan(cardRects[1].left));
     expect(cardRects[1].left, lessThan(cardRects[2].left));
+    final commonList = find.byKey(const ValueKey('store-rarity-list-common'));
+    await tester.drag(commonList, const Offset(-90, 0));
+    await tester.pump();
+    final commonScrollable = find.descendant(
+      of: commonList,
+      matching: find.byType(Scrollable),
+    );
+    expect(
+      tester.state<ScrollableState>(commonScrollable).position.pixels,
+      greaterThan(0),
+    );
     final rabbitRect = tester.getRect(
       find.byKey(const ValueKey('store-product-balloon-rabbit')),
     );
@@ -1966,7 +2138,7 @@ void main() {
       -220,
       scrollable: storeScrollable,
     );
-    expect(find.byType(StoreProductCard), findsNWidgets(3));
+    expect(find.byType(StoreProductCard), findsAtLeastNWidgets(3));
     expect(find.byKey(const ValueKey('store-product-balloon-heart')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('store-product-balloon-star')),
@@ -1977,10 +2149,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('store-filter-limited')));
     await tester.pump();
     expect(find.byType(StoreProductCard), findsNothing);
-    final commonPlaceholderGrid = tester.widget<GridView>(
-      find.byKey(const ValueKey('store-rarity-grid-common')),
-    );
-    expect(commonPlaceholderGrid.childrenDelegate.estimatedChildCount, 8);
+    expect(find.text('해당 상품이 없습니다.'), findsAtLeastNWidgets(3));
 
     await tester.tap(find.byKey(const ValueKey('store-filter-all')));
     await tester.pump();
@@ -1989,7 +2158,9 @@ void main() {
       -220,
       scrollable: storeScrollable,
     );
-    expect(find.byType(StoreProductCard), findsNWidgets(4));
+    expect(find.byType(StoreProductCard), findsAtLeastNWidgets(4));
+
+    await tester.pump(const Duration(milliseconds: 300));
 
     await tester.tap(find.byKey(const ValueKey('home-nav-event')));
     await tester.pumpAndSettle();
@@ -2087,8 +2258,7 @@ void main() {
     expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsNothing);
   });
 
-  testWidgets(
-      'real balloon card surfaces open preview and coming soon stays inert',
+  testWidgets('real balloon card surfaces open the shared preview',
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
@@ -2102,16 +2272,11 @@ void main() {
     expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
 
     await openBalloonPreview(tester, 'balloon-heart');
-    expect(find.text('하트 풍선'), findsWidgets);
+    expect(find.text('하트'), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
     await tester.pumpAndSettle();
 
-    final comingSoon = find.byKey(const ValueKey('store-placeholder-common-4'));
-    await tester.ensureVisible(comingSoon);
-    await tester.tap(comingSoon);
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsNothing);
-    expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
+    expect(find.byType(StoreComingSoonCard), findsNothing);
   });
 
   testWidgets('buying a store product updates coins and survives reload',
@@ -2131,10 +2296,11 @@ void main() {
     );
 
     await openBalloonPreview(tester, 'balloon-rabbit');
-    expect(find.text('토끼 풍선'), findsWidgets);
+    expect(find.text('모찌'), findsWidgets);
+    expect(find.text('겁은 많지만 호기심은 누구보다 많아요.'), findsOneWidget);
     expect(find.text('500 구매'), findsOneWidget);
     await tapBalloonPreviewAction(tester);
-    expect(find.text('토끼 풍선 구매 완료!'), findsOneWidget);
+    expect(find.text('모찌 구매 완료!'), findsOneWidget);
     expect(CoinService.balance, 100);
     expect(
       find.descendant(of: productCard, matching: find.text('사용하기')),
@@ -2264,7 +2430,7 @@ void main() {
       previewHapticCount++;
     });
     await openBalloonPreview(tester, 'balloon-heart');
-    expect(find.text('하트 풍선'), findsWidgets);
+    expect(find.text('하트'), findsWidgets);
     final previewRenderer = tester.widget<BalloonSkinRenderer>(
       find.descendant(
         of: find.byKey(const ValueKey('balloon-preview-renderer')),
