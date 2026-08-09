@@ -3220,28 +3220,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     BalloonRarity rarity,
     List<StoreProduct> products,
   ) {
-    if (products.isEmpty) {
-      return const SizedBox(
-        height: 48,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              '해당 상품이 없습니다.',
-              style: TextStyle(
-                color: Color(0xFF87949C),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    Widget productGrid(List<StoreProduct> pageProducts, String keySuffix) =>
-        GridView.builder(
+    Widget productGrid(int pageIndex, String keySuffix) => GridView.builder(
           key: ValueKey('store-rarity-grid-${rarity.name}-$keySuffix'),
           padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
           shrinkWrap: true,
@@ -3252,9 +3231,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             mainAxisSpacing: 8,
             childAspectRatio: 0.78,
           ),
-          itemCount: pageProducts.length,
-          itemBuilder: (context, index) {
-            final product = pageProducts[index];
+          itemCount: storeProductsPerPage,
+          itemBuilder: (context, slot) {
+            final productIndex = pageIndex * storeProductsPerPage + slot;
+            if (productIndex >= products.length) {
+              return StoreComingSoonCard(
+                rarity: rarity,
+                slot: productIndex,
+              );
+            }
+            final product = products[productIndex];
             return StoreProductCard(
               product: product,
               onPressed: () => _showBalloonPreview(product),
@@ -3263,7 +3249,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         );
 
     if (products.length <= storeProductsPerPage) {
-      return productGrid(products, 'single');
+      return productGrid(0, 'single');
     }
 
     final pageCount = storeRarityPageCount(products.length);
@@ -3291,14 +3277,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               key: ValueKey('store-rarity-pages-${rarity.name}'),
               physics: const PageScrollPhysics(),
               itemCount: pageCount,
-              itemBuilder: (context, pageIndex) {
-                final start = pageIndex * storeProductsPerPage;
-                final end = min(start + storeProductsPerPage, products.length);
-                return productGrid(
-                  products.sublist(start, end),
-                  'page-$pageIndex',
-                );
-              },
+              itemBuilder: (context, pageIndex) =>
+                  productGrid(pageIndex, 'page-$pageIndex'),
             ),
           ),
         );

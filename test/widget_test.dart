@@ -2145,7 +2145,11 @@ void main() {
     final firstDelegate =
         firstGrid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
     expect(firstDelegate.crossAxisCount, 4);
-    expect(firstGrid.childrenDelegate.estimatedChildCount, 4);
+    expect(firstGrid.childrenDelegate.estimatedChildCount, 8);
+    for (var slot = 4; slot < 8; slot++) {
+      expect(find.byKey(ValueKey('store-placeholder-common-$slot')),
+          findsOneWidget);
+    }
 
     expect(
       tester
@@ -2192,6 +2196,10 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('store-rarity-grid-rare-single')),
         findsOneWidget);
+    for (var slot = 3; slot < 8; slot++) {
+      expect(
+          find.byKey(ValueKey('store-placeholder-rare-$slot')), findsOneWidget);
+    }
     expect(
       tester
           .widget<InkWell>(
@@ -2208,6 +2216,10 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('store-rarity-grid-heroic-single')),
         findsOneWidget);
+    for (var slot = 2; slot < 8; slot++) {
+      expect(find.byKey(ValueKey('store-placeholder-heroic-$slot')),
+          findsOneWidget);
+    }
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('store-rarity-header-legendary')),
       180,
@@ -2216,9 +2228,15 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('store-rarity-grid-legendary-single')),
         findsOneWidget);
+    for (var slot = 2; slot < 8; slot++) {
+      expect(find.byKey(ValueKey('store-placeholder-legendary-$slot')),
+          findsOneWidget);
+    }
 
     await tester.tap(find.byKey(const ValueKey('store-filter-owned')));
     await tester.pump();
+    await tester.drag(storeScrollable, const Offset(0, 2000));
+    await tester.pumpAndSettle();
     expect(find.byType(StoreProductCard), findsOneWidget);
     expect(find.byKey(const ValueKey('store-product-balloon-default')),
         findsOneWidget);
@@ -2230,12 +2248,19 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('store-product-balloon-star')),
         findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('store-rarity-header-rare')),
+      180,
+      scrollable: storeScrollable,
+    );
+    await tester.pump();
     expect(find.byKey(const ValueKey('store-product-balloon-rabbit')),
         findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('store-filter-limited')));
     await tester.pump();
     expect(find.byType(StoreProductCard), findsNothing);
+    expect(find.byType(StoreComingSoonCard), findsAtLeastNWidgets(8));
 
     await tester.tap(find.byKey(const ValueKey('store-filter-all')));
     await tester.pump();
@@ -2357,7 +2382,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(StoreComingSoonCard), findsNothing);
+    expect(find.byType(StoreComingSoonCard), findsAtLeastNWidgets(4));
   });
 
   testWidgets('buying a store product updates coins and survives reload',
