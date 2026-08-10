@@ -31,8 +31,19 @@ extension type _AudioParam._(JSObject _) implements JSObject {
   external void exponentialRampToValueAtTime(num value, num endTime);
 }
 
+@JS('Audio')
+extension type _AudioElement._(JSObject _) implements JSObject {
+  external factory _AudioElement([String source]);
+
+  external JSPromise<JSAny?> play();
+  external void pause();
+  external set currentTime(num value);
+  external set preload(String value);
+}
+
 abstract final class PopSound {
   static _AudioContext? _context;
+  static final Map<String, _AudioElement> _assetPlayers = {};
   static bool enabled = true;
 
   static void setEnabled(bool value) => enabled = value;
@@ -207,6 +218,33 @@ abstract final class PopSound {
   static void playCream() {
     _playTone('sine', 270, 115, 0.12, 0.16);
     _playTone('triangle', 520, 310, 0.09, 0.07);
+  }
+
+  static void preloadAsset(String assetPath) {
+    try {
+      _assetPlayers.putIfAbsent(assetPath, () {
+        final player = _AudioElement('assets/$assetPath');
+        player.preload = 'auto';
+        return player;
+      });
+    } catch (_) {
+      // Asset preload support must never affect startup.
+    }
+  }
+
+  static void playAsset(String assetPath) {
+    if (!enabled) return;
+    try {
+      preloadAsset(assetPath);
+      final player = _assetPlayers[assetPath];
+      if (player == null) return;
+      player
+        ..pause()
+        ..currentTime = 0;
+      player.play();
+    } catch (_) {
+      // Missing browser audio support must never affect gameplay.
+    }
   }
 
   static void _playTone(

@@ -24,3 +24,25 @@ flutter:
     - assets/images/nature_assets.png
     - assets/images/heart_balloon.png
     - assets/images/mochi_balloon.png
+    - assets/images/balloon_star_asset.png
+    - assets/images/balloon_flower_asset.png
+    - assets/images/balloon_wari_halfmoon_asset.png
+    - assets/images/balloon_wari_triangle_asset.png
+    - assets/images/balloon_wari_round_asset.png
+    - assets/images/balloon_kicks_asset.png
+    - assets/images/balloon_boo_asset.png
+    - assets/images/balloon_muggy_asset.png
+    - assets/images/balloon_gemi_asset.png
+    - assets/images/balloon_shushu_asset.png
+    - assets/images/gemi_pickaxe_asset.png
+    - assets/images/shushu_fork_asset.png
+    - assets/images/shushu_cream_wall_asset.png
+    - assets/images/shushu_cream_burst_asset.png
+    - assets/images/shushu_cream_screen_asset.png
+    - assets/images/gemi_background_asset.png
+    - assets/images/shushu_background_asset.png
+    - assets/images/muggy_break.mp3.mp3
+    - assets/images/gemi_pickaxe_hit.mp3.mp3
+    - assets/images/gemi_break.mp3.mp3
+    - assets/images/shushu_fork_hit.mp3.mp3
+    - assets/images/shushu_cream_burst.mp3.mp3

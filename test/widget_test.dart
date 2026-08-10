@@ -614,7 +614,8 @@ void main() {
     expect(star.displayName, '별');
     expect(star.price, 200);
     expect(star.rarity, BalloonRarity.common);
-    expect(star.rendererType, BalloonRendererType.star);
+    expect(star.rendererType, BalloonRendererType.image);
+    expect(star.assetPath, 'assets/images/balloon_star_asset.png');
     expect(star.supportsBossSkin, isTrue);
 
     final rabbit = BalloonSkinCatalog.byIdOrDefault('balloon-rabbit');
@@ -626,7 +627,7 @@ void main() {
     expect(rabbit.imageDetailMask, BalloonImageDetailMask.mochiFace);
     expect(rabbit.colorPalette, hasLength(5));
     expect(rabbit.supportsBossSkin, isTrue);
-    expect(rabbit.description, '겁은 많지만 호기심은 누구보다 많아요.');
+    expect(rabbit.description, '겁 많고 호기심 많음');
 
     final expected = <String, (BalloonRarity, int)>{
       'balloon-flower': (BalloonRarity.common, 200),
@@ -650,8 +651,10 @@ void main() {
     );
     expect(
       BalloonSkinCatalog.byIdOrDefault('balloon-kicks').specialSpawnChance,
-      0.01,
+      0,
     );
+    expect(BalloonSkinCatalog.byIdOrDefault('balloon-jello').displayName, '머기');
+    expect(BalloonSkinCatalog.byIdOrDefault('balloon-lumen').displayName, '제미');
     expect(
       BalloonSkinCatalog.byIdOrDefault('balloon-lumen').background,
       BalloonBackgroundType.crystalCave,
@@ -691,14 +694,38 @@ void main() {
     );
 
     final wari = BalloonSkinCatalog.byIdOrDefault('balloon-wari');
+    expect(wari.variantAssetPaths, hasLength(3));
+    expect(wari.imageColorMode, BalloonImageColorMode.original);
     expect(wari.chooseVisualVariant(0), 0);
     expect(wari.chooseVisualVariant(0.34), 1);
     expect(wari.chooseVisualVariant(0.99), 2);
 
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-star').description,
+      '조용하지만 은근 튀는 편',
+    );
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-flower').description,
+      '화사하고 기분파',
+    );
+
     final kicks = BalloonSkinCatalog.byIdOrDefault('balloon-kicks');
-    expect(kicks.chooseSpecialSpawn(0.009), isTrue);
+    expect(kicks.chooseSpecialSpawn(0.009), isFalse);
     expect(kicks.chooseSpecialSpawn(0.01), isFalse);
     expect(kicks.chooseSpecialSpawn(0.5), isFalse);
+
+    final muggy = BalloonSkinCatalog.byIdOrDefault('balloon-jello');
+    expect(muggy.popSoundAssetPath, 'assets/images/muggy_break.mp3.mp3');
+    final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
+    expect(gemi.hitToolAssetPath, 'assets/images/gemi_pickaxe_asset.png');
+    expect(gemi.hitSoundAssetPath, 'assets/images/gemi_pickaxe_hit.mp3.mp3');
+    expect(gemi.popSoundAssetPath, 'assets/images/gemi_break.mp3.mp3');
+    final shushu = BalloonSkinCatalog.byIdOrDefault('balloon-chouchou');
+    expect(shushu.imageColorMode, BalloonImageColorMode.original);
+    expect(shushu.hitToolAssetPath, 'assets/images/shushu_fork_asset.png');
+    expect(shushu.hitSoundAssetPath, 'assets/images/shushu_fork_hit.mp3.mp3');
+    expect(
+        shushu.popSoundAssetPath, 'assets/images/shushu_cream_burst.mp3.mp3');
   });
 
   test('skin metadata does not alter any stage rule', () {
@@ -754,7 +781,7 @@ void main() {
         of: find.byKey(const ValueKey('kicks-normal')),
         matching: find.byType(Transform),
       ),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       find.descendant(
@@ -765,14 +792,15 @@ void main() {
     );
 
     for (final entry in const [
-      ('balloon-lumen', ValueKey('background-crystal-cave')),
-      ('balloon-chouchou', ValueKey('background-cream-cafe')),
+      ('balloon-lumen', 'assets/images/gemi_background_asset.png'),
+      ('balloon-chouchou', 'assets/images/shushu_background_asset.png'),
     ]) {
       final definition = BalloonSkinCatalog.byIdOrDefault(entry.$1);
       await tester.pumpWidget(MaterialApp(
         home: GameBalloonBackground(definition: definition),
       ));
-      expect(find.byKey(entry.$2), findsOneWidget);
+      final image = tester.widget<Image>(find.byType(Image));
+      expect((image.image as AssetImage).assetName, entry.$2);
     }
   });
 
@@ -805,27 +833,17 @@ void main() {
 
       for (final contextName in ['normal', 'boss', 'fake', 'fake-boss']) {
         final scope = find.byKey(ValueKey('$id-$contextName'));
-        if (id == 'balloon-star') {
-          final painter = tester.widget<CustomPaint>(
-            find
-                .descendant(of: scope, matching: find.byType(CustomPaint))
-                .first,
-          );
-          expect((painter.painter! as ShapedBalloonPainter).shape,
-              BalloonShape.star);
-        } else {
-          expect(
-            find.descendant(
-              of: scope,
-              matching: find.byType(BalloonSkinArtwork),
-            ),
-            findsOneWidget,
-          );
-          expect(
-            find.descendant(of: scope, matching: find.byType(Image)),
-            findsWidgets,
-          );
-        }
+        expect(
+          find.descendant(
+            of: scope,
+            matching: find.byType(BalloonSkinArtwork),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: scope, matching: find.byType(Image)),
+          findsWidgets,
+        );
         if (contextName.contains('fake')) {
           expect(
             tester
@@ -2403,7 +2421,7 @@ void main() {
 
     await openBalloonPreview(tester, 'balloon-rabbit');
     expect(find.text('모찌'), findsWidgets);
-    expect(find.text('겁은 많지만 호기심은 누구보다 많아요.'), findsOneWidget);
+    expect(find.text('겁 많고 호기심 많음'), findsOneWidget);
     expect(find.text('500 구매'), findsOneWidget);
     await tapBalloonPreviewAction(tester);
     expect(find.text('모찌 구매 완료!'), findsOneWidget);

@@ -5,6 +5,8 @@ abstract final class PopSound {
   static int bossExplosionPlayCount = 0;
   static int fakePlayCount = 0;
   static int themedPlayCount = 0;
+  static int assetPlayCount = 0;
+  static String? lastAssetPath;
 
   static void setEnabled(bool value) => enabled = value;
 
@@ -42,11 +44,21 @@ abstract final class PopSound {
     if (enabled) themedPlayCount++;
   }
 
+  static void preloadAsset(String assetPath) {}
+
+  static void playAsset(String assetPath) {
+    if (!enabled) return;
+    assetPlayCount++;
+    lastAssetPath = assetPath;
+  }
+
   static void resetDebug() {
     basicPlayCount = 0;
     heartPlayCount = 0;
     bossExplosionPlayCount = 0;
     fakePlayCount = 0;
     themedPlayCount = 0;
+    assetPlayCount = 0;
+    lastAssetPath = null;
   }
 }

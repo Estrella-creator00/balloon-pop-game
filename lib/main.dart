@@ -593,7 +593,6 @@ void addBalloonPopEffect({
         color: color,
         big: big,
         shape: EffectPieceShape.shard,
-        tool: EffectPieceShape.pickaxe,
       );
     case BalloonPopEffectType.cream:
       addThemedPieces(
@@ -603,7 +602,6 @@ void addBalloonPopEffect({
         color: const Color(0xFFFFE47A),
         big: big,
         shape: EffectPieceShape.gel,
-        tool: EffectPieceShape.fork,
       );
   }
 }
@@ -742,6 +740,12 @@ void playBalloonPopSound(
   BalloonSkinDefinition definition, {
   required bool boss,
 }) {
+  final assetPath = definition.popSoundAssetPath;
+  if (assetPath != null) {
+    PopSound.playAsset(assetPath);
+    if (boss) PopSound.playBossExplosion();
+    return;
+  }
   switch (definition.popSoundType) {
     case BalloonPopSoundType.basic:
       boss ? PopSound.playBossExplosion() : PopSound.play();
@@ -761,6 +765,35 @@ void playBalloonPopSound(
       PopSound.playCream();
       if (boss) PopSound.playBossExplosion();
   }
+}
+
+class AssetVisualEffect {
+  AssetVisualEffect({
+    required this.assetPath,
+    required this.center,
+    required this.velocity,
+    required this.size,
+    required this.rotation,
+    required this.spin,
+    required this.life,
+    required this.maxLife,
+  });
+
+  final String assetPath;
+  Offset center;
+  Offset velocity;
+  final double size;
+  double rotation;
+  final double spin;
+  double life;
+  final double maxLife;
+}
+
+bool playBalloonHitSound(BalloonSkinDefinition definition) {
+  final assetPath = definition.hitSoundAssetPath;
+  if (assetPath == null) return false;
+  PopSound.playAsset(assetPath);
+  return true;
 }
 
 const gameLoopInterval = Duration(milliseconds: 33);
@@ -939,6 +972,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   final List<PopPiece> _pieces = [];
   final List<BurstRing> _rings = [];
   final List<FloatingTextFeedback> _feedbacks = [];
+  final List<AssetVisualEffect> _assetEffects = [];
   int _effectsRevision = 0;
   final SinglePeriodicGameLoop _gameLoop = SinglePeriodicGameLoop();
   final CoinRewardSession _coinRewardSession = CoinRewardSession();
@@ -986,6 +1020,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     SettingsService.applyStoredPreferences();
     _ownedProductIds = PurchaseService.ownedProductIds;
     _equippedProductIds = _loadEquippedProductIds();
+    for (final definition in BalloonSkinCatalog.definitions) {
+      final sounds = <String?>[
+        definition.hitSoundAssetPath,
+        definition.popSoundAssetPath,
+      ];
+      for (final sound in sounds) {
+        if (sound != null) PopSound.preloadAsset(sound);
+      }
+    }
     _stagePage = homeStagePageForProgress(ProgressStorage.nextPlayableStage());
     _stagePageController = PageController(initialPage: _stagePage);
     _headerData = ValueNotifier(_createHeaderData());
@@ -1058,6 +1101,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _balloons.clear();
     _pieces.clear();
     _rings.clear();
+    _assetEffects.clear();
     _feedbacks.clear();
     _effectsRevision++;
     _bosses.clear();
@@ -1100,6 +1144,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _balloons.clear();
       _pieces.clear();
       _rings.clear();
+      _assetEffects.clear();
       _feedbacks.clear();
       _bosses.clear();
     });
@@ -1462,7 +1507,20 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _updateEffects(double dt) {
-    if (advanceEffects(_pieces, _rings, dt, feedbacks: _feedbacks)) {
+    var changed = advanceEffects(
+      _pieces,
+      _rings,
+      dt,
+      feedbacks: _feedbacks,
+    );
+    for (final effect in _assetEffects) {
+      effect.life -= dt;
+      effect.center += effect.velocity * dt;
+      effect.rotation += effect.spin * dt;
+      changed = true;
+    }
+    _assetEffects.removeWhere((effect) => effect.life <= 0);
+    if (changed) {
       _effectsRevision++;
     }
   }
@@ -1475,8 +1533,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       return;
     }
 
+    final skin = BalloonSkinCatalog.byIdOrDefault(balloon.skinId);
+    final center =
+        balloon.position + Offset(balloon.size / 2, balloon.size / 2);
     if (balloon.hp > 1) {
-      PopSound.playLightTap();
+      _spawnSkinHitTool(skin, center);
+      if (!playBalloonHitSound(skin)) PopSound.playLightTap();
       setState(() {
         balloon.hp--;
         balloon.size *= 0.88;
@@ -1484,10 +1546,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       return;
     }
 
-    final center =
-        balloon.position + Offset(balloon.size / 2, balloon.size / 2);
-    final skin = BalloonSkinCatalog.byIdOrDefault(balloon.skinId);
     HapticService.shortImpact();
+    _spawnSkinHitTool(skin, center);
+    playBalloonHitSound(skin);
     _playSkinPopSound(skin, boss: false);
     _spawnSkinPopEffect(skin, center, balloon.color, balloon.size, big: false);
     _spawnRing(center, balloon.color, balloon.size * 0.72);
@@ -1586,12 +1647,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       return;
     }
 
+    final skin = BalloonSkinCatalog.byIdOrDefault(boss.skinId);
     HapticService.shortImpact();
-    PopSound.play();
     final center = boss.position + Offset(boss.size / 2, boss.size / 2);
+    _spawnSkinHitTool(skin, center);
+    if (!playBalloonHitSound(skin)) PopSound.play();
     final hitColor = _bossColor(
       boss,
-      BalloonSkinCatalog.byIdOrDefault(boss.skinId),
+      skin,
     );
     _spawnPieces(center, hitColor, boss.size * 0.35, big: false);
 
@@ -1702,6 +1765,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _phase = GamePhase.completed;
     _pieces.clear();
     _rings.clear();
+    _assetEffects.clear();
     _feedbacks.clear();
     _effectsRevision++;
     _publishHeader();
@@ -1739,7 +1803,100 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       sourceSize: sourceSize,
       big: big,
     );
+    _spawnSkinAssetPopEffects(skin, center, sourceSize, big: big);
     _effectsRevision++;
+  }
+
+  void _spawnSkinHitTool(BalloonSkinDefinition skin, Offset center) {
+    final assetPath = skin.hitToolAssetPath;
+    if (assetPath == null) return;
+    _assetEffects.add(
+      AssetVisualEffect(
+        assetPath: assetPath,
+        center: center - const Offset(34, 42),
+        velocity: const Offset(95, 120),
+        size: 64,
+        rotation: -0.55,
+        spin: 0,
+        life: 0.22,
+        maxLife: 0.22,
+      ),
+    );
+    _effectsRevision++;
+  }
+
+  void _spawnSkinAssetPopEffects(
+    BalloonSkinDefinition skin,
+    Offset center,
+    double sourceSize, {
+    required bool big,
+  }) {
+    final burstPath = skin.burstAssetPath;
+    if (burstPath != null) {
+      final count = big ? 8 : 5;
+      for (var index = 0; index < count; index++) {
+        final angle = pi * 2 * index / count + _random.nextDouble() * 0.35;
+        final speed = (big ? 115 : 72) + _random.nextDouble() * 45;
+        _assetEffects.add(
+          AssetVisualEffect(
+            assetPath: burstPath,
+            center: center,
+            velocity: Offset(cos(angle) * speed, sin(angle) * speed - 25),
+            size: (big ? sourceSize * 0.16 : sourceSize * 0.22) +
+                _random.nextDouble() * 18,
+            rotation: _random.nextDouble() * pi * 2,
+            spin: (_random.nextDouble() - 0.5) * 3,
+            life: 0.52,
+            maxLife: 0.52,
+          ),
+        );
+      }
+    }
+
+    final wallPath = skin.wallSplatAssetPath;
+    if (wallPath != null && _playArea != Size.zero) {
+      final count = 2 + _random.nextInt(3);
+      for (var index = 0; index < count; index++) {
+        final leftEdge = index.isEven;
+        _assetEffects.add(
+          AssetVisualEffect(
+            assetPath: wallPath,
+            center: Offset(
+              leftEdge ? 4 : _playArea.width - 4,
+              45 + _random.nextDouble() * max(1, _playArea.height - 90),
+            ),
+            velocity: Offset.zero,
+            size: 48 + _random.nextDouble() * 24,
+            rotation: leftEdge ? 0 : pi,
+            spin: 0,
+            life: 1.15,
+            maxLife: 1.15,
+          ),
+        );
+      }
+    }
+
+    final screenPath = skin.screenSplatAssetPath;
+    if (screenPath != null && _playArea != Size.zero) {
+      final count = 1 + _random.nextInt(2);
+      for (var index = 0; index < count; index++) {
+        _assetEffects.add(
+          AssetVisualEffect(
+            assetPath: screenPath,
+            center: Offset(
+              _playArea.width * (0.22 + _random.nextDouble() * 0.56),
+              _playArea.height * (0.20 + _random.nextDouble() * 0.56),
+            ),
+            velocity: Offset.zero,
+            size: 42 + _random.nextDouble() * 18,
+            rotation: _random.nextDouble() * pi * 2,
+            spin: 0,
+            life: 0.92,
+            maxLife: 0.92,
+          ),
+        );
+      }
+    }
   }
 
   void _playSkinPopSound(BalloonSkinDefinition skin, {required bool boss}) {
@@ -3497,6 +3654,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                         ),
                         for (final balloon in _balloons) _buildBalloon(balloon),
                         for (final boss in _bosses) _buildBoss(boss),
+                        for (final effect in _assetEffects)
+                          _buildAssetVisualEffect(effect),
                         if (_stage == 30 && _phase == GamePhase.playing)
                           Positioned.fill(
                             key: const ValueKey('stage-30-boss-hit-layer'),
@@ -3586,6 +3745,31 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               specialVisual: boss.specialVisual,
               animationPhase: boss.visualPhase,
               collisionImpact: boss.impactVisual,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssetVisualEffect(AssetVisualEffect effect) {
+    final opacity = (effect.life / effect.maxLife).clamp(0.0, 1.0);
+    return Positioned(
+      left: effect.center.dx - effect.size / 2,
+      top: effect.center.dy - effect.size / 2,
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: opacity,
+          child: Transform.rotate(
+            angle: effect.rotation,
+            child: SizedBox.square(
+              dimension: effect.size,
+              child: Image.asset(
+                effect.assetPath,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.low,
+                gaplessPlayback: true,
+              ),
             ),
           ),
         ),
@@ -4161,7 +4345,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
   void _playPop() {
     if (!mounted) return;
     setState(() {
-      _balloonVisible = false;
+      _balloonVisible = widget.definition.hitToolAssetPath != null;
       addBalloonPopEffect(
         definition: widget.definition,
         pieces: _pieces,
@@ -4180,6 +4364,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
       _effectsRevision++;
     });
     // Preview sound only: no haptic and no gameplay action is invoked here.
+    playBalloonHitSound(widget.definition);
     playBalloonPopSound(widget.definition, boss: false);
     _lastEffectElapsed = Duration.zero;
     _effectController.forward(from: 0);
@@ -4189,6 +4374,9 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     final elapsed = _effectController.lastElapsedDuration ?? Duration.zero;
     final delta = elapsed - _lastEffectElapsed;
     _lastEffectElapsed = elapsed;
+    if (_balloonVisible && _effectController.value >= 0.12) {
+      setState(() => _balloonVisible = false);
+    }
     if (advanceEffects(_pieces, _rings, calculateFrameDelta(delta))) {
       _effectsRevision++;
     }
@@ -4357,6 +4545,72 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                                   animationPhase:
                                       _idleController.value * pi * 2,
                                 ),
+                              ),
+                            ),
+                          ),
+                        if (widget.definition.hitToolAssetPath != null)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: AnimatedBuilder(
+                                animation: _effectController,
+                                builder: (context, _) {
+                                  if (!_effectController.isAnimating ||
+                                      _effectController.value > 0.22) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final progress =
+                                      (_effectController.value / 0.22)
+                                          .clamp(0.0, 1.0);
+                                  return Align(
+                                    alignment: Alignment(
+                                      -0.52 + progress * 0.48,
+                                      -0.78 + progress * 0.55,
+                                    ),
+                                    child: Transform.rotate(
+                                      angle: -0.55,
+                                      child: SizedBox.square(
+                                        dimension: 64,
+                                        child: Image.asset(
+                                          widget.definition.hitToolAssetPath!,
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        if (widget.definition.burstAssetPath != null)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: AnimatedBuilder(
+                                animation: _effectController,
+                                builder: (context, _) {
+                                  final progress = _effectController.value;
+                                  if (!_effectController.isAnimating ||
+                                      progress < 0.10 ||
+                                      progress > 0.48) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final fade = ((0.48 - progress) / 0.38)
+                                      .clamp(0.0, 1.0);
+                                  return Center(
+                                    child: Opacity(
+                                      opacity: fade,
+                                      child: Transform.scale(
+                                        scale: 0.55 + progress,
+                                        child: SizedBox.square(
+                                          dimension: 118,
+                                          child: Image.asset(
+                                            widget.definition.burstAssetPath!,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ),
@@ -4913,6 +5167,7 @@ class BalloonSkinRenderer extends StatelessWidget {
             definition: definition,
             color: color,
             isFake: isFake,
+            visualVariant: visualVariant,
           ),
         BalloonRendererType.star => CustomPaint(
             painter: ShapedBalloonPainter(
@@ -4980,10 +5235,21 @@ class BalloonSkinRenderer extends StatelessWidget {
           ),
       };
       final shouldSpin =
-          definition.idleAnimation == BalloonIdleAnimationType.spin &&
-              specialVisual;
+          definition.idleAnimation == BalloonIdleAnimationType.spin;
       if (shouldSpin) {
-        skinVisual = Transform.rotate(angle: animationPhase, child: skinVisual);
+        skinVisual = Transform.rotate(
+          angle: animationPhase * 0.65,
+          child: skinVisual,
+        );
+      } else if (definition.idleAnimation ==
+          BalloonIdleAnimationType.ghostTail) {
+        skinVisual = Transform.translate(
+          offset: Offset(sin(animationPhase) * 1.4, cos(animationPhase) * 2.2),
+          child: Transform.rotate(
+            angle: sin(animationPhase * 0.7) * 0.018,
+            child: skinVisual,
+          ),
+        );
       } else if (definition.idleAnimation ==
           BalloonIdleAnimationType.slimeSquish) {
         final squash = sin(animationPhase) * 0.045 + collisionImpact * 0.10;
@@ -4998,7 +5264,7 @@ class BalloonSkinRenderer extends StatelessWidget {
           child: skinVisual,
         );
       }
-      if (definition.rendererType == BalloonRendererType.ghost) {
+      if (definition.idleAnimation == BalloonIdleAnimationType.ghostTail) {
         skinVisual = Opacity(opacity: 0.86, child: skinVisual);
       }
       visual = !isBoss
@@ -5038,16 +5304,18 @@ class BalloonSkinArtwork extends StatelessWidget {
     required this.definition,
     required this.color,
     this.isFake = false,
+    this.visualVariant = 0,
   });
 
   final BalloonSkinDefinition definition;
   final Color color;
   final bool isFake;
+  final int visualVariant;
 
   @override
   Widget build(BuildContext context) {
     Widget assetImage() => Image.asset(
-          definition.assetPath!,
+          definition.assetForVariant(visualVariant)!,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.medium,
           gaplessPlayback: true,
@@ -5092,6 +5360,13 @@ class BalloonSkinArtwork extends StatelessWidget {
     }
 
     final image = assetImage();
+    if (definition.imageColorMode == BalloonImageColorMode.original) {
+      if (!isFake) return image;
+      return ColorFiltered(
+        colorFilter: ColorFilter.matrix(_fakeToneMatrix),
+        child: image,
+      );
+    }
     if (usesOriginalAsset(definition, color) && !isFake) return image;
     return ColorFiltered(
       colorFilter: ColorFilter.matrix(
@@ -5151,6 +5426,33 @@ class BalloonSkinArtwork extends StatelessWidget {
     BalloonSkinDefinition definition,
     Color color,
   ) {
+    if (definition.imageColorMode == BalloonImageColorMode.grayscaleTint) {
+      final red = color.r;
+      final green = color.g;
+      final blue = color.b;
+      return <double>[
+        0.213 * red,
+        0.715 * red,
+        0.072 * red,
+        0,
+        0,
+        0.213 * green,
+        0.715 * green,
+        0.072 * green,
+        0,
+        0,
+        0.213 * blue,
+        0.715 * blue,
+        0.072 * blue,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+      ];
+    }
     final sourceHue = HSLColor.fromColor(definition.previewColor).hue;
     final targetHue = HSLColor.fromColor(color).hue;
     final degrees = (targetHue - sourceHue + 540) % 360 - 180;

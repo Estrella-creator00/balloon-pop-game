@@ -35,6 +35,8 @@ enum BalloonSpecialBehavior { none, watermelonVariant, onePercentSpin }
 
 enum BalloonImageDetailMask { none, mochiFace }
 
+enum BalloonImageColorMode { hueShift, grayscaleTint, original }
+
 enum BalloonBadge { none, newItem, popular, event, recommended }
 
 @immutable
@@ -66,6 +68,14 @@ class BalloonSkinDefinition {
     this.visualVariantCount = 1,
     this.specialSpawnChance = 0,
     this.imageDetailMask = BalloonImageDetailMask.none,
+    this.imageColorMode = BalloonImageColorMode.hueShift,
+    this.variantAssetPaths = const <String>[],
+    this.hitToolAssetPath,
+    this.hitSoundAssetPath,
+    this.popSoundAssetPath,
+    this.burstAssetPath,
+    this.wallSplatAssetPath,
+    this.screenSplatAssetPath,
   });
 
   final String id;
@@ -83,6 +93,14 @@ class BalloonSkinDefinition {
   final int visualVariantCount;
   final double specialSpawnChance;
   final BalloonImageDetailMask imageDetailMask;
+  final BalloonImageColorMode imageColorMode;
+  final List<String> variantAssetPaths;
+  final String? hitToolAssetPath;
+  final String? hitSoundAssetPath;
+  final String? popSoundAssetPath;
+  final String? burstAssetPath;
+  final String? wallSplatAssetPath;
+  final String? screenSplatAssetPath;
   final bool isDefault;
   final BalloonBadge badge;
   final bool supportsBossSkin;
@@ -95,8 +113,7 @@ class BalloonSkinDefinition {
   final bool initiallyOwned;
   final BalloonBackgroundType background;
 
-  bool get showsDescription =>
-      rarity != BalloonRarity.common && description != null;
+  bool get showsDescription => description?.isNotEmpty ?? false;
 
   Color colorAtDamage(Color base, double progress, {required bool isBoss}) {
     final strength = isBoss ? bossDamageTintStrength : normalDamageTintStrength;
@@ -111,6 +128,11 @@ class BalloonSkinDefinition {
 
   bool chooseSpecialSpawn(double randomValue) =>
       specialSpawnChance > 0 && randomValue < specialSpawnChance;
+
+  String? assetForVariant(int variant) {
+    if (variantAssetPaths.isEmpty) return assetPath;
+    return variantAssetPaths[variant % variantAssetPaths.length];
+  }
 }
 
 /// Single source of truth for shop, preview, gameplay, Boss, effects and sound.
@@ -200,9 +222,11 @@ abstract final class BalloonSkinCatalog {
     BalloonSkinDefinition(
       id: 'balloon-star',
       displayName: '별',
+      description: '조용하지만 은근 튀는 편',
       price: 200,
       rarity: BalloonRarity.common,
-      rendererType: BalloonRendererType.star,
+      rendererType: BalloonRendererType.image,
+      assetPath: 'assets/images/balloon_star_asset.png',
       colorPalette: _basicPalette,
       popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic,
@@ -214,21 +238,23 @@ abstract final class BalloonSkinCatalog {
     BalloonSkinDefinition(
       id: 'balloon-flower',
       displayName: '꽃',
+      description: '화사하고 기분파',
       price: 200,
       rarity: BalloonRarity.common,
-      rendererType: BalloonRendererType.flower,
+      rendererType: BalloonRendererType.image,
+      assetPath: 'assets/images/balloon_flower_asset.png',
       colorPalette: _basicPalette,
       popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic,
       isDefault: false,
       supportsBossSkin: true,
       shopOrder: 3,
-      previewColor: Color(0xFFFF7FDB),
+      previewColor: Color(0xFF6FA7FF),
     ),
     BalloonSkinDefinition(
       // Keep the legacy rabbit ID so existing ownership/equipment survives.
       id: 'balloon-rabbit', displayName: '모찌', price: 500,
-      description: '겁은 많지만 호기심은 누구보다 많아요.',
+      description: '겁 많고 호기심 많음',
       rarity: BalloonRarity.rare, rendererType: BalloonRendererType.image,
       assetPath: 'assets/images/mochi_balloon.png',
       colorPalette: _rabbitPalette, popEffectType: BalloonPopEffectType.shards,
@@ -241,9 +267,16 @@ abstract final class BalloonSkinCatalog {
       id: 'balloon-wari',
       displayName: '와리',
       price: 600,
-      description: '오늘은 어떤 모습으로 나타날지 아무도 몰라요.',
+      description: '시원하고 자유분방함',
       rarity: BalloonRarity.rare,
-      rendererType: BalloonRendererType.watermelon,
+      rendererType: BalloonRendererType.image,
+      assetPath: 'assets/images/balloon_wari_halfmoon_asset.png',
+      variantAssetPaths: <String>[
+        'assets/images/balloon_wari_halfmoon_asset.png',
+        'assets/images/balloon_wari_triangle_asset.png',
+        'assets/images/balloon_wari_round_asset.png',
+      ],
+      imageColorMode: BalloonImageColorMode.original,
       colorPalette: <Color>[Color(0xFFFF5E67)],
       popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic,
@@ -258,10 +291,12 @@ abstract final class BalloonSkinCatalog {
       id: 'balloon-kicks',
       displayName: '킥스',
       price: 700,
-      description: '평소엔 얌전하지만 가끔 혼자 신이 납니다.',
+      description: '활발하고 승부욕 강함',
       rarity: BalloonRarity.rare,
-      rendererType: BalloonRendererType.soccer,
-      colorPalette: <Color>[Color(0xFFF8FAFC)],
+      rendererType: BalloonRendererType.image,
+      assetPath: 'assets/images/balloon_kicks_asset.png',
+      imageColorMode: BalloonImageColorMode.grayscaleTint,
+      colorPalette: _basicPalette,
       popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic,
       isDefault: false,
@@ -269,19 +304,18 @@ abstract final class BalloonSkinCatalog {
       shopOrder: 6,
       previewColor: Color(0xFFF8FAFC),
       idleAnimation: BalloonIdleAnimationType.spin,
-      specialBehavior: BalloonSpecialBehavior.onePercentSpin,
-      specialSpawnChance: 0.01,
     ),
     BalloonSkinDefinition(
       id: 'balloon-boo',
       displayName: '부우',
       price: 1000,
-      description: '조용히 떠다니는 걸 제일 좋아해요.',
+      description: '장난기 많고 살짝 겁쟁이',
       rarity: BalloonRarity.heroic,
-      rendererType: BalloonRendererType.ghost,
+      rendererType: BalloonRendererType.image,
+      assetPath: 'assets/images/balloon_boo_asset.png',
       colorPalette: _ghostPalette,
       popEffectType: BalloonPopEffectType.mist,
-      popSoundType: BalloonPopSoundType.ghost,
+      popSoundType: BalloonPopSoundType.basic,
       isDefault: false,
       supportsBossSkin: true,
       shopOrder: 7,
@@ -291,46 +325,54 @@ abstract final class BalloonSkinCatalog {
     ),
     BalloonSkinDefinition(
       id: 'balloon-jello',
-      displayName: '젤로',
+      displayName: '머기',
       price: 1500,
-      description: '말랑해 보여도 건드리면 빠지직!',
+      description: '예민하고 까칠함',
       rarity: BalloonRarity.heroic,
-      rendererType: BalloonRendererType.slime,
+      rendererType: BalloonRendererType.image,
+      assetPath: 'assets/images/balloon_muggy_asset.png',
       colorPalette: _slimePalette,
-      popEffectType: BalloonPopEffectType.gel,
-      popSoundType: BalloonPopSoundType.crackle,
+      popEffectType: BalloonPopEffectType.shards,
+      popSoundType: BalloonPopSoundType.basic,
+      popSoundAssetPath: 'assets/images/muggy_break.mp3.mp3',
       isDefault: false,
       supportsBossSkin: true,
       shopOrder: 8,
-      previewColor: Color(0xFF6EEB83),
+      previewColor: Color(0xFFB7CF86),
       avoidImmediateColorRepeat: true,
-      idleAnimation: BalloonIdleAnimationType.slimeSquish,
+      idleAnimation: BalloonIdleAnimationType.none,
     ),
     BalloonSkinDefinition(
       id: 'balloon-lumen',
-      displayName: '루멘',
+      displayName: '제미',
       price: 5000,
-      description: '깊은 동굴에서 발견된 정체불명의 수정.',
+      description: '차갑고 단단함',
       rarity: BalloonRarity.legendary,
-      rendererType: BalloonRendererType.crystal,
+      rendererType: BalloonRendererType.image,
+      assetPath: 'assets/images/balloon_gemi_asset.png',
       colorPalette: _crystalPalette,
       popEffectType: BalloonPopEffectType.crystal,
       popSoundType: BalloonPopSoundType.crystal,
       isDefault: false,
       supportsBossSkin: true,
       shopOrder: 9,
-      previewColor: Color(0xFF4C8DFF),
+      previewColor: Color(0xFF9A67FF),
       avoidImmediateColorRepeat: true,
       idleAnimation: BalloonIdleAnimationType.glow,
       background: BalloonBackgroundType.crystalCave,
+      hitToolAssetPath: 'assets/images/gemi_pickaxe_asset.png',
+      hitSoundAssetPath: 'assets/images/gemi_pickaxe_hit.mp3.mp3',
+      popSoundAssetPath: 'assets/images/gemi_break.mp3.mp3',
     ),
     BalloonSkinDefinition(
       id: 'balloon-chouchou',
       displayName: '슈슈',
       price: 5000,
-      description: '절대로 포크로 찌르지 마세요.',
+      description: '달콤하고 엉뚱함',
       rarity: BalloonRarity.legendary,
-      rendererType: BalloonRendererType.creamPuff,
+      rendererType: BalloonRendererType.image,
+      assetPath: 'assets/images/balloon_shushu_asset.png',
+      imageColorMode: BalloonImageColorMode.original,
       colorPalette: <Color>[Color(0xFFD99542)],
       popEffectType: BalloonPopEffectType.cream,
       popSoundType: BalloonPopSoundType.cream,
@@ -340,6 +382,12 @@ abstract final class BalloonSkinCatalog {
       previewColor: Color(0xFFD99542),
       idleAnimation: BalloonIdleAnimationType.breathe,
       background: BalloonBackgroundType.creamCafe,
+      hitToolAssetPath: 'assets/images/shushu_fork_asset.png',
+      hitSoundAssetPath: 'assets/images/shushu_fork_hit.mp3.mp3',
+      popSoundAssetPath: 'assets/images/shushu_cream_burst.mp3.mp3',
+      burstAssetPath: 'assets/images/shushu_cream_burst_asset.png',
+      wallSplatAssetPath: 'assets/images/shushu_cream_wall_asset.png',
+      screenSplatAssetPath: 'assets/images/shushu_cream_screen_asset.png',
     ),
   ];
 

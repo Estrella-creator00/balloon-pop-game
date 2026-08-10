@@ -20,7 +20,16 @@ class BalloonBackgroundSpec {
 abstract final class BalloonBackgroundRegistry {
   static final definitions = <BalloonBackgroundType, BalloonBackgroundSpec>{
     for (final type in BalloonBackgroundType.values)
-      type: BalloonBackgroundSpec(type: type),
+      type: BalloonBackgroundSpec(
+        type: type,
+        assetPath: switch (type) {
+          BalloonBackgroundType.crystalCave =>
+            'assets/images/gemi_background_asset.png',
+          BalloonBackgroundType.creamCafe =>
+            'assets/images/shushu_background_asset.png',
+          _ => null,
+        },
+      ),
   };
   static BalloonBackgroundSpec definitionFor(BalloonBackgroundType type) =>
       definitions[type]!;
