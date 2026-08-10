@@ -33,6 +33,8 @@ enum BalloonIdleAnimationType {
 
 enum BalloonSpecialBehavior { none, watermelonVariant, onePercentSpin }
 
+enum BalloonExitAnimationType { none, kickAway }
+
 enum BalloonImageDetailMask { none, mochiFace }
 
 enum BalloonImageColorMode { hueShift, grayscaleTint, original }
@@ -76,6 +78,10 @@ class BalloonSkinDefinition {
     this.burstAssetPath,
     this.wallSplatAssetPath,
     this.screenSplatAssetPath,
+    this.shardAssetPath,
+    this.screenCrackAssetPath,
+    this.screenCrackChance = 0,
+    this.exitAnimation = BalloonExitAnimationType.none,
   });
 
   final String id;
@@ -101,6 +107,10 @@ class BalloonSkinDefinition {
   final String? burstAssetPath;
   final String? wallSplatAssetPath;
   final String? screenSplatAssetPath;
+  final String? shardAssetPath;
+  final String? screenCrackAssetPath;
+  final double screenCrackChance;
+  final BalloonExitAnimationType exitAnimation;
   final bool isDefault;
   final BalloonBadge badge;
   final bool supportsBossSkin;
@@ -213,7 +223,6 @@ abstract final class BalloonSkinCatalog {
       popEffectType: BalloonPopEffectType.hearts,
       popSoundType: BalloonPopSoundType.heart,
       isDefault: false,
-      badge: BalloonBadge.newItem,
       supportsBossSkin: true,
       shopOrder: 1,
       previewColor: Color(0xFFFF5C8A),
@@ -262,6 +271,7 @@ abstract final class BalloonSkinCatalog {
       supportsBossSkin: true, shopOrder: 4, previewColor: Color(0xFFFF91B8),
       avoidImmediateColorRepeat: true,
       imageDetailMask: BalloonImageDetailMask.mochiFace,
+      popSoundAssetPath: 'assets/sounds/mochi_wing_flap.mp3.mp3',
     ),
     BalloonSkinDefinition(
       id: 'balloon-wari',
@@ -286,6 +296,7 @@ abstract final class BalloonSkinCatalog {
       previewColor: Color(0xFFFF5E67),
       specialBehavior: BalloonSpecialBehavior.watermelonVariant,
       visualVariantCount: 3,
+      popSoundAssetPath: 'assets/sounds/wari_watermelon_bite.mp3.mp3',
     ),
     BalloonSkinDefinition(
       id: 'balloon-kicks',
@@ -303,7 +314,9 @@ abstract final class BalloonSkinCatalog {
       supportsBossSkin: true,
       shopOrder: 6,
       previewColor: Color(0xFFF8FAFC),
-      idleAnimation: BalloonIdleAnimationType.spin,
+      idleAnimation: BalloonIdleAnimationType.none,
+      hitSoundAssetPath: 'assets/sounds/kicks_soccer_kick.mp3.mp3',
+      exitAnimation: BalloonExitAnimationType.kickAway,
     ),
     BalloonSkinDefinition(
       id: 'balloon-boo',
@@ -322,6 +335,7 @@ abstract final class BalloonSkinCatalog {
       previewColor: Color(0xFFC9B7FF),
       avoidImmediateColorRepeat: true,
       idleAnimation: BalloonIdleAnimationType.ghostTail,
+      popSoundAssetPath: 'assets/sounds/boo_ghost_woo.mp3.mp3',
     ),
     BalloonSkinDefinition(
       id: 'balloon-jello',
@@ -363,6 +377,9 @@ abstract final class BalloonSkinCatalog {
       hitToolAssetPath: 'assets/images/gemi_pickaxe_asset.png',
       hitSoundAssetPath: 'assets/images/gemi_pickaxe_hit.mp3.mp3',
       popSoundAssetPath: 'assets/images/gemi_break.mp3.mp3',
+      shardAssetPath: 'assets/images/gemi_shard.png.png',
+      screenCrackAssetPath: 'assets/images/gemi_screen_crack.png.png',
+      screenCrackChance: 0.28,
     ),
     BalloonSkinDefinition(
       id: 'balloon-chouchou',
@@ -397,6 +414,24 @@ abstract final class BalloonSkinCatalog {
   static final List<BalloonSkinDefinition> shopDefinitions = List.unmodifiable(
     [...definitions]..sort((a, b) => a.shopOrder.compareTo(b.shopOrder)),
   );
+
+  /// Release-content badge targets. Update this set only when the shop's
+  /// NEW lineup changes; product order and saved IDs stay untouched.
+  static const newItemIds = <String>{
+    'balloon-star',
+    'balloon-flower',
+    'balloon-wari',
+    'balloon-kicks',
+    'balloon-boo',
+    'balloon-jello',
+    'balloon-lumen',
+    'balloon-chouchou',
+  };
+
+  static BalloonBadge badgeFor(BalloonSkinDefinition definition) =>
+      newItemIds.contains(definition.id)
+          ? BalloonBadge.newItem
+          : definition.badge;
 
   static BalloonSkinDefinition get defaultSkin => _byId[defaultId]!;
   static BalloonSkinDefinition byIdOrDefault(String? id) =>

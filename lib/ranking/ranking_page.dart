@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../audio/pop_sound.dart';
 import 'mock_ranking_repository.dart';
 import 'ranking_entry.dart';
 import 'ranking_repository.dart';
@@ -227,7 +228,10 @@ class _RankingHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 child: InkWell(
                   key: const ValueKey('ranking-back-button'),
-                  onTap: () => Navigator.of(context).pop(),
+                  onTap: () {
+                    PopSound.playUiClick();
+                    Navigator.of(context).pop();
+                  },
                   borderRadius: BorderRadius.circular(14),
                   child: const SizedBox(
                     width: 44,
@@ -633,7 +637,10 @@ class _RankingErrorView extends StatelessWidget {
                   const SizedBox(height: 12),
                   FilledButton(
                     key: const ValueKey('ranking-retry-button'),
-                    onPressed: onRetry,
+                    onPressed: () {
+                      PopSound.playUiClick();
+                      onRetry();
+                    },
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFFFF4F7B),
                     ),

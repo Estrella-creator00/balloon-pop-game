@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'audio/pop_sound.dart';
 import 'services/settings_service.dart';
 
 abstract final class AppVersion {
@@ -76,7 +77,10 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             _SettingsHeader(
               title: '설정',
-              onBack: () => Navigator.of(context).pop(),
+              onBack: () {
+                PopSound.playUiClick();
+                Navigator.of(context).pop();
+              },
             ),
             const SizedBox(height: 10),
             Expanded(
@@ -107,6 +111,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         value: SettingsService.soundEnabled,
                         switchKey: const ValueKey('settings-sound-switch'),
                         onChanged: (enabled) {
+                          PopSound.playUiClick();
                           SettingsService.setSoundEnabled(enabled);
                           setState(() {});
                         },
@@ -119,6 +124,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         value: SettingsService.hapticEnabled,
                         switchKey: const ValueKey('settings-haptic-switch'),
                         onChanged: (enabled) {
+                          PopSound.playUiClick();
                           SettingsService.setHapticEnabled(enabled);
                           setState(() {});
                         },
@@ -298,7 +304,10 @@ class _SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
+        onTap: () {
+          PopSound.playUiClick();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(18),
         child: SizedBox(
           height: 54,
@@ -488,7 +497,10 @@ class _NicknameEditDialogState extends State<NicknameEditDialog> {
                     height: 48,
                     child: FilledButton(
                       key: const ValueKey('nickname-save-button'),
-                      onPressed: _save,
+                      onPressed: () {
+                        PopSound.playUiClick();
+                        _save();
+                      },
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFFFF4F7B),
                       ),

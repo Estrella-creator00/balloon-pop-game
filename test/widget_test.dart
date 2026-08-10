@@ -24,6 +24,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+String assetNameOf(ImageProvider<Object> provider) {
+  var current = provider;
+  while (current is ResizeImage) {
+    current = current.imageProvider;
+  }
+  return (current as AssetImage).assetName;
+}
+
 Future<void> tapSectionStart(WidgetTester tester, int section) async {
   final button = find.byKey(ValueKey('start-section-$section'));
   final widget = tester.widget<FilledButton>(button);
@@ -607,7 +615,7 @@ void main() {
     expect(heart.popEffectType, BalloonPopEffectType.hearts);
     expect(heart.popSoundType, BalloonPopSoundType.heart);
     expect(heart.supportsBossSkin, isTrue);
-    expect(heart.badge, BalloonBadge.newItem);
+    expect(BalloonSkinCatalog.badgeFor(heart), BalloonBadge.none);
     expect(heart.background, BalloonBackgroundType.none);
 
     final star = BalloonSkinCatalog.byIdOrDefault('balloon-star');
@@ -623,6 +631,27 @@ void main() {
     expect(rabbit.price, 500);
     expect(rabbit.rarity, BalloonRarity.rare);
     expect(rabbit.rendererType, BalloonRendererType.image);
+
+    expect(
+      BalloonSkinCatalog.newItemIds,
+      containsAll(<String>{
+        'balloon-star',
+        'balloon-flower',
+        'balloon-wari',
+        'balloon-kicks',
+        'balloon-boo',
+        'balloon-jello',
+        'balloon-lumen',
+        'balloon-chouchou',
+      }),
+    );
+    expect(BalloonSkinCatalog.badgeFor(heart), BalloonBadge.none);
+    expect(
+      BalloonSkinCatalog.badgeFor(
+        BalloonSkinCatalog.byIdOrDefault('balloon-kicks'),
+      ),
+      BalloonBadge.newItem,
+    );
     expect(rabbit.assetPath, 'assets/images/mochi_balloon.png');
     expect(rabbit.imageDetailMask, BalloonImageDetailMask.mochiFace);
     expect(rabbit.colorPalette, hasLength(5));
@@ -746,8 +775,7 @@ void main() {
     }
   });
 
-  testWidgets(
-      'kicks spin is instance data and legendary backgrounds are shared',
+  testWidgets('kicks rotation is removed and legendary backgrounds are shared',
       (tester) async {
     final kicks = BalloonSkinCatalog.byIdOrDefault('balloon-kicks');
     await tester.pumpWidget(MaterialApp(
@@ -781,14 +809,14 @@ void main() {
         of: find.byKey(const ValueKey('kicks-normal')),
         matching: find.byType(Transform),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('kicks-spin')),
         matching: find.byType(Transform),
       ),
-      findsOneWidget,
+      findsNothing,
     );
 
     for (final entry in const [
@@ -800,7 +828,7 @@ void main() {
         home: GameBalloonBackground(definition: definition),
       ));
       final image = tester.widget<Image>(find.byType(Image));
-      expect((image.image as AssetImage).assetName, entry.$2);
+      expect(assetNameOf(image.image), entry.$2);
     }
   });
 
@@ -1123,8 +1151,7 @@ void main() {
       final image = tester.widget<Image>(
         find.descendant(of: artwork, matching: find.byType(Image)),
       );
-      expect(image.image, isA<AssetImage>());
-      expect((image.image as AssetImage).assetName, definition.assetPath);
+      expect(assetNameOf(image.image), definition.assetPath);
       expect(image.color, isNull);
       expect(image.opacity, isNull);
     }
@@ -3414,6 +3441,13 @@ void main() {
           await tapGameTarget(tester, 'boss-balloon-0');
         }
         await tester.pump(const Duration(seconds: 1));
+        expect(find.byKey(const ValueKey('stage-intro-next')), findsOneWidget);
+        expect(find.byKey(ValueKey<int>(nextBalloonId)), findsNothing);
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.byKey(const ValueKey('stage-intro-next')), findsOneWidget);
+        expect(find.byKey(ValueKey<int>(nextBalloonId)), findsNothing);
+        await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
+        await tester.pump();
         continue;
       }
       final count = (stage - 1) % 10 + 2;
@@ -3607,6 +3641,9 @@ void main() {
     expect(find.text('21 STAGE'), findsOneWidget);
     expect(find.text('점수  $scoreAtStage20Clear'), findsOneWidget);
     expect(find.text('게임 완료!'), findsNothing);
+    expect(find.byKey(const ValueKey('stage-intro-next')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
+    await tester.pump();
     expect(find.byKey(ValueKey(nextBalloonId)), findsOneWidget);
     expect(
       find.byKey(ValueKey('fake-balloon-${nextBalloonId + 2}')),
@@ -3790,6 +3827,47 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(find.text('일시정지'), findsWidgets);
     expect(find.text('시간  10'), findsOneWidget);
+  });
+
+  testWidgets('legendary tools apply damage only at their impact frame',
+      (tester) async {
+    for (final id in const ['balloon-lumen', 'balloon-chouchou']) {
+      ProgressStorage.clear();
+      ProgressStorage.setNicknameOnboardingCompleted(true);
+      ProgressStorage.addCoins(5000);
+      final definition = BalloonSkinCatalog.byIdOrDefault(id);
+      expect(
+        PurchaseService.purchase(
+          productId: id,
+          price: definition.price,
+          initiallyOwned: false,
+        ),
+        PurchaseResult.success,
+      );
+      expect(
+        PurchaseService.equip(
+          category: StoreCategory.balloon.name,
+          productId: id,
+          initiallyOwned: false,
+        ),
+        EquipResult.success,
+      );
+
+      await tester.pumpWidget(
+        const BalloonPopApp(toolHitDeltaForTest: 0.15),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+      expect(find.byKey(const ValueKey<int>(0)), findsOneWidget);
+
+      await tapGameTarget(tester, 0);
+      expect(find.byKey(const ValueKey<int>(0)), findsOneWidget);
+      await tester.pump(gameLoopInterval);
+      expect(find.byKey(const ValueKey<int>(0)), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
   });
 
   testWidgets('locked store product uses a compact disabled placeholder',

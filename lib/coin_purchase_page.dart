@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'audio/pop_sound.dart';
 import 'coin/coin_package.dart';
 import 'services/coin_purchase_service.dart';
 import 'services/coin_service.dart';
@@ -33,7 +34,10 @@ class CoinPurchasePage extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: IconButton(
                       key: const ValueKey('coin-purchase-back'),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () {
+                        PopSound.playUiClick();
+                        Navigator.of(context).pop();
+                      },
                       tooltip: '뒤로가기',
                       icon: const Icon(Icons.arrow_back_rounded),
                       color: const Color(0xFF285A78),
@@ -61,7 +65,10 @@ class CoinPurchasePage extends StatelessWidget {
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) => _CoinPackageCard(
                   package: packages[index],
-                  onTap: () => _requestPurchase(context, packages[index]),
+                  onTap: () {
+                    PopSound.playUiClick();
+                    _requestPurchase(context, packages[index]);
+                  },
                 ),
               ),
             ),

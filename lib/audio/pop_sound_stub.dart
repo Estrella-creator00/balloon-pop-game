@@ -1,4 +1,10 @@
 abstract final class PopSound {
+  static const uiClickAssetPath = 'assets/sounds/ui_click.mp3.mp3';
+  static const bossAppearAssetPath = 'assets/sounds/boss_appear.mp3.mp3';
+  static const bossClearAssetPath = 'assets/sounds/boss_clear.mp3.mp3';
+  static const shopPurchaseAssetPath = 'assets/sounds/shop_purchase.mp3.mp3';
+  static const shopEquipAssetPath = 'assets/sounds/shop_equip.mp3.mp3';
+
   static bool enabled = true;
   static int basicPlayCount = 0;
   static int heartPlayCount = 0;
@@ -9,6 +15,14 @@ abstract final class PopSound {
   static String? lastAssetPath;
 
   static void setEnabled(bool value) => enabled = value;
+
+  static void preloadSharedAssets() {}
+
+  static void playUiClick() => playAsset(uiClickAssetPath);
+  static void playBossAppear() => playAsset(bossAppearAssetPath);
+  static void playBossClear() => playAsset(bossClearAssetPath);
+  static void playShopPurchase() => playAsset(shopPurchaseAssetPath);
+  static void playShopEquip() => playAsset(shopEquipAssetPath);
 
   static void play() {
     if (enabled) basicPlayCount++;

@@ -25,10 +25,17 @@ void main() {
 }
 
 class BalloonPopApp extends StatefulWidget {
-  const BalloonPopApp({super.key, this.stage30SwapRollForTest});
+  const BalloonPopApp({
+    super.key,
+    this.stage30SwapRollForTest,
+    this.toolHitDeltaForTest,
+  });
 
   @visibleForTesting
   final double Function()? stage30SwapRollForTest;
+
+  @visibleForTesting
+  final double? toolHitDeltaForTest;
 
   @override
   State<BalloonPopApp> createState() => _BalloonPopAppState();
@@ -62,6 +69,7 @@ class _BalloonPopAppState extends State<BalloonPopApp> {
       home: _nicknameOnboardingCompleted
           ? BalloonGamePage(
               stage30SwapRollForTest: widget.stage30SwapRollForTest,
+              toolHitDeltaForTest: widget.toolHitDeltaForTest,
             )
           : NicknameOnboardingPage(onCompleted: _completeNicknameOnboarding),
     );
@@ -70,6 +78,7 @@ class _BalloonPopAppState extends State<BalloonPopApp> {
 
 enum GamePhase {
   menu,
+  stageIntro,
   playing,
   paused,
   stageClear,
@@ -164,7 +173,7 @@ class StoreProduct {
         previewType: StorePreviewType.balloon,
         previewData: definition.previewColor,
         rarity: definition.rarity,
-        badge: definition.badge,
+        badge: BalloonSkinCatalog.badgeFor(definition),
       );
 
   final String id;
@@ -216,6 +225,8 @@ class Balloon {
     this.visualVariant = 0,
     this.specialVisual = false,
     this.impactVisual = 0,
+    this.exitProgress = 0,
+    this.exitVelocity = Offset.zero,
   });
 
   final int id;
@@ -232,6 +243,10 @@ class Balloon {
   final int visualVariant;
   final bool specialVisual;
   double impactVisual;
+  double exitProgress;
+  Offset exitVelocity;
+
+  bool get isExiting => exitProgress > 0;
 }
 
 class BossBalloon {
@@ -777,6 +792,8 @@ class AssetVisualEffect {
     required this.spin,
     required this.life,
     required this.maxLife,
+    this.removeLightBackground = false,
+    this.cropScale = 1,
   });
 
   final String assetPath;
@@ -787,7 +804,73 @@ class AssetVisualEffect {
   final double spin;
   double life;
   final double maxLife;
+  final bool removeLightBackground;
+  final double cropScale;
 }
+
+class PendingToolHit {
+  PendingToolHit.balloon({required this.balloon, required this.definition})
+      : boss = null;
+
+  PendingToolHit.boss({required this.boss, required this.definition})
+      : balloon = null;
+
+  static const impactTime = 0.14;
+  static const totalTime = 0.24;
+
+  final Balloon? balloon;
+  final BossBalloon? boss;
+  final BalloonSkinDefinition definition;
+  double elapsed = 0;
+  bool impactApplied = false;
+
+  Offset get center {
+    final targetBalloon = balloon;
+    if (targetBalloon != null) {
+      return targetBalloon.position +
+          Offset(targetBalloon.size / 2, targetBalloon.size / 2);
+    }
+    final targetBoss = boss!;
+    return targetBoss.position +
+        Offset(targetBoss.size / 2, targetBoss.size / 2);
+  }
+}
+
+@immutable
+class StageIntroDefinition {
+  const StageIntroDefinition({
+    required this.title,
+    required this.headline,
+    required this.rules,
+  });
+
+  final String title;
+  final String headline;
+  final List<String> rules;
+}
+
+const stageIntroDefinitions = <int, StageIntroDefinition>{
+  11: StageIntroDefinition(
+    title: 'STAGE 11–20',
+    headline: '단단한 풍선 등장!',
+    rules: ['풍선마다 2번 터치', '빠르게 모두 터뜨리기'],
+  ),
+  21: StageIntroDefinition(
+    title: 'STAGE 21–30',
+    headline: '가짜 풍선 등장!',
+    rules: ['가짜 풍선 터치 금지', '진짜 풍선만 터뜨리기'],
+  ),
+  31: StageIntroDefinition(
+    title: 'STAGE 31–40',
+    headline: '분열 풍선 등장!',
+    rules: ['터뜨리면 작은 풍선으로 분열', '분열된 풍선까지 모두 터뜨리기'],
+  ),
+  41: StageIntroDefinition(
+    title: 'STAGE 41–50',
+    headline: '숫자 풍선 등장!',
+    rules: ['풍선에 숫자 표시', '숫자 순서대로 터뜨리기'],
+  ),
+};
 
 bool playBalloonHitSound(BalloonSkinDefinition definition) {
   final assetPath = definition.hitSoundAssetPath;
@@ -829,10 +912,17 @@ class SinglePeriodicGameLoop {
 }
 
 class BalloonGamePage extends StatefulWidget {
-  const BalloonGamePage({super.key, this.stage30SwapRollForTest});
+  const BalloonGamePage({
+    super.key,
+    this.stage30SwapRollForTest,
+    this.toolHitDeltaForTest,
+  });
 
   @visibleForTesting
   final double Function()? stage30SwapRollForTest;
+
+  @visibleForTesting
+  final double? toolHitDeltaForTest;
 
   @override
   State<BalloonGamePage> createState() => _BalloonGamePageState();
@@ -973,6 +1063,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   final List<BurstRing> _rings = [];
   final List<FloatingTextFeedback> _feedbacks = [];
   final List<AssetVisualEffect> _assetEffects = [];
+  final List<PendingToolHit> _pendingToolHits = [];
   int _effectsRevision = 0;
   final SinglePeriodicGameLoop _gameLoop = SinglePeriodicGameLoop();
   final CoinRewardSession _coinRewardSession = CoinRewardSession();
@@ -1006,6 +1097,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   late final ValueNotifier<GameHeaderData> _headerData;
   late final Widget _gameHeader;
   int _stagePage = 0;
+  bool _initialAssetsPrecached = false;
+  double _crystalBackgroundPulse = 0;
 
   StageConfig get _stageConfig => StageConfig.forStage(_stage);
 
@@ -1018,6 +1111,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _lastScore = ProgressStorage.lastScore();
     _coinBalance = CoinService.balance;
     SettingsService.applyStoredPreferences();
+    PopSound.preloadSharedAssets();
     _ownedProductIds = PurchaseService.ownedProductIds;
     _equippedProductIds = _loadEquippedProductIds();
     for (final definition in BalloonSkinCatalog.definitions) {
@@ -1034,9 +1128,35 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _headerData = ValueNotifier(_createHeaderData());
     _gameHeader = GameHeader(
       data: _headerData,
-      onPause: _pauseGame,
-      onEnd: _confirmEndGame,
+      onPause: _onPausePressed,
+      onEnd: _onEndPressed,
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialAssetsPrecached) return;
+    _initialAssetsPrecached = true;
+    _precacheSkinAssets(_equippedBalloonSkin);
+  }
+
+  void _precacheSkinAssets(BalloonSkinDefinition definition) {
+    final paths = <String?>{
+      definition.assetPath,
+      ...definition.variantAssetPaths,
+      definition.hitToolAssetPath,
+      definition.burstAssetPath,
+      definition.wallSplatAssetPath,
+      definition.screenSplatAssetPath,
+      definition.shardAssetPath,
+      definition.screenCrackAssetPath,
+      BalloonBackgroundRegistry.definitionFor(definition.background).assetPath,
+    }..remove(null);
+    for (final path in paths.cast<String>()) {
+      final width = path.contains('background') ? 1024 : 512;
+      precacheImage(ResizeImage(AssetImage(path), width: width), context);
+    }
   }
 
   Map<StoreCategory, String> _loadEquippedProductIds() {
@@ -1102,6 +1222,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _pieces.clear();
     _rings.clear();
     _assetEffects.clear();
+    _pendingToolHits.clear();
     _feedbacks.clear();
     _effectsRevision++;
     _bosses.clear();
@@ -1145,6 +1266,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _pieces.clear();
       _rings.clear();
       _assetEffects.clear();
+      _pendingToolHits.clear();
       _feedbacks.clear();
       _bosses.clear();
     });
@@ -1177,6 +1299,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _phase = GamePhase.paused;
     });
     _publishHeader();
+  }
+
+  void _onPausePressed() {
+    PopSound.playUiClick();
+    _pauseGame();
+  }
+
+  void _onEndPressed() {
+    PopSound.playUiClick();
+    _confirmEndGame();
   }
 
   void _resumeGame() {
@@ -1224,6 +1356,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _balloons.clear();
     _bosses.clear();
     _stage30BossState = null;
+    _pendingToolHits.clear();
+    _crystalBackgroundPulse = 0;
 
     if (_playArea == Size.zero) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1240,6 +1374,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
     if (_stageConfig.isBoss) {
       _spawnBoss();
+      PopSound.playBossAppear();
     } else {
       _spawnBalloons(_stageConfig.balloonCount);
       _spawnFakeBalloons(_stageConfig.fakeBalloonCount);
@@ -1409,6 +1544,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _frameStopwatch
       ..reset()
       ..start();
+    _updatePendingToolHits(widget.toolHitDeltaForTest ?? dt);
     if (_phase == GamePhase.stageClear || _phase == GamePhase.bossClear) {
       _updateEffects(dt);
       setState(() {});
@@ -1436,7 +1572,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _updateBalloons(double dt) {
     if (_phase != GamePhase.playing || _playArea == Size.zero) return;
 
+    final completedExits = <Balloon>[];
     for (final balloon in _balloons) {
+      if (balloon.isExiting) {
+        balloon.exitProgress += dt / 0.24;
+        balloon.position += balloon.exitVelocity * dt;
+        if (balloon.exitProgress >= 1) completedExits.add(balloon);
+        continue;
+      }
       balloon.impactVisual = max(0, balloon.impactVisual - dt * 6);
       balloon.floatPhase += dt * 2.4;
       final drift = Offset(0, sin(balloon.floatPhase) * balloon.floatPower);
@@ -1445,6 +1588,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         if (v != balloon.velocity) balloon.impactVisual = 1;
         balloon.velocity = v;
       });
+    }
+    for (final balloon in completedExits) {
+      _completeKickExit(balloon);
     }
   }
 
@@ -1506,6 +1652,51 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     return Offset(x, y);
   }
 
+  bool _queueToolHit({
+    Balloon? balloon,
+    BossBalloon? boss,
+    required BalloonSkinDefinition definition,
+  }) {
+    if (definition.hitToolAssetPath == null) return false;
+    final alreadyPending = _pendingToolHits.any(
+      (hit) => identical(hit.balloon, balloon) && identical(hit.boss, boss),
+    );
+    if (alreadyPending) return true;
+    setState(() {
+      _pendingToolHits.add(
+        balloon != null
+            ? PendingToolHit.balloon(
+                balloon: balloon,
+                definition: definition,
+              )
+            : PendingToolHit.boss(
+                boss: boss!,
+                definition: definition,
+              ),
+      );
+    });
+    return true;
+  }
+
+  void _updatePendingToolHits(double dt) {
+    if (_pendingToolHits.isEmpty) return;
+    for (final hit in List<PendingToolHit>.of(_pendingToolHits)) {
+      hit.elapsed += dt;
+      if (!hit.impactApplied && hit.elapsed >= PendingToolHit.impactTime) {
+        hit.impactApplied = true;
+        final balloon = hit.balloon;
+        if (balloon != null) {
+          _applyBalloonHit(balloon, hit.definition);
+        } else {
+          _applyBossHit(hit.boss!, hit.definition);
+        }
+      }
+    }
+    _pendingToolHits.removeWhere(
+      (hit) => hit.elapsed >= PendingToolHit.totalTime,
+    );
+  }
+
   void _updateEffects(double dt) {
     var changed = advanceEffects(
       _pieces,
@@ -1520,6 +1711,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       changed = true;
     }
     _assetEffects.removeWhere((effect) => effect.life <= 0);
+    _crystalBackgroundPulse = max(0, _crystalBackgroundPulse - dt * 4.8);
     if (changed) {
       _effectsRevision++;
     }
@@ -1534,11 +1726,27 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     }
 
     final skin = BalloonSkinCatalog.byIdOrDefault(balloon.skinId);
+    if (balloon.isExiting) return;
+    if (balloon.hp <= 1 &&
+        skin.exitAnimation == BalloonExitAnimationType.kickAway) {
+      _startKickExit(balloon, skin);
+      return;
+    }
+    if (_queueToolHit(balloon: balloon, definition: skin)) return;
+    _applyBalloonHit(balloon, skin);
+  }
+
+  void _applyBalloonHit(
+    Balloon balloon,
+    BalloonSkinDefinition skin,
+  ) {
+    if (_phase != GamePhase.playing || !_balloons.contains(balloon)) return;
     final center =
         balloon.position + Offset(balloon.size / 2, balloon.size / 2);
     if (balloon.hp > 1) {
-      _spawnSkinHitTool(skin, center);
       if (!playBalloonHitSound(skin)) PopSound.playLightTap();
+      _spawnGemiShards(skin, center, balloon.size, count: 2);
+      _registerLegendaryBackgroundImpact(skin, finalHit: false);
       setState(() {
         balloon.hp--;
         balloon.size *= 0.88;
@@ -1547,8 +1755,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     }
 
     HapticService.shortImpact();
-    _spawnSkinHitTool(skin, center);
     playBalloonHitSound(skin);
+    _registerLegendaryBackgroundImpact(skin, finalHit: true);
     _playSkinPopSound(skin, boss: false);
     _spawnSkinPopEffect(skin, center, balloon.color, balloon.size, big: false);
     _spawnRing(center, balloon.color, balloon.size * 0.72);
@@ -1562,6 +1770,39 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         _showStageClear();
       }
     });
+    _publishHeader();
+  }
+
+  void _startKickExit(
+    Balloon balloon,
+    BalloonSkinDefinition skin,
+  ) {
+    if (_phase != GamePhase.playing || !_balloons.contains(balloon)) return;
+    HapticService.shortImpact();
+    playBalloonHitSound(skin);
+    final center =
+        balloon.position + Offset(balloon.size / 2, balloon.size / 2);
+    var direction = center - _playArea.center(Offset.zero);
+    if (direction.distanceSquared < 1) {
+      final angle = _random.nextDouble() * pi * 2;
+      direction = Offset(cos(angle), sin(angle));
+    } else {
+      direction /= direction.distance;
+    }
+    final exitDistance = _playArea.longestSide + balloon.size * 2;
+    setState(() {
+      balloon.exitProgress = 0.0001;
+      balloon.exitVelocity = direction * (exitDistance / 0.24);
+    });
+  }
+
+  void _completeKickExit(Balloon balloon) {
+    if (!_balloons.remove(balloon)) return;
+    balloon.hp = 0;
+    if (_normalBalloonCount == 0) {
+      _balloons.removeWhere((candidate) => candidate.isFake);
+      _showStageClear();
+    }
     _publishHeader();
   }
 
@@ -1636,7 +1877,20 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     }
 
     _stage = nextStage;
+    if (stageIntroDefinitions.containsKey(nextStage)) {
+      _secondsLeft = StageConfig.forStage(nextStage).duration.inSeconds;
+      _phase = GamePhase.stageIntro;
+      _pendingToolHits.clear();
+      _publishHeader();
+      return;
+    }
     _startStage();
+  }
+
+  void _dismissStageIntro() {
+    if (_phase != GamePhase.stageIntro) return;
+    PopSound.playUiClick();
+    setState(_startStage);
   }
 
   void _hitBoss(BossBalloon boss) {
@@ -1648,13 +1902,26 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     }
 
     final skin = BalloonSkinCatalog.byIdOrDefault(boss.skinId);
+    if (_queueToolHit(boss: boss, definition: skin)) return;
+    _applyBossHit(boss, skin);
+  }
+
+  void _applyBossHit(
+    BossBalloon boss,
+    BalloonSkinDefinition skin,
+  ) {
+    if (_phase != GamePhase.playing || !_bosses.contains(boss)) return;
     HapticService.shortImpact();
     final center = boss.position + Offset(boss.size / 2, boss.size / 2);
-    _spawnSkinHitTool(skin, center);
     if (!playBalloonHitSound(skin)) PopSound.play();
     final hitColor = _bossColor(
       boss,
       skin,
+    );
+    _spawnGemiShards(skin, center, boss.size, count: 2);
+    _registerLegendaryBackgroundImpact(
+      skin,
+      finalHit: _currentBossHp(boss) <= 1,
     );
     _spawnPieces(center, hitColor, boss.size * 0.35, big: false);
 
@@ -1743,6 +2010,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopGameLoop();
     _stopwatch.stop();
     _score += _secondsLeft;
+    PopSound.playBossClear();
     _phase = GamePhase.bossClear;
     if (_stage == 10) {
       _secondSectionUnlocked = true;
@@ -1766,6 +2034,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _pieces.clear();
     _rings.clear();
     _assetEffects.clear();
+    _pendingToolHits.clear();
     _feedbacks.clear();
     _effectsRevision++;
     _publishHeader();
@@ -1807,22 +2076,41 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _effectsRevision++;
   }
 
-  void _spawnSkinHitTool(BalloonSkinDefinition skin, Offset center) {
-    final assetPath = skin.hitToolAssetPath;
-    if (assetPath == null) return;
-    _assetEffects.add(
-      AssetVisualEffect(
-        assetPath: assetPath,
-        center: center - const Offset(34, 42),
-        velocity: const Offset(95, 120),
-        size: 64,
-        rotation: -0.55,
-        spin: 0,
-        life: 0.22,
-        maxLife: 0.22,
-      ),
-    );
+  void _spawnGemiShards(
+    BalloonSkinDefinition skin,
+    Offset center,
+    double sourceSize, {
+    required int count,
+  }) {
+    final path = skin.shardAssetPath;
+    if (path == null) return;
+    for (var index = 0; index < count; index++) {
+      final angle = pi * 2 * index / count + _random.nextDouble() * 0.8;
+      final speed = 75 + _random.nextDouble() * 65;
+      _assetEffects.add(
+        AssetVisualEffect(
+          assetPath: path,
+          center: center,
+          velocity: Offset(cos(angle) * speed, sin(angle) * speed - 18),
+          size: sourceSize * (0.20 + _random.nextDouble() * 0.08),
+          rotation: _random.nextDouble() * pi * 2,
+          spin: (_random.nextDouble() - 0.5) * 5,
+          life: 0.48,
+          maxLife: 0.48,
+          removeLightBackground: true,
+          cropScale: 3.5,
+        ),
+      );
+    }
     _effectsRevision++;
+  }
+
+  void _registerLegendaryBackgroundImpact(
+    BalloonSkinDefinition skin, {
+    required bool finalHit,
+  }) {
+    if (skin.background != BalloonBackgroundType.crystalCave) return;
+    _crystalBackgroundPulse = finalHit ? 1 : max(_crystalBackgroundPulse, 0.55);
   }
 
   void _spawnSkinAssetPopEffects(
@@ -1831,6 +2119,36 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     double sourceSize, {
     required bool big,
   }) {
+    if (skin.shardAssetPath != null) {
+      _spawnGemiShards(
+        skin,
+        center,
+        sourceSize,
+        count: big ? 10 : 6,
+      );
+    }
+
+    final crackPath = skin.screenCrackAssetPath;
+    if (crackPath != null &&
+        _playArea != Size.zero &&
+        _random.nextDouble() < skin.screenCrackChance) {
+      _assetEffects.add(
+        AssetVisualEffect(
+          assetPath: crackPath,
+          center: Offset(
+            _playArea.width * (0.18 + _random.nextDouble() * 0.64),
+            _playArea.height * (0.18 + _random.nextDouble() * 0.58),
+          ),
+          velocity: Offset.zero,
+          size: 105 + _random.nextDouble() * 45,
+          rotation: (_random.nextDouble() - 0.5) * 0.65,
+          spin: 0,
+          life: 0.72,
+          maxLife: 0.72,
+        ),
+      );
+    }
+
     final burstPath = skin.burstAssetPath;
     if (burstPath != null) {
       final count = big ? 8 : 5;
@@ -2231,6 +2549,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   // C-01 코인 충전 화면
   Future<void> _openCoinPurchasePage() async {
+    PopSound.playUiClick();
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(builder: (context) => const CoinPurchasePage()),
@@ -2771,7 +3090,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                         ? 'start-section-3'
                                         : 'start-$title',
                           ),
-                          onPressed: onTap,
+                          onPressed: onTap == null
+                              ? null
+                              : () {
+                                  PopSound.playUiClick();
+                                  onTap();
+                                },
                           icon: Icon(
                             locked
                                 ? Icons.lock_rounded
@@ -3018,7 +3342,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }) =>
       InkWell(
         key: key,
-        onTap: onTap,
+        onTap: () {
+          PopSound.playUiClick();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(14),
         child: Container(
           key: selectionKey,
@@ -3086,6 +3413,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   // SET-01 설정 화면. H-01과 S-02가 이 진입점을 함께 사용한다.
   Future<void> _onSettingsPressed() async {
+    PopSound.playUiClick();
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -3445,6 +3773,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   Future<void> _showBalloonPreview(StoreProduct product) async {
     if (product.category != StoreCategory.balloon || product.locked) return;
+    PopSound.playUiClick();
     final definition = BalloonSkinCatalog.byIdOrDefault(product.id);
     await showGeneralDialog<void>(
       context: context,
@@ -3480,6 +3809,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
       switch (result) {
         case EquipResult.success:
+          PopSound.playShopEquip();
+          _precacheSkinAssets(BalloonSkinCatalog.byIdOrDefault(product.id));
           setState(() {
             _equippedProductIds[product.category] = product.id;
           });
@@ -3500,6 +3831,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
     switch (result) {
       case PurchaseResult.success:
+        PopSound.playShopPurchase();
         setState(() {
           _coinBalance = CoinService.balance;
           _ownedProductIds = PurchaseService.ownedProductIds;
@@ -3592,94 +3924,121 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       };
     }
     // G-01 게임 플레이 화면
+    final equippedSkin = _equippedBalloonSkin;
+    final hasDedicatedBackground =
+        equippedSkin.background != BalloonBackgroundType.none;
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF77D5FF), Color(0xFFDDF7FF)],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _gameHeader,
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final newSize = Size(
-                      constraints.maxWidth,
-                      constraints.maxHeight,
-                    );
-                    if (_playArea == Size.zero) {
-                      _playArea = newSize;
-                      if (_phase == GamePhase.playing &&
-                          _balloons.isEmpty &&
-                          _bosses.isEmpty) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted &&
-                              _phase == GamePhase.playing &&
-                              _balloons.isEmpty &&
-                              _bosses.isEmpty) {
-                            setState(_startStage);
+      body: Stack(
+        children: [
+          if (hasDedicatedBackground)
+            Positioned.fill(
+              child: GameBalloonBackground(
+                definition: equippedSkin,
+                crystalPulse: _crystalBackgroundPulse,
+              ),
+            ),
+          Positioned.fill(
+            child: Container(
+              decoration: hasDedicatedBackground
+                  ? null
+                  : const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF77D5FF), Color(0xFFDDF7FF)],
+                      ),
+                    ),
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    _gameHeader,
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final newSize = Size(
+                            constraints.maxWidth,
+                            constraints.maxHeight,
+                          );
+                          if (_playArea == Size.zero) {
+                            _playArea = newSize;
+                            if (_phase == GamePhase.playing &&
+                                _balloons.isEmpty &&
+                                _bosses.isEmpty) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted &&
+                                    _phase == GamePhase.playing &&
+                                    _balloons.isEmpty &&
+                                    _bosses.isEmpty) {
+                                  setState(_startStage);
+                                }
+                              });
+                            }
+                          } else if (_playArea != newSize) {
+                            _playArea = newSize;
                           }
-                        });
-                      }
-                    } else if (_playArea != newSize) {
-                      _playArea = newSize;
-                    }
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned.fill(
-                          child: GameBalloonBackground(
-                            definition: _equippedBalloonSkin,
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: RepaintBoundary(
-                              key: const ValueKey('effects-boundary'),
-                              child: CustomPaint(
-                                painter: EffectsPainter(
-                                  pieces: _pieces,
-                                  rings: _rings,
-                                  feedbacks: _feedbacks,
-                                  revision: _effectsRevision,
+                          return Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              if (!hasDedicatedBackground)
+                                Positioned.fill(
+                                  child: GameBalloonBackground(
+                                    definition: equippedSkin,
+                                  ),
+                                ),
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: RepaintBoundary(
+                                    key: const ValueKey('effects-boundary'),
+                                    child: CustomPaint(
+                                      painter: EffectsPainter(
+                                        pieces: _pieces,
+                                        rings: _rings,
+                                        feedbacks: _feedbacks,
+                                        revision: _effectsRevision,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ),
-                        for (final balloon in _balloons) _buildBalloon(balloon),
-                        for (final boss in _bosses) _buildBoss(boss),
-                        for (final effect in _assetEffects)
-                          _buildAssetVisualEffect(effect),
-                        if (_stage == 30 && _phase == GamePhase.playing)
-                          Positioned.fill(
-                            key: const ValueKey('stage-30-boss-hit-layer'),
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onTapUp: _hitStage30BossAt,
-                            ),
-                          ),
-                        if (_phase == GamePhase.stageClear)
-                          _buildCenterMessage('Stage Clear!', null),
-                        if (_phase == GamePhase.bossClear)
-                          _buildCenterMessage('BOSS CLEAR!', null),
-                        if (_phase == GamePhase.paused) _buildPauseOverlay(),
-                        if (_phase == GamePhase.completed)
-                          _buildGameOver(completed: true),
-                        if (_phase == GamePhase.gameOver) _buildGameOver(),
-                      ],
-                    );
-                  },
+                              for (final balloon in _balloons)
+                                _buildBalloon(balloon),
+                              for (final boss in _bosses) _buildBoss(boss),
+                              for (final hit in _pendingToolHits)
+                                _buildPendingToolHit(hit),
+                              for (final effect in _assetEffects)
+                                _buildAssetVisualEffect(effect),
+                              if (_stage == 30 && _phase == GamePhase.playing)
+                                Positioned.fill(
+                                  key:
+                                      const ValueKey('stage-30-boss-hit-layer'),
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    onTapUp: _hitStage30BossAt,
+                                  ),
+                                ),
+                              if (_phase == GamePhase.stageIntro)
+                                _buildStageIntro(),
+                              if (_phase == GamePhase.stageClear)
+                                _buildCenterMessage('Stage Clear!', null),
+                              if (_phase == GamePhase.bossClear)
+                                _buildCenterMessage('BOSS CLEAR!', null),
+                              if (_phase == GamePhase.paused)
+                                _buildPauseOverlay(),
+                              if (_phase == GamePhase.completed)
+                                _buildGameOver(completed: true),
+                              if (_phase == GamePhase.gameOver)
+                                _buildGameOver(),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -3697,20 +4056,25 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         onTap: () => _popBalloon(balloon),
         child: RepaintBoundary(
           key: ValueKey('balloon-raster-${balloon.id}'),
-          child: SizedBox(
-            width: balloon.size,
-            height: balloon.size + 26,
-            child: BalloonSkinRenderer(
-              key: ValueKey(
-                '${balloon.isFake ? 'fake-' : ''}balloon-skin-${balloon.id}',
+          child: Transform.scale(
+            scale: balloon.isExiting
+                ? (1 - balloon.exitProgress * 0.42).clamp(0.58, 1.0)
+                : 1,
+            child: SizedBox(
+              width: balloon.size,
+              height: balloon.size + 26,
+              child: BalloonSkinRenderer(
+                key: ValueKey(
+                  '${balloon.isFake ? 'fake-' : ''}balloon-skin-${balloon.id}',
+                ),
+                definition: skin,
+                color: _balloonColor(balloon, skin),
+                isFake: balloon.isFake,
+                visualVariant: balloon.visualVariant,
+                specialVisual: balloon.specialVisual,
+                animationPhase: balloon.floatPhase,
+                collisionImpact: balloon.impactVisual,
               ),
-              definition: skin,
-              color: _balloonColor(balloon, skin),
-              isFake: balloon.isFake,
-              visualVariant: balloon.visualVariant,
-              specialVisual: balloon.specialVisual,
-              animationPhase: balloon.floatPhase,
-              collisionImpact: balloon.impactVisual,
             ),
           ),
         ),
@@ -3754,6 +4118,42 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   Widget _buildAssetVisualEffect(AssetVisualEffect effect) {
     final opacity = (effect.life / effect.maxLife).clamp(0.0, 1.0);
+    Widget image = Image.asset(
+      effect.assetPath,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.low,
+      gaplessPlayback: true,
+      cacheWidth: effect.removeLightBackground ? 512 : 320,
+    );
+    if (effect.removeLightBackground) {
+      image = ClipRect(
+        child: ColorFiltered(
+          colorFilter: const ColorFilter.matrix(<double>[
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            -4,
+            -4,
+            -4,
+            0,
+            3000,
+          ]),
+          child: Transform.scale(scale: effect.cropScale, child: image),
+        ),
+      );
+    }
     return Positioned(
       left: effect.center.dx - effect.size / 2,
       top: effect.center.dy - effect.size / 2,
@@ -3764,13 +4164,70 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             angle: effect.rotation,
             child: SizedBox.square(
               dimension: effect.size,
+              child: image,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingToolHit(PendingToolHit hit) {
+    final isFork = hit.definition.popEffectType == BalloonPopEffectType.cream;
+    final swingProgress =
+        (hit.elapsed / PendingToolHit.impactTime).clamp(0.0, 1.0);
+    final eased = Curves.easeInCubic.transform(swingProgress);
+    final fade = hit.elapsed <= PendingToolHit.impactTime
+        ? 1.0
+        : ((PendingToolHit.totalTime - hit.elapsed) /
+                (PendingToolHit.totalTime - PendingToolHit.impactTime))
+            .clamp(0.0, 1.0);
+    final size = isFork ? 100.0 : 116.0;
+    final startOffset = isFork ? const Offset(58, 96) : const Offset(-68, -30);
+    final endOffset = isFork ? const Offset(0, 52) : const Offset(0, 55);
+    final offset = Offset.lerp(startOffset, endOffset, eased)!;
+    final startAngle = isFork ? -0.48 : -1.12;
+    final endAngle = isFork ? -0.12 : -0.08;
+    final angle = startAngle + (endAngle - startAngle) * eased;
+    Widget toolImage = Image.asset(
+      hit.definition.hitToolAssetPath!,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      cacheWidth: 256,
+    );
+    if (!isFork) {
+      toolImage = Stack(
+        fit: StackFit.expand,
+        children: [
+          ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(sigmaX: 2.2, sigmaY: 2.2),
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.mode(
+                Color(0xB3D9F4FF),
+                BlendMode.srcIn,
+              ),
               child: Image.asset(
-                effect.assetPath,
+                hit.definition.hitToolAssetPath!,
                 fit: BoxFit.contain,
-                filterQuality: FilterQuality.low,
-                gaplessPlayback: true,
+                cacheWidth: 256,
               ),
             ),
+          ),
+          toolImage,
+        ],
+      );
+    }
+    final center = hit.center + offset;
+    return Positioned(
+      left: center.dx - size / 2,
+      top: center.dy - size / 2,
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: fade,
+          child: Transform.rotate(
+            angle: angle,
+            alignment: Alignment.bottomCenter,
+            child: SizedBox.square(dimension: size, child: toolImage),
           ),
         ),
       ),
@@ -3854,6 +4311,79 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
+  Widget _buildStageIntro() {
+    final definition = stageIntroDefinitions[_stage]!;
+    return Positioned.fill(
+      key: const ValueKey('stage-intro-overlay'),
+      child: ColoredBox(
+        color: const Color(0x660D2940),
+        child: Center(
+          child: Container(
+            key: ValueKey('stage-intro-$_stage'),
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+            constraints: const BoxConstraints(maxWidth: 340),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  definition.title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFF7354E8),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  definition.headline,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFFF4F7B),
+                    fontSize: 23,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                for (final rule in definition.rules)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: Text(
+                      '• $rule',
+                      style: const TextStyle(
+                        color: Color(0xFF3F5F70),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 13),
+                FilledButton(
+                  key: const ValueKey('stage-intro-next'),
+                  onPressed: _dismissStageIntro,
+                  child: const Text('다음 단계 ▶'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPauseOverlay() {
     return Positioned.fill(
       child: ColoredBox(
@@ -3888,7 +4418,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 const SizedBox(height: 24),
                 FilledButton.icon(
                   key: const ValueKey('resume-button'),
-                  onPressed: _resumeGame,
+                  onPressed: () {
+                    PopSound.playUiClick();
+                    _resumeGame();
+                  },
                   icon: const Icon(Icons.play_arrow_rounded, size: 30),
                   label: const Text('계속하기'),
                   style: FilledButton.styleFrom(
@@ -3901,7 +4434,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: _returnToMenu,
+                  onPressed: () {
+                    PopSound.playUiClick();
+                    _returnToMenu();
+                  },
                   icon: const Icon(Icons.home_rounded, size: 28),
                   label: const Text('시작 화면으로'),
                   style: OutlinedButton.styleFrom(
@@ -4041,7 +4577,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             borderRadius: BorderRadius.circular(22),
             child: InkWell(
               key: key,
-              onTap: onTap,
+              onTap: () {
+                PopSound.playUiClick();
+                onTap();
+              },
               borderRadius: BorderRadius.circular(22),
               child: SizedBox(
                 width: 68,
@@ -4105,7 +4644,10 @@ class StoreProductFilterBar extends StatelessWidget {
             Expanded(
               child: InkWell(
                 key: ValueKey('store-filter-${item.$1.name}'),
-                onTap: () => onSelected(item.$1),
+                onTap: () {
+                  PopSound.playUiClick();
+                  onSelected(item.$1);
+                },
                 borderRadius: BorderRadius.circular(15),
                 child: Container(
                   alignment: Alignment.center,
@@ -4315,6 +4857,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
   Duration _lastEffectElapsed = Duration.zero;
   late Color _color;
   bool _balloonVisible = true;
+  bool _impactApplied = false;
   int _effectsRevision = 0;
   late int _visualVariant;
   late bool _specialVisual;
@@ -4344,8 +4887,21 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
 
   void _playPop() {
     if (!mounted) return;
+    final hasTool = widget.definition.hitToolAssetPath != null;
     setState(() {
-      _balloonVisible = widget.definition.hitToolAssetPath != null;
+      _balloonVisible = hasTool;
+      _impactApplied = false;
+    });
+    if (!hasTool) _applyPreviewImpact();
+    _lastEffectElapsed = Duration.zero;
+    _effectController.forward(from: 0);
+  }
+
+  void _applyPreviewImpact() {
+    if (_impactApplied) return;
+    _impactApplied = true;
+    setState(() {
+      _balloonVisible = false;
       addBalloonPopEffect(
         definition: widget.definition,
         pieces: _pieces,
@@ -4366,16 +4922,18 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     // Preview sound only: no haptic and no gameplay action is invoked here.
     playBalloonHitSound(widget.definition);
     playBalloonPopSound(widget.definition, boss: false);
-    _lastEffectElapsed = Duration.zero;
-    _effectController.forward(from: 0);
   }
 
   void _advanceEffects() {
     final elapsed = _effectController.lastElapsedDuration ?? Duration.zero;
     final delta = elapsed - _lastEffectElapsed;
     _lastEffectElapsed = elapsed;
-    if (_balloonVisible && _effectController.value >= 0.12) {
-      setState(() => _balloonVisible = false);
+    if (widget.definition.hitToolAssetPath != null &&
+        !_impactApplied &&
+        _effectController.value >=
+            PendingToolHit.impactTime /
+                (_effectDuration.inMilliseconds / 1000)) {
+      _applyPreviewImpact();
     }
     if (advanceEffects(_pieces, _rings, calculateFrameDelta(delta))) {
       _effectsRevision++;
@@ -4466,7 +5024,10 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                       ),
                       IconButton(
                         key: const ValueKey('balloon-preview-close'),
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () {
+                          PopSound.playUiClick();
+                          Navigator.of(context).pop();
+                        },
                         icon: const Icon(Icons.close_rounded),
                         color: const Color(0xFF526B79),
                         tooltip: '닫기',
@@ -4558,21 +5119,69 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                                       _effectController.value > 0.22) {
                                     return const SizedBox.shrink();
                                   }
-                                  final progress =
-                                      (_effectController.value / 0.22)
-                                          .clamp(0.0, 1.0);
-                                  return Align(
-                                    alignment: Alignment(
-                                      -0.52 + progress * 0.48,
-                                      -0.78 + progress * 0.55,
-                                    ),
-                                    child: Transform.rotate(
-                                      angle: -0.55,
-                                      child: SizedBox.square(
-                                        dimension: 64,
-                                        child: Image.asset(
-                                          widget.definition.hitToolAssetPath!,
-                                          fit: BoxFit.contain,
+                                  final isFork =
+                                      widget.definition.popEffectType ==
+                                          BalloonPopEffectType.cream;
+                                  final impactValue = PendingToolHit
+                                          .impactTime /
+                                      (_effectDuration.inMilliseconds / 1000);
+                                  final progress = Curves.easeInCubic.transform(
+                                    (_effectController.value / impactValue)
+                                        .clamp(0.0, 1.0),
+                                  );
+                                  final offset = Offset.lerp(
+                                    isFork
+                                        ? const Offset(48, 70)
+                                        : const Offset(-56, -32),
+                                    isFork
+                                        ? const Offset(0, 42)
+                                        : const Offset(0, 45),
+                                    progress,
+                                  )!;
+                                  final angle = isFork
+                                      ? -0.48 + 0.36 * progress
+                                      : -1.12 + 1.04 * progress;
+                                  final size = isFork ? 96.0 : 112.0;
+                                  Widget tool = Image.asset(
+                                    widget.definition.hitToolAssetPath!,
+                                    fit: BoxFit.contain,
+                                    cacheWidth: 256,
+                                  );
+                                  if (!isFork) {
+                                    tool = Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        ImageFiltered(
+                                          imageFilter: ui.ImageFilter.blur(
+                                            sigmaX: 2.2,
+                                            sigmaY: 2.2,
+                                          ),
+                                          child: ColorFiltered(
+                                            colorFilter: const ColorFilter.mode(
+                                              Color(0xB3D9F4FF),
+                                              BlendMode.srcIn,
+                                            ),
+                                            child: Image.asset(
+                                              widget
+                                                  .definition.hitToolAssetPath!,
+                                              fit: BoxFit.contain,
+                                              cacheWidth: 256,
+                                            ),
+                                          ),
+                                        ),
+                                        tool,
+                                      ],
+                                    );
+                                  }
+                                  return Center(
+                                    child: Transform.translate(
+                                      offset: offset,
+                                      child: Transform.rotate(
+                                        angle: angle,
+                                        alignment: Alignment.bottomCenter,
+                                        child: SizedBox.square(
+                                          dimension: size,
+                                          child: tool,
                                         ),
                                       ),
                                     ),
@@ -5103,15 +5712,21 @@ class PlaySky extends StatelessWidget {
 /// shared renderer decides whether to keep [PlaySky] or show a registered
 /// dedicated background.
 class GameBalloonBackground extends StatelessWidget {
-  const GameBalloonBackground({super.key, required this.definition});
+  const GameBalloonBackground({
+    super.key,
+    required this.definition,
+    this.crystalPulse = 0,
+  });
 
   final BalloonSkinDefinition definition;
+  final double crystalPulse;
 
   @override
   Widget build(BuildContext context) => BalloonBackgroundRenderer(
         key: const ValueKey('game-balloon-background'),
         background: definition.background,
         fallback: const PlaySky(),
+        crystalPulse: crystalPulse,
       );
 }
 
@@ -5319,6 +5934,7 @@ class BalloonSkinArtwork extends StatelessWidget {
           fit: BoxFit.contain,
           filterQuality: FilterQuality.medium,
           gaplessPlayback: true,
+          cacheWidth: 512,
         );
 
     if (definition.imageDetailMask == BalloonImageDetailMask.mochiFace) {

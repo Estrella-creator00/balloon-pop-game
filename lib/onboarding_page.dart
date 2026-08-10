@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'audio/pop_sound.dart';
 import 'services/settings_service.dart';
 
 /// ON-01 최초 닉네임 설정 화면.
@@ -37,6 +38,7 @@ class _NicknameOnboardingPageState extends State<NicknameOnboardingPage> {
       return;
     }
 
+    PopSound.playUiClick();
     setState(() {
       _submitting = true;
       _error = null;
