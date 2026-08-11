@@ -794,7 +794,6 @@ class AssetVisualEffect {
     required this.life,
     required this.maxLife,
     this.cacheWidth = 320,
-    this.tint,
     this.paintLayer = AssetEffectPaintLayer.shared,
   });
 
@@ -807,48 +806,40 @@ class AssetVisualEffect {
   double life;
   final double maxLife;
   final int cacheWidth;
-  final Color? tint;
   final AssetEffectPaintLayer paintLayer;
 }
 
-enum AssetEffectPaintLayer { shared, gemiShards, gemiScreenCrack }
-
-ColorFilter gemShardTintFilter(Color color) {
-  const brightness = 1.4;
-  final red = color.r * brightness;
-  final green = color.g * brightness;
-  final blue = color.b * brightness;
-  return ColorFilter.matrix(<double>[
-    0.2126 * red,
-    0.7152 * red,
-    0.0722 * red,
-    0,
-    0,
-    0.2126 * green,
-    0.7152 * green,
-    0.0722 * green,
-    0,
-    0,
-    0.2126 * blue,
-    0.7152 * blue,
-    0.0722 * blue,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-  ]);
+enum AssetEffectPaintLayer {
+  legendaryTools,
+  shared,
+  gemiShards,
+  gemiScreenCrack,
+  shushuBurst,
+  shushuWallLeft,
+  shushuWallRight,
+  shushuFront,
 }
 
-final Map<int, ColorFilter> _gemShardTintFilterCache = <int, ColorFilter>{};
+@immutable
+class LegendaryToolVisual {
+  const LegendaryToolVisual({
+    required this.assetPath,
+    required this.topLeft,
+    required this.pivot,
+    required this.size,
+    required this.rotation,
+    required this.opacity,
+    this.spriteScale = 1,
+  });
 
-ColorFilter cachedGemShardTintFilter(Color color) =>
-    _gemShardTintFilterCache.putIfAbsent(
-      color.toARGB32(),
-      () => gemShardTintFilter(color),
-    );
+  final String assetPath;
+  final Offset topLeft;
+  final Offset pivot;
+  final double size;
+  final double rotation;
+  final double opacity;
+  final double spriteScale;
+}
 
 void addGemiShardAssetEffects({
   required List<AssetVisualEffect> effects,
@@ -856,7 +847,6 @@ void addGemiShardAssetEffects({
   required String assetPath,
   required Offset center,
   required double sourceSize,
-  required Color color,
   required int count,
 }) {
   for (var index = 0; index < count; index++) {
@@ -873,7 +863,6 @@ void addGemiShardAssetEffects({
         life: 0.48,
         maxLife: 0.48,
         cacheWidth: 128,
-        tint: color,
         paintLayer: AssetEffectPaintLayer.gemiShards,
       ),
     );
@@ -900,38 +889,64 @@ class AssetEffectsCanvas extends StatefulWidget {
     required this.effects,
     required this.revision,
     this.preloadAssets = const <String, int>{},
+    this.toolVisuals = const <LegendaryToolVisual>[],
+    this.toolRevision = 0,
   });
 
   final List<AssetVisualEffect> effects;
   final int revision;
   final Map<String, int> preloadAssets;
+  final List<LegendaryToolVisual> toolVisuals;
+  final int toolRevision;
 
   int get effectCount => effects.length;
   int effectsForAsset(String assetPath) =>
       effects.where((effect) => effect.assetPath == assetPath).length;
-  int get tintedEffectCount =>
-      effects.where((effect) => effect.tint != null).length;
 
   @override
   State<AssetEffectsCanvas> createState() => _AssetEffectsCanvasState();
 }
 
-final Map<String, Map<String, int>> _gemiEffectPreloadCache =
+final Map<String, Map<String, int>> _legendaryEffectPreloadCache =
     <String, Map<String, int>>{};
 
-Map<String, int> gemiEffectPreloadAssets(BalloonSkinDefinition definition) {
-  if (definition.background != BalloonBackgroundType.crystalCave) {
+Map<String, int> legendaryEffectPreloadAssets(
+  BalloonSkinDefinition definition,
+) {
+  if (definition.rarity != BalloonRarity.legendary) {
     return const <String, int>{};
   }
-  return _gemiEffectPreloadCache.putIfAbsent(definition.id, () {
+  return _legendaryEffectPreloadCache.putIfAbsent(definition.id, () {
     final result = <String, int>{};
-    final shard = definition.shardAssetPath;
-    final crack = definition.screenCrackAssetPath;
-    if (shard != null) result[shard] = 128;
-    if (crack != null) result[crack] = 320;
+    void add(String? path, int width) {
+      if (path != null) result[path] = width;
+    }
+
+    add(definition.hitToolAssetPath, 256);
+    add(definition.burstAssetPath, 320);
+    add(definition.wallSplatAssetPath, 320);
+    add(definition.screenSplatAssetPath, 320);
+    if (definition.runtimeShardAssetPaths.isEmpty) {
+      add(definition.shardAssetPath, 128);
+    } else {
+      for (final path in definition.runtimeShardAssetPaths.values) {
+        add(path, 128);
+      }
+    }
+    add(definition.screenCrackAssetPath, 320);
+    if (definition.background == BalloonBackgroundType.crystalCave) {
+      add(BalloonBackgroundRegistry.crystalImpactGlowAssetPath, 423);
+    }
     return Map<String, int>.unmodifiable(result);
   });
 }
+
+String? gemiShardAssetForColor(
+  BalloonSkinDefinition definition,
+  Color color,
+) =>
+    definition.runtimeShardAssetPaths[color.toARGB32()] ??
+    definition.shardAssetPath;
 
 class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
   final Map<String, _ResolvedEffectImage> _images =
@@ -954,12 +969,39 @@ class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
   }
 
   void _resolveMissingImages() {
+    var needsResolution = false;
+    for (final path in widget.preloadAssets.keys) {
+      if (!_streams.containsKey(path)) {
+        needsResolution = true;
+        break;
+      }
+    }
+    if (!needsResolution) {
+      for (final effect in widget.effects) {
+        if (!_streams.containsKey(effect.assetPath)) {
+          needsResolution = true;
+          break;
+        }
+      }
+    }
+    if (!needsResolution) {
+      for (final tool in widget.toolVisuals) {
+        if (!_streams.containsKey(tool.assetPath)) {
+          needsResolution = true;
+          break;
+        }
+      }
+    }
+    if (!needsResolution) return;
     final configuration = createLocalImageConfiguration(context);
     for (final entry in widget.preloadAssets.entries) {
       _resolveImage(entry.key, entry.value, configuration);
     }
     for (final effect in widget.effects) {
       _resolveImage(effect.assetPath, effect.cacheWidth, configuration);
+    }
+    for (final tool in widget.toolVisuals) {
+      _resolveImage(tool.assetPath, 256, configuration);
     }
   }
 
@@ -968,24 +1010,24 @@ class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
     int cacheWidth,
     ImageConfiguration configuration,
   ) {
-      if (_streams.containsKey(assetPath)) return;
-      final provider = ResizeImage(AssetImage(assetPath), width: cacheWidth);
-      final stream = provider.resolve(configuration);
-      late final ImageStreamListener listener;
-      listener = ImageStreamListener((image, _) {
-        if (!mounted) {
-          image.dispose();
-          return;
-        }
-        final previous = _images[assetPath];
-        _images[assetPath] = _ResolvedEffectImage(image);
-        _imageRevision++;
-        previous?.imageInfo.dispose();
-        setState(() {});
-      });
-      _streams[assetPath] = stream;
-      _listeners[assetPath] = listener;
-      stream.addListener(listener);
+    if (_streams.containsKey(assetPath)) return;
+    final provider = ResizeImage(AssetImage(assetPath), width: cacheWidth);
+    final stream = provider.resolve(configuration);
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener((image, _) {
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      final previous = _images[assetPath];
+      _images[assetPath] = _ResolvedEffectImage(image);
+      _imageRevision++;
+      previous?.imageInfo.dispose();
+      setState(() {});
+    });
+    _streams[assetPath] = stream;
+    _listeners[assetPath] = listener;
+    stream.addListener(listener);
   }
 
   @override
@@ -1002,7 +1044,9 @@ class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.effects.isEmpty) return const SizedBox.expand();
+    if (widget.effects.isEmpty && widget.toolVisuals.isEmpty) {
+      return const SizedBox.expand();
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewport = Size(constraints.maxWidth, constraints.maxHeight);
@@ -1018,7 +1062,9 @@ class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
   }
 
   Widget _buildPaintLayer(AssetEffectPaintLayer layer, Size viewport) {
-    final bounds = assetEffectPaintBounds(widget.effects, viewport, layer);
+    final bounds = layer == AssetEffectPaintLayer.legendaryTools
+        ? legendaryToolPaintBounds(widget.toolVisuals, viewport)
+        : assetEffectPaintBounds(widget.effects, viewport, layer);
     if (bounds.isEmpty) return const SizedBox.shrink();
     return Positioned.fromRect(
       rect: bounds,
@@ -1028,11 +1074,13 @@ class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
           key: ValueKey('asset-effects-canvas-${layer.name}'),
           painter: _AssetEffectsPainter(
             effects: widget.effects,
+            toolVisuals: widget.toolVisuals,
             images: _images,
             paintLayer: layer,
             origin: bounds.topLeft,
             revision: widget.revision,
             imageRevision: _imageRevision,
+            toolRevision: widget.toolRevision,
           ),
         ),
       ),
@@ -1082,6 +1130,33 @@ Rect assetEffectPaintBounds(
   );
 }
 
+Rect legendaryToolPaintBounds(
+  List<LegendaryToolVisual> tools,
+  Size viewport,
+) {
+  if (tools.isEmpty || viewport.isEmpty) return Rect.zero;
+  var left = double.infinity;
+  var top = double.infinity;
+  var right = double.negativeInfinity;
+  var bottom = double.negativeInfinity;
+  for (final tool in tools) {
+    final pivot = tool.topLeft + tool.pivot;
+    final farX = max(tool.pivot.dx, tool.size - tool.pivot.dx);
+    final farY = max(tool.pivot.dy, tool.size - tool.pivot.dy);
+    final radius = sqrt(farX * farX + farY * farY) * tool.spriteScale + 2;
+    left = min(left, pivot.dx - radius);
+    top = min(top, pivot.dy - radius);
+    right = max(right, pivot.dx + radius);
+    bottom = max(bottom, pivot.dy + radius);
+  }
+  return Rect.fromLTRB(
+    left.clamp(0.0, viewport.width),
+    top.clamp(0.0, viewport.height),
+    right.clamp(0.0, viewport.width),
+    bottom.clamp(0.0, viewport.height),
+  );
+}
+
 final List<Color> _effectAlphaColors = List<Color>.generate(
   256,
   (alpha) => Color.fromARGB(alpha, 255, 255, 255),
@@ -1091,25 +1166,68 @@ final List<Color> _effectAlphaColors = List<Color>.generate(
 class _AssetEffectsPainter extends CustomPainter {
   const _AssetEffectsPainter({
     required this.effects,
+    required this.toolVisuals,
     required this.images,
     required this.paintLayer,
     required this.origin,
     required this.revision,
     required this.imageRevision,
+    required this.toolRevision,
   });
 
   final List<AssetVisualEffect> effects;
+  final List<LegendaryToolVisual> toolVisuals;
   final Map<String, _ResolvedEffectImage> images;
   final AssetEffectPaintLayer paintLayer;
   final Offset origin;
   final int revision;
   final int imageRevision;
+  final int toolRevision;
+
+  static final Paint _spritePaint = Paint()
+    ..isAntiAlias = true
+    ..filterQuality = FilterQuality.low;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..isAntiAlias = true
-      ..filterQuality = FilterQuality.low;
+    final paint = _spritePaint;
+    if (paintLayer == AssetEffectPaintLayer.legendaryTools) {
+      for (final tool in toolVisuals) {
+        final resolved = images[tool.assetPath];
+        if (resolved == null) continue;
+        final alpha = (tool.opacity * 255).round().clamp(0, 255);
+        paint
+          ..color = _effectAlphaColors[alpha]
+          ..colorFilter = null;
+        final drawSize = tool.size * tool.spriteScale;
+        final aspectRatio = resolved.aspectRatio;
+        final destinationWidth =
+            aspectRatio >= 1 ? drawSize : drawSize * aspectRatio;
+        final destinationHeight =
+            aspectRatio >= 1 ? drawSize / aspectRatio : drawSize;
+        final destination = Rect.fromCenter(
+          center: Offset(tool.size / 2, tool.size / 2),
+          width: destinationWidth,
+          height: destinationHeight,
+        );
+        canvas
+          ..save()
+          ..translate(
+            tool.topLeft.dx + tool.pivot.dx - origin.dx,
+            tool.topLeft.dy + tool.pivot.dy - origin.dy,
+          )
+          ..rotate(tool.rotation)
+          ..translate(-tool.pivot.dx, -tool.pivot.dy)
+          ..drawImageRect(
+            resolved.imageInfo.image,
+            resolved.sourceRect,
+            destination,
+            paint,
+          )
+          ..restore();
+      }
+      return;
+    }
     for (final effect in effects) {
       if (effect.paintLayer != paintLayer) continue;
       final resolved = images[effect.assetPath];
@@ -1118,17 +1236,13 @@ class _AssetEffectsPainter extends CustomPainter {
       final alpha = (opacity * 255).round().clamp(0, 255);
       paint
         ..color = _effectAlphaColors[alpha]
-        ..colorFilter = effect.tint == null
-            ? null
-            : cachedGemShardTintFilter(effect.tint!);
+        ..colorFilter = null;
       final image = resolved.imageInfo.image;
       final aspectRatio = resolved.aspectRatio;
-      final destinationWidth = aspectRatio >= 1
-          ? effect.size
-          : effect.size * aspectRatio;
-      final destinationHeight = aspectRatio >= 1
-          ? effect.size / aspectRatio
-          : effect.size;
+      final destinationWidth =
+          aspectRatio >= 1 ? effect.size : effect.size * aspectRatio;
+      final destinationHeight =
+          aspectRatio >= 1 ? effect.size / aspectRatio : effect.size;
       final destination = Rect.fromCenter(
         center: Offset.zero,
         width: destinationWidth,
@@ -1149,7 +1263,8 @@ class _AssetEffectsPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _AssetEffectsPainter oldDelegate) =>
       oldDelegate.revision != revision ||
-      oldDelegate.imageRevision != imageRevision;
+      oldDelegate.imageRevision != imageRevision ||
+      oldDelegate.toolRevision != toolRevision;
 }
 
 @immutable
@@ -1170,38 +1285,6 @@ ShushuForkMotion shushuForkMotion(int approach, double progress) {
     offset: Offset.lerp(starts[index], Offset.zero, eased)!,
     angle: endAngles[index] + angleLeads[index] * (1 - eased),
   );
-}
-
-class _GemiPickaxeArtwork extends StatelessWidget {
-  const _GemiPickaxeArtwork({required this.assetPath});
-
-  final String assetPath;
-
-  Widget _image({Color? color}) => Image.asset(
-        assetPath,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.medium,
-        gaplessPlayback: true,
-        cacheWidth: 256,
-        color: color,
-        colorBlendMode: color == null ? null : BlendMode.srcIn,
-      );
-
-  @override
-  Widget build(BuildContext context) => RepaintBoundary(
-        key: const ValueKey('gemi-pickaxe-raster-boundary'),
-        child: Stack(
-          fit: StackFit.expand,
-          clipBehavior: Clip.none,
-          children: [
-            Transform.scale(
-              scale: 1.045,
-              child: _image(color: const Color(0x66D9F4FF)),
-            ),
-            _image(),
-          ],
-        ),
-      );
 }
 
 class PendingToolHit {
@@ -1237,6 +1320,59 @@ class PendingToolHit {
     return targetBoss.position +
         Offset(targetBoss.size / 2, targetBoss.size / 2);
   }
+}
+
+LegendaryToolVisual legendaryToolVisual({
+  required BalloonSkinDefinition definition,
+  required Offset targetCenter,
+  required int approach,
+  required double easedProgress,
+  required double opacity,
+  required double size,
+  required Offset gemiStart,
+  required Offset gemiEnd,
+}) {
+  final isFork = definition.popEffectType == BalloonPopEffectType.cream;
+  final forkMotion = shushuForkMotion(approach, easedProgress);
+  final offset = isFork
+      ? forkMotion.offset
+      : Offset.lerp(gemiStart, gemiEnd, easedProgress)!;
+  final angle = isFork ? forkMotion.angle : -1.12 + 1.04 * easedProgress;
+  final center = targetCenter + offset;
+  final topLeft = isFork
+      ? Offset(center.dx - size * 0.35, center.dy - size * 0.05)
+      : Offset(center.dx - size / 2, center.dy - size / 2);
+  return LegendaryToolVisual(
+    assetPath: definition.hitToolAssetPath!,
+    topLeft: topLeft,
+    pivot: isFork ? Offset(size * 0.35, size * 0.05) : Offset(size / 2, size),
+    size: size,
+    rotation: angle,
+    opacity: opacity,
+    spriteScale: isFork ? 1 : 1.045,
+  );
+}
+
+LegendaryToolVisual pendingToolVisual(PendingToolHit hit) {
+  final swingProgress =
+      (hit.elapsed / PendingToolHit.impactTime).clamp(0.0, 1.0);
+  final eased = Curves.easeInCubic.transform(swingProgress);
+  final fade = hit.elapsed <= PendingToolHit.impactTime
+      ? 1.0
+      : ((PendingToolHit.totalTime - hit.elapsed) /
+              (PendingToolHit.totalTime - PendingToolHit.impactTime))
+          .clamp(0.0, 1.0);
+  final isFork = hit.definition.popEffectType == BalloonPopEffectType.cream;
+  return legendaryToolVisual(
+    definition: hit.definition,
+    targetCenter: hit.center,
+    approach: hit.toolApproach,
+    easedProgress: eased,
+    opacity: fade,
+    size: isFork ? 100 : 116,
+    gemiStart: const Offset(-68, -30),
+    gemiEnd: const Offset(0, 55),
+  );
 }
 
 @immutable
@@ -1555,7 +1691,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       if (path != null) paths[path] = width;
     }
 
-    add(definition.assetPath, 512);
+    if (definition.runtimeColorAssetPaths.isEmpty) {
+      add(definition.assetPath, 512);
+    } else {
+      for (final path in definition.runtimeColorAssetPaths.values) {
+        add(path, 512);
+      }
+      for (final path in definition.runtimeFakeColorAssetPaths.values) {
+        add(path, 512);
+      }
+    }
     for (final path in definition.variantAssetPaths) {
       add(path, 512);
     }
@@ -1563,7 +1708,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     add(definition.burstAssetPath, 320);
     add(definition.wallSplatAssetPath, 320);
     add(definition.screenSplatAssetPath, 320);
-    add(definition.shardAssetPath, 128);
+    if (definition.runtimeShardAssetPaths.isEmpty) {
+      add(definition.shardAssetPath, 128);
+    } else {
+      for (final path in definition.runtimeShardAssetPaths.values) {
+        add(path, 128);
+      }
+    }
     add(definition.screenCrackAssetPath, 320);
     add(
       BalloonBackgroundRegistry.gameplayAssetPathFor(definition.background),
@@ -2505,7 +2656,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     Color color, {
     required int count,
   }) {
-    final path = skin.shardAssetPath;
+    final path = gemiShardAssetForColor(skin, color);
     if (path == null) return;
     addGemiShardAssetEffects(
       effects: _assetEffects,
@@ -2513,7 +2664,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       assetPath: path,
       center: center,
       sourceSize: sourceSize,
-      color: color,
       count: count,
     );
     _effectsRevision++;
@@ -2578,6 +2728,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             spin: (_random.nextDouble() - 0.5) * 3,
             life: 0.52,
             maxLife: 0.52,
+            paintLayer: AssetEffectPaintLayer.shushuBurst,
           ),
         );
       }
@@ -2601,6 +2752,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             spin: 0,
             life: 1.15,
             maxLife: 1.15,
+            paintLayer: leftEdge
+                ? AssetEffectPaintLayer.shushuWallLeft
+                : AssetEffectPaintLayer.shushuWallRight,
           ),
         );
       }
@@ -2623,6 +2777,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             spin: 0,
             life: 0.92,
             maxLife: 0.92,
+            paintLayer: AssetEffectPaintLayer.shushuFront,
           ),
         );
       }
@@ -4400,7 +4555,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                     ),
                                   )
                                 : null,
-                            builder: (context, _, staticBackground) => Stack(
+                            builder: (context, frame, staticBackground) =>
+                                Stack(
                               clipBehavior: Clip.none,
                               children: [
                                 if (staticBackground != null) staticBackground,
@@ -4422,8 +4578,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 for (final balloon in _balloons)
                                   _buildBalloon(balloon),
                                 for (final boss in _bosses) _buildBoss(boss),
-                                for (final hit in _pendingToolHits)
-                                  _buildPendingToolHit(hit),
                                 Positioned.fill(
                                   child: IgnorePointer(
                                     child: AssetEffectsCanvas(
@@ -4432,9 +4586,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                       ),
                                       effects: _assetEffects,
                                       revision: _effectsRevision,
-                                      preloadAssets: gemiEffectPreloadAssets(
+                                      preloadAssets:
+                                          legendaryEffectPreloadAssets(
                                         equippedSkin,
                                       ),
+                                      toolVisuals: [
+                                        for (final hit in _pendingToolHits)
+                                          pendingToolVisual(hit),
+                                      ],
+                                      toolRevision: frame,
                                     ),
                                   ),
                                 ),
@@ -4543,54 +4703,6 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               animationPhase: boss.visualPhase,
               collisionImpact: boss.impactVisual,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPendingToolHit(PendingToolHit hit) {
-    final isFork = hit.definition.popEffectType == BalloonPopEffectType.cream;
-    final swingProgress = (hit.elapsed / PendingToolHit.impactTime).clamp(
-      0.0,
-      1.0,
-    );
-    final eased = Curves.easeInCubic.transform(swingProgress);
-    final fade = hit.elapsed <= PendingToolHit.impactTime
-        ? 1.0
-        : ((PendingToolHit.totalTime - hit.elapsed) /
-                (PendingToolHit.totalTime - PendingToolHit.impactTime))
-            .clamp(0.0, 1.0);
-    final size = isFork ? 100.0 : 116.0;
-    final forkMotion = shushuForkMotion(hit.toolApproach, eased);
-    final offset = isFork
-        ? forkMotion.offset
-        : Offset.lerp(const Offset(-68, -30), const Offset(0, 55), eased)!;
-    final angle = isFork ? forkMotion.angle : -1.12 + 1.04 * eased;
-    final toolImage = isFork
-        ? Image.asset(
-            hit.definition.hitToolAssetPath!,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.medium,
-            cacheWidth: 256,
-          )
-        : _GemiPickaxeArtwork(
-            assetPath: hit.definition.hitToolAssetPath!,
-          );
-    final center = hit.center + offset;
-    final left = isFork ? center.dx - size * 0.35 : center.dx - size / 2;
-    final top = isFork ? center.dy - size * 0.05 : center.dy - size / 2;
-    return Positioned(
-      left: left,
-      top: top,
-      child: IgnorePointer(
-        child: Opacity(
-          opacity: fade,
-          child: Transform.rotate(
-            angle: angle,
-            alignment:
-                isFork ? const Alignment(-0.3, -0.9) : Alignment.bottomCenter,
-            child: SizedBox.square(dimension: size, child: toolImage),
           ),
         ),
       ),
@@ -5269,7 +5381,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     _impactApplied = true;
     setState(() {
       _balloonVisible = false;
-      final shardPath = widget.definition.shardAssetPath;
+      final shardPath = gemiShardAssetForColor(widget.definition, _color);
       if (shardPath != null) {
         addGemiShardAssetEffects(
           effects: _assetEffects,
@@ -5277,7 +5389,6 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
           assetPath: shardPath,
           center: _previewSize.center(Offset.zero),
           sourceSize: _balloonSize.width,
-          color: _color,
           count: 8,
         );
       } else {
@@ -5352,6 +5463,33 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
       nextIndex = (nextIndex + 1) % palette.length;
     }
     return palette[nextIndex];
+  }
+
+  List<LegendaryToolVisual> _previewToolVisuals() {
+    final definition = widget.definition;
+    if (definition.hitToolAssetPath == null ||
+        !_effectController.isAnimating ||
+        _effectController.value > 0.22) {
+      return const <LegendaryToolVisual>[];
+    }
+    final impactValue =
+        PendingToolHit.impactTime / (_effectDuration.inMilliseconds / 1000);
+    final progress = Curves.easeInCubic.transform(
+      (_effectController.value / impactValue).clamp(0.0, 1.0),
+    );
+    final isFork = definition.popEffectType == BalloonPopEffectType.cream;
+    return <LegendaryToolVisual>[
+      legendaryToolVisual(
+        definition: definition,
+        targetCenter: _previewSize.center(Offset.zero),
+        approach: _toolApproach,
+        easedProgress: progress,
+        opacity: 1,
+        size: isFork ? 96 : 112,
+        gemiStart: const Offset(-56, -32),
+        gemiEnd: const Offset(0, 45),
+      ),
+    ];
   }
 
   void _handleAction() {
@@ -5497,92 +5635,6 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                               ),
                             ),
                           ),
-                        if (widget.definition.hitToolAssetPath != null)
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: AnimatedBuilder(
-                                animation: _effectController,
-                                builder: (context, _) {
-                                  if (!_effectController.isAnimating ||
-                                      _effectController.value > 0.22) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  final isFork =
-                                      widget.definition.popEffectType ==
-                                          BalloonPopEffectType.cream;
-                                  final impactValue = PendingToolHit
-                                          .impactTime /
-                                      (_effectDuration.inMilliseconds / 1000);
-                                  final progress = Curves.easeInCubic.transform(
-                                    (_effectController.value / impactValue)
-                                        .clamp(0.0, 1.0),
-                                  );
-                                  final forkMotion = shushuForkMotion(
-                                    _toolApproach,
-                                    progress,
-                                  );
-                                  final offset = isFork
-                                      ? forkMotion.offset
-                                      : Offset.lerp(
-                                          const Offset(-56, -32),
-                                          const Offset(0, 45),
-                                          progress,
-                                        )!;
-                                  final angle = isFork
-                                      ? forkMotion.angle
-                                      : -1.12 + 1.04 * progress;
-                                  final size = isFork ? 96.0 : 112.0;
-                                  final tool = isFork
-                                      ? Image.asset(
-                                          widget.definition.hitToolAssetPath!,
-                                          fit: BoxFit.contain,
-                                          cacheWidth: 256,
-                                        )
-                                      : _GemiPickaxeArtwork(
-                                          assetPath: widget
-                                              .definition.hitToolAssetPath!,
-                                        );
-                                  if (isFork) {
-                                    final target =
-                                        _previewSize.center(Offset.zero) +
-                                            offset;
-                                    return Stack(
-                                      children: [
-                                        Positioned(
-                                          left: target.dx - size * 0.35,
-                                          top: target.dy - size * 0.05,
-                                          child: Transform.rotate(
-                                            angle: angle,
-                                            alignment: const Alignment(
-                                              -0.3,
-                                              -0.9,
-                                            ),
-                                            child: SizedBox.square(
-                                              dimension: size,
-                                              child: tool,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  }
-                                  return Center(
-                                    child: Transform.translate(
-                                      offset: offset,
-                                      child: Transform.rotate(
-                                        angle: angle,
-                                        alignment: Alignment.bottomCenter,
-                                        child: SizedBox.square(
-                                          dimension: size,
-                                          child: tool,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
                         if (widget.definition.burstAssetPath != null)
                           Positioned.fill(
                             child: IgnorePointer(
@@ -5624,16 +5676,22 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                           child: IgnorePointer(
                             child: AnimatedBuilder(
                               animation: _effectController,
-                              builder: (context, _) => AssetEffectsCanvas(
-                                key: const ValueKey(
-                                  'balloon-preview-asset-effects',
-                                ),
-                                effects: _assetEffects,
-                                revision: _effectsRevision,
-                                preloadAssets: gemiEffectPreloadAssets(
-                                  widget.definition,
-                                ),
-                              ),
+                              builder: (context, _) {
+                                final toolVisuals = _previewToolVisuals();
+                                return AssetEffectsCanvas(
+                                  key: const ValueKey(
+                                    'balloon-preview-asset-effects',
+                                  ),
+                                  effects: _assetEffects,
+                                  revision: _effectsRevision,
+                                  preloadAssets: legendaryEffectPreloadAssets(
+                                    widget.definition,
+                                  ),
+                                  toolVisuals: toolVisuals,
+                                  toolRevision:
+                                      (_effectController.value * 10000).round(),
+                                );
+                              },
                             ),
                           ),
                         ),
@@ -6328,7 +6386,9 @@ class BalloonSkinRenderer extends StatelessWidget {
     // Fake balloons share every skin's normal renderer and palette. A single
     // final-stage treatment makes all current and future definitions look
     // slightly faded without introducing skin-specific fake implementations.
-    return isFake
+    final usesPrecomposedFake = isFake &&
+        definition.runtimeFakeColorAssetPaths.containsKey(color.toARGB32());
+    return isFake && !usesPrecomposedFake
         ? Opacity(opacity: fakeBalloonOpacity, child: visual)
         : visual;
   }
@@ -6348,37 +6408,21 @@ class BalloonSkinArtwork extends StatelessWidget {
   final bool isFake;
   final int visualVariant;
 
-  static final Map<String, Map<int, ColorFilter>> _gemiColorFilterCache =
-      <String, Map<int, ColorFilter>>{};
-
-  static ColorFilter _gemiColorFilter(
-    BalloonSkinDefinition definition,
-    Color color, {
-    required bool isFake,
-  }) {
-    final colorKey = color.toARGB32();
-    final key = isFake ? colorKey ^ 0x80000000 : colorKey;
-    final definitionCache = _gemiColorFilterCache.putIfAbsent(
-      definition.id,
-      () => <int, ColorFilter>{},
-    );
-    return definitionCache.putIfAbsent(
-      key,
-      () => ColorFilter.matrix(
-        visualColorMatrix(definition, color, isFake: isFake),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    Widget assetImage() => Image.asset(
-          definition.assetForVariant(visualVariant)!,
+    Widget assetImage([String? path]) => Image.asset(
+          path ?? definition.assetForVariant(visualVariant)!,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.medium,
           gaplessPlayback: true,
           cacheWidth: 512,
         );
+
+    final colorKey = color.toARGB32();
+    final runtimeAsset = (isFake
+        ? definition.runtimeFakeColorAssetPaths
+        : definition.runtimeColorAssetPaths)[colorKey];
+    if (runtimeAsset != null) return assetImage(runtimeAsset);
 
     if (definition.imageDetailMask == BalloonImageDetailMask.mochiFace) {
       if (usesOriginalAsset(definition, color) && !isFake) {
@@ -6427,16 +6471,6 @@ class BalloonSkinArtwork extends StatelessWidget {
       );
     }
     if (usesOriginalAsset(definition, color) && !isFake) return image;
-    if (definition.popEffectType == BalloonPopEffectType.crystal) {
-      return ColorFiltered(
-        colorFilter: _gemiColorFilter(
-          definition,
-          color,
-          isFake: isFake,
-        ),
-        child: image,
-      );
-    }
     return ColorFiltered(
       colorFilter: ColorFilter.matrix(
         visualColorMatrix(definition, color, isFake: isFake),

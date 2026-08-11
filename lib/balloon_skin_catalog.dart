@@ -82,6 +82,9 @@ class BalloonSkinDefinition {
     this.screenCrackAssetPath,
     this.screenCrackChance = 0,
     this.exitAnimation = BalloonExitAnimationType.none,
+    this.runtimeColorAssetPaths = const <int, String>{},
+    this.runtimeFakeColorAssetPaths = const <int, String>{},
+    this.runtimeShardAssetPaths = const <int, String>{},
   });
 
   final String id;
@@ -111,6 +114,9 @@ class BalloonSkinDefinition {
   final String? screenCrackAssetPath;
   final double screenCrackChance;
   final BalloonExitAnimationType exitAnimation;
+  final Map<int, String> runtimeColorAssetPaths;
+  final Map<int, String> runtimeFakeColorAssetPaths;
+  final Map<int, String> runtimeShardAssetPaths;
   final bool isDefault;
   final BalloonBadge badge;
   final bool supportsBossSkin;
@@ -380,12 +386,30 @@ abstract final class BalloonSkinCatalog {
       avoidImmediateColorRepeat: true,
       idleAnimation: BalloonIdleAnimationType.glow,
       background: BalloonBackgroundType.crystalCave,
-      hitToolAssetPath: 'assets/images/gemi_pickaxe_asset.png',
+      hitToolAssetPath: 'assets/images/gemi_pickaxe_glow_runtime.png',
       hitSoundAssetPath: 'assets/images/gemi_pickaxe_hit.mp3.mp3',
       popSoundAssetPath: 'assets/images/gemi_break.mp3.mp3',
       shardAssetPath: 'assets/images/gemi_shard_runtime.png',
       screenCrackAssetPath: 'assets/images/gemi_screen_crack.png.png',
       screenCrackChance: 0.28,
+      runtimeColorAssetPaths: <int, String>{
+        0xFF4C8DFF: 'assets/images/gemi_body_blue_runtime.png',
+        0xFF9A67FF: 'assets/images/gemi_body_purple_runtime.png',
+        0xFF39C98A: 'assets/images/gemi_body_green_runtime.png',
+        0xFFFF5574: 'assets/images/gemi_body_red_runtime.png',
+      },
+      runtimeFakeColorAssetPaths: <int, String>{
+        0xFF4C8DFF: 'assets/images/gemi_body_blue_fake_runtime.png',
+        0xFF9A67FF: 'assets/images/gemi_body_purple_fake_runtime.png',
+        0xFF39C98A: 'assets/images/gemi_body_green_fake_runtime.png',
+        0xFFFF5574: 'assets/images/gemi_body_red_fake_runtime.png',
+      },
+      runtimeShardAssetPaths: <int, String>{
+        0xFF4C8DFF: 'assets/images/gemi_shard_blue_runtime.png',
+        0xFF9A67FF: 'assets/images/gemi_shard_purple_runtime.png',
+        0xFF39C98A: 'assets/images/gemi_shard_green_runtime.png',
+        0xFFFF5574: 'assets/images/gemi_shard_red_runtime.png',
+      },
     ),
     BalloonSkinDefinition(
       id: 'balloon-chouchou',

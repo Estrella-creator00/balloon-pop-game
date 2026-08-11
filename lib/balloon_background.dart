@@ -19,6 +19,15 @@ class BalloonBackgroundSpec {
 }
 
 abstract final class BalloonBackgroundRegistry {
+  static const crystalGameplayAssetSize = Size(720, 1280);
+  static const crystalImpactGlowAssetPath =
+      'assets/images/gemi_crack_glow_runtime.png';
+  static const crystalImpactGlowSourceRect = Rect.fromLTWH(
+    143,
+    311,
+    423,
+    581,
+  );
   static final definitions = <BalloonBackgroundType, BalloonBackgroundSpec>{
     for (final type in BalloonBackgroundType.values)
       type: BalloonBackgroundSpec(
@@ -80,6 +89,35 @@ class BalloonBackgroundRenderer extends StatelessWidget {
       if (background != BalloonBackgroundType.crystalCave) {
         return RepaintBoundary(child: image);
       }
+      final pulse = crystalPulseListenable;
+      if (pulse != null) {
+        final glowImage = RepaintBoundary(
+          key: const ValueKey('background-crystal-impact-glow-image'),
+          child: Image.asset(
+            BalloonBackgroundRegistry.crystalImpactGlowAssetPath,
+            fit: BoxFit.fill,
+            cacheWidth: 423,
+            gaplessPlayback: true,
+          ),
+        );
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            RepaintBoundary(
+              key: const ValueKey('background-crystal-image-boundary'),
+              child: image,
+            ),
+            ValueListenableBuilder<double>(
+              valueListenable: pulse,
+              child: glowImage,
+              builder: (context, value, child) => _CrystalImpactGlowPlacement(
+                opacity: 0.18 + value.clamp(0.0, 1.0) * 0.82,
+                child: child!,
+              ),
+            ),
+          ],
+        );
+      }
       const pulseGlow = RepaintBoundary(
         child: DecoratedBox(
           key: ValueKey('background-crystal-pulse-glow'),
@@ -96,7 +134,6 @@ class BalloonBackgroundRenderer extends StatelessWidget {
             opacity: value.clamp(0.0, 1.0),
             child: child,
           );
-      final pulse = crystalPulseListenable;
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -111,19 +148,15 @@ class BalloonBackgroundRenderer extends StatelessWidget {
                 gradient: RadialGradient(
                   center: Alignment(0, -0.18),
                   radius: 0.43,
-                  colors: [Color.fromRGBO(184, 225, 255, 0.08), Color(0x00000000)],
+                  colors: [
+                    Color.fromRGBO(184, 225, 255, 0.08),
+                    Color(0x00000000)
+                  ],
                 ),
               ),
             ),
           ),
-          if (pulse != null)
-            ValueListenableBuilder<double>(
-              valueListenable: pulse,
-              child: pulseGlow,
-              builder: (context, value, child) => pulseLayer(value, child!),
-            )
-          else
-            pulseLayer(crystalPulse, pulseGlow),
+          pulseLayer(crystalPulse, pulseGlow),
         ],
       );
     }
@@ -164,4 +197,44 @@ class BalloonBackgroundRenderer extends StatelessWidget {
       _ => fallback,
     };
   }
+}
+
+class _CrystalImpactGlowPlacement extends StatelessWidget {
+  const _CrystalImpactGlowPlacement({
+    required this.opacity,
+    required this.child,
+  });
+
+  final double opacity;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = constraints.biggest;
+          final fitted = applyBoxFit(
+            BoxFit.cover,
+            BalloonBackgroundRegistry.crystalGameplayAssetSize,
+            viewport,
+          );
+          final destination = fitted.destination;
+          final scale = destination.width /
+              BalloonBackgroundRegistry.crystalGameplayAssetSize.width;
+          final imageLeft = (viewport.width - destination.width) / 2;
+          final imageTop = (viewport.height - destination.height) / 2;
+          final source = BalloonBackgroundRegistry.crystalImpactGlowSourceRect;
+          return Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned(
+                left: imageLeft + source.left * scale,
+                top: imageTop + source.top * scale,
+                width: source.width * scale,
+                height: source.height * scale,
+                child: Opacity(opacity: opacity, child: child),
+              ),
+            ],
+          );
+        },
+      );
 }
