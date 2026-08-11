@@ -54,12 +54,14 @@ class BalloonBackgroundRenderer extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.crystalPulse = 0,
     this.assetPathOverride,
+    this.cacheWidth = 1024,
   });
   final BalloonBackgroundType background;
   final Widget fallback;
   final BoxFit fit;
   final double crystalPulse;
   final String? assetPathOverride;
+  final int cacheWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -69,19 +71,22 @@ class BalloonBackgroundRenderer extends StatelessWidget {
       final image = Image.asset(
         assetPath,
         fit: fit,
-        cacheWidth: 1024,
+        cacheWidth: cacheWidth,
         gaplessPlayback: true,
       );
       if (background != BalloonBackgroundType.crystalCave) {
         return RepaintBoundary(child: image);
       }
       final pulse = crystalPulse.clamp(0.0, 1.0);
-      return RepaintBoundary(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            image,
-            DecoratedBox(
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          RepaintBoundary(
+            key: const ValueKey('background-crystal-image-boundary'),
+            child: image,
+          ),
+          RepaintBoundary(
+            child: DecoratedBox(
               key: const ValueKey('background-crystal-glow'),
               decoration: BoxDecoration(
                 gradient: RadialGradient(
@@ -94,8 +99,8 @@ class BalloonBackgroundRenderer extends StatelessWidget {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
     return switch (background) {

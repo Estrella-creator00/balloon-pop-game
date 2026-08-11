@@ -2529,7 +2529,7 @@ void main() {
     },
   );
 
-  testWidgets('gemi preview uses eight color-tinted official shard images', (
+  testWidgets('gemi preview paints eight color-tinted official shards', (
     tester,
   ) async {
     final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
@@ -2550,19 +2550,20 @@ void main() {
       const ValueKey('balloon-preview-asset-effects'),
     );
     expect(effectLayer, findsOneWidget);
-    final shardImages = tester
-        .widgetList<Image>(
-          find.descendant(of: effectLayer, matching: find.byType(Image)),
-        )
-        .where(
-          (image) =>
-              assetNameOf(image.image) ==
-              'assets/images/gemi_shard_runtime.png',
-        );
-    expect(shardImages, hasLength(8));
+    final canvas = tester.widget<AssetEffectsCanvas>(
+      find.descendant(
+        of: effectLayer,
+        matching: find.byType(AssetEffectsCanvas),
+      ),
+    );
     expect(
-      find.descendant(of: effectLayer, matching: find.byType(ColorFiltered)),
-      findsNWidgets(8),
+      canvas.effectsForAsset('assets/images/gemi_shard_runtime.png'),
+      8,
+    );
+    expect(canvas.tintedEffectCount, 8);
+    expect(
+      find.descendant(of: effectLayer, matching: find.byType(Image)),
+      findsNothing,
     );
   });
 
@@ -4067,17 +4068,31 @@ void main() {
             )
             .painter! as EffectsPainter;
         expect(effectsPainter.pieceCount, 0);
-        final shardImages = tester.widgetList<Image>(find.byType(Image)).where((
-          image,
-        ) {
-          try {
-            return assetNameOf(image.image) ==
-                'assets/images/gemi_shard_runtime.png';
-          } catch (_) {
-            return false;
-          }
-        });
-        expect(shardImages.length, greaterThanOrEqualTo(8));
+        final assetCanvas = tester.widget<AssetEffectsCanvas>(
+          find.descendant(
+            of: find.byKey(const ValueKey('asset-effects-boundary')),
+            matching: find.byType(AssetEffectsCanvas),
+          ),
+        );
+        expect(
+          assetCanvas.effectsForAsset('assets/images/gemi_shard_runtime.png'),
+          greaterThanOrEqualTo(8),
+        );
+      } else if (id == 'balloon-chouchou') {
+        final effectBoundary = find.byKey(
+          const ValueKey('asset-effects-boundary'),
+        );
+        final assetCanvas = tester.widget<AssetEffectsCanvas>(
+          find.descendant(
+            of: effectBoundary,
+            matching: find.byType(AssetEffectsCanvas),
+          ),
+        );
+        expect(assetCanvas.effectCount, inInclusiveRange(8, 11));
+        expect(
+          find.descendant(of: effectBoundary, matching: find.byType(Image)),
+          findsNothing,
+        );
       }
 
       await tester.pumpWidget(const SizedBox.shrink());

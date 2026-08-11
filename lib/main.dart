@@ -838,6 +838,14 @@ ColorFilter gemShardTintFilter(Color color) {
   ]);
 }
 
+final Map<int, ColorFilter> _gemShardTintFilterCache = <int, ColorFilter>{};
+
+ColorFilter cachedGemShardTintFilter(Color color) =>
+    _gemShardTintFilterCache.putIfAbsent(
+      color.toARGB32(),
+      () => gemShardTintFilter(color),
+    );
+
 void addGemiShardAssetEffects({
   required List<AssetVisualEffect> effects,
   required Random random,
@@ -878,28 +886,157 @@ bool advanceAssetVisualEffects(List<AssetVisualEffect> effects, double dt) {
   return true;
 }
 
-Widget buildAssetVisualEffect(AssetVisualEffect effect) {
-  final opacity = (effect.life / effect.maxLife).clamp(0.0, 1.0);
-  Widget image = Image.asset(
-    effect.assetPath,
-    fit: BoxFit.contain,
-    filterQuality: FilterQuality.low,
-    gaplessPlayback: true,
-    cacheWidth: effect.cacheWidth,
-    opacity: AlwaysStoppedAnimation<double>(opacity),
-  );
-  final tint = effect.tint;
-  if (tint != null) {
-    image = ColorFiltered(colorFilter: gemShardTintFilter(tint), child: image);
+/// Draws every transient PNG effect in one canvas layer. This avoids creating
+/// an Image/Transform/Opacity subtree (and a potential compositing layer) for
+/// every GEMI shard and SHUSHU cream particle.
+class AssetEffectsCanvas extends StatefulWidget {
+  const AssetEffectsCanvas({
+    super.key,
+    required this.effects,
+    required this.revision,
+  });
+
+  final List<AssetVisualEffect> effects;
+  final int revision;
+
+  int get effectCount => effects.length;
+  int effectsForAsset(String assetPath) =>
+      effects.where((effect) => effect.assetPath == assetPath).length;
+  int get tintedEffectCount =>
+      effects.where((effect) => effect.tint != null).length;
+
+  @override
+  State<AssetEffectsCanvas> createState() => _AssetEffectsCanvasState();
+}
+
+class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
+  final Map<String, ImageInfo> _images = <String, ImageInfo>{};
+  final Map<String, ImageStream> _streams = <String, ImageStream>{};
+  final Map<String, ImageStreamListener> _listeners =
+      <String, ImageStreamListener>{};
+  int _imageRevision = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveMissingImages();
   }
-  return Positioned(
-    left: effect.center.dx - effect.size / 2,
-    top: effect.center.dy - effect.size / 2,
-    child: Transform.rotate(
-      angle: effect.rotation,
-      child: SizedBox.square(dimension: effect.size, child: image),
-    ),
-  );
+
+  @override
+  void didUpdateWidget(covariant AssetEffectsCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _resolveMissingImages();
+  }
+
+  void _resolveMissingImages() {
+    final configuration = createLocalImageConfiguration(context);
+    for (final effect in widget.effects) {
+      final assetPath = effect.assetPath;
+      if (_streams.containsKey(assetPath)) continue;
+      final provider = ResizeImage(
+        AssetImage(assetPath),
+        width: effect.cacheWidth,
+      );
+      final stream = provider.resolve(configuration);
+      late final ImageStreamListener listener;
+      listener = ImageStreamListener((image, _) {
+        if (!mounted) {
+          image.dispose();
+          return;
+        }
+        final previous = _images[assetPath];
+        _images[assetPath] = image;
+        _imageRevision++;
+        previous?.dispose();
+        setState(() {});
+      });
+      _streams[assetPath] = stream;
+      _listeners[assetPath] = listener;
+      stream.addListener(listener);
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final entry in _streams.entries) {
+      final listener = _listeners[entry.key];
+      if (listener != null) entry.value.removeListener(listener);
+    }
+    for (final image in _images.values) {
+      image.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+        key: const ValueKey('asset-effects-canvas'),
+        painter: _AssetEffectsPainter(
+          effects: widget.effects,
+          images: _images,
+          revision: widget.revision,
+          imageRevision: _imageRevision,
+        ),
+      );
+}
+
+class _AssetEffectsPainter extends CustomPainter {
+  const _AssetEffectsPainter({
+    required this.effects,
+    required this.images,
+    required this.revision,
+    required this.imageRevision,
+  });
+
+  final List<AssetVisualEffect> effects;
+  final Map<String, ImageInfo> images;
+  final int revision;
+  final int imageRevision;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..isAntiAlias = true
+      ..filterQuality = FilterQuality.low;
+    for (final effect in effects) {
+      final imageInfo = images[effect.assetPath];
+      if (imageInfo == null) continue;
+      final opacity = (effect.life / effect.maxLife).clamp(0.0, 1.0);
+      paint
+        ..color = Color.fromRGBO(255, 255, 255, opacity)
+        ..colorFilter = effect.tint == null
+            ? null
+            : cachedGemShardTintFilter(effect.tint!);
+      final image = imageInfo.image;
+      final source = Rect.fromLTWH(
+        0,
+        0,
+        image.width.toDouble(),
+        image.height.toDouble(),
+      );
+      final fitted = applyBoxFit(
+        BoxFit.contain,
+        Size(image.width.toDouble(), image.height.toDouble()),
+        Size.square(effect.size),
+      );
+      final destination = Rect.fromCenter(
+        center: Offset.zero,
+        width: fitted.destination.width,
+        height: fitted.destination.height,
+      );
+      canvas
+        ..save()
+        ..translate(effect.center.dx, effect.center.dy)
+        ..rotate(effect.rotation)
+        ..drawImageRect(image, source, destination, paint)
+        ..restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AssetEffectsPainter oldDelegate) =>
+      oldDelegate.revision != revision ||
+      oldDelegate.imageRevision != imageRevision;
 }
 
 @immutable
@@ -1284,8 +1421,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     add(definition.shardAssetPath, 128);
     add(definition.screenCrackAssetPath, 320);
     add(
-      BalloonBackgroundRegistry.definitionFor(definition.background).assetPath,
-      1024,
+      BalloonBackgroundRegistry.gameplayAssetPathFor(definition.background),
+      720,
     );
     for (final entry in paths.entries) {
       precacheImage(
@@ -4144,23 +4281,19 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 for (final boss in _bosses) _buildBoss(boss),
                                 for (final hit in _pendingToolHits)
                                   _buildPendingToolHit(hit),
-                                if (_assetEffects.isNotEmpty)
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: RepaintBoundary(
-                                        key: const ValueKey(
-                                          'asset-effects-boundary',
-                                        ),
-                                        child: Stack(
-                                          clipBehavior: Clip.none,
-                                          children: [
-                                            for (final effect in _assetEffects)
-                                              buildAssetVisualEffect(effect),
-                                          ],
-                                        ),
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: RepaintBoundary(
+                                      key: const ValueKey(
+                                        'asset-effects-boundary',
+                                      ),
+                                      child: AssetEffectsCanvas(
+                                        effects: _assetEffects,
+                                        revision: _effectsRevision,
                                       ),
                                     ),
                                   ),
+                                ),
                                 if (_stage == 30 && _phase == GamePhase.playing)
                                   Positioned.fill(
                                     key: const ValueKey(
@@ -5382,26 +5515,22 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                               ),
                             ),
                           ),
-                        if (_assetEffects.isNotEmpty)
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: RepaintBoundary(
-                                key: const ValueKey(
-                                  'balloon-preview-asset-effects',
-                                ),
-                                child: AnimatedBuilder(
-                                  animation: _effectController,
-                                  builder: (context, _) => Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      for (final effect in _assetEffects)
-                                        buildAssetVisualEffect(effect),
-                                    ],
-                                  ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: RepaintBoundary(
+                              key: const ValueKey(
+                                'balloon-preview-asset-effects',
+                              ),
+                              child: AnimatedBuilder(
+                                animation: _effectController,
+                                builder: (context, _) => AssetEffectsCanvas(
+                                  effects: _assetEffects,
+                                  revision: _effectsRevision,
                                 ),
                               ),
                             ),
                           ),
+                        ),
                         Positioned.fill(
                           child: IgnorePointer(
                             child: RepaintBoundary(
@@ -5906,6 +6035,7 @@ class GameBalloonBackground extends StatelessWidget {
         background: definition.background,
         fallback: const PlaySky(),
         crystalPulse: crystalPulse,
+        cacheWidth: 720,
         assetPathOverride: BalloonBackgroundRegistry.gameplayAssetPathFor(
           definition.background,
         ),
