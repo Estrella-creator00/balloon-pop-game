@@ -48,7 +48,7 @@ flutter:
     - assets/images/gemi_break.mp3.mp3
     - assets/images/shushu_fork_hit.mp3.mp3
     - assets/images/shushu_cream_burst.mp3.mp3
-    - assets/images/gemi_shard.png.png
+    - assets/images/gemi_shard_runtime.png
     - assets/images/gemi_screen_crack.png.png
     - assets/sounds/mochi_wing_flap.mp3.mp3
     - assets/sounds/wari_watermelon_bite.mp3.mp3

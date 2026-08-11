@@ -28,7 +28,7 @@ enum BalloonIdleAnimationType {
   ghostTail,
   slimeSquish,
   glow,
-  breathe
+  breathe,
 }
 
 enum BalloonSpecialBehavior { none, watermelonVariant, onePercentSpin }
@@ -262,13 +262,20 @@ abstract final class BalloonSkinCatalog {
     ),
     BalloonSkinDefinition(
       // Keep the legacy rabbit ID so existing ownership/equipment survives.
-      id: 'balloon-rabbit', displayName: '모찌', price: 500,
+      id: 'balloon-rabbit',
+      displayName: '모찌',
+      price: 500,
       description: '겁 많고 호기심 많음',
-      rarity: BalloonRarity.rare, rendererType: BalloonRendererType.image,
+      rarity: BalloonRarity.rare,
+      rendererType: BalloonRendererType.image,
       assetPath: 'assets/images/mochi_balloon.png',
-      colorPalette: _rabbitPalette, popEffectType: BalloonPopEffectType.shards,
-      popSoundType: BalloonPopSoundType.basic, isDefault: false,
-      supportsBossSkin: true, shopOrder: 4, previewColor: Color(0xFFFF91B8),
+      colorPalette: _rabbitPalette,
+      popEffectType: BalloonPopEffectType.shards,
+      popSoundType: BalloonPopSoundType.basic,
+      isDefault: false,
+      supportsBossSkin: true,
+      shopOrder: 4,
+      previewColor: Color(0xFFFF91B8),
       avoidImmediateColorRepeat: true,
       imageDetailMask: BalloonImageDetailMask.mochiFace,
     ),
@@ -376,7 +383,7 @@ abstract final class BalloonSkinCatalog {
       hitToolAssetPath: 'assets/images/gemi_pickaxe_asset.png',
       hitSoundAssetPath: 'assets/images/gemi_pickaxe_hit.mp3.mp3',
       popSoundAssetPath: 'assets/images/gemi_break.mp3.mp3',
-      shardAssetPath: 'assets/images/gemi_shard.png.png',
+      shardAssetPath: 'assets/images/gemi_shard_runtime.png',
       screenCrackAssetPath: 'assets/images/gemi_screen_crack.png.png',
       screenCrackChance: 0.28,
     ),

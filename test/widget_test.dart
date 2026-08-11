@@ -117,10 +117,7 @@ Future<void> openBalloonPreview(WidgetTester tester, String productId) async {
   expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsOneWidget);
 }
 
-Future<void> scrollToStoreProduct(
-  WidgetTester tester,
-  String productId,
-) async {
+Future<void> scrollToStoreProduct(WidgetTester tester, String productId) async {
   final product = find.byKey(ValueKey('store-product-$productId'));
   final scrollable = find
       .descendant(
@@ -216,10 +213,7 @@ class _ErrorRankingRepository implements RankingRepository {
 
 void main() {
   test('screen identifiers stay stable', () {
-    expect(
-      ScreenIds.names[ScreenIds.nicknameOnboarding],
-      '최초 닉네임 설정 화면',
-    );
+    expect(ScreenIds.names[ScreenIds.nicknameOnboarding], '최초 닉네임 설정 화면');
     expect(ScreenIds.names[ScreenIds.home], '홈 화면');
     expect(ScreenIds.names[ScreenIds.shopCategories], '상점 카테고리 화면');
     expect(ScreenIds.names[ScreenIds.shopProductList], '상점 상품 목록 화면');
@@ -390,51 +384,41 @@ void main() {
     expect(bossA.turnIntervalOffset, isNot(bossB.turnIntervalOffset));
   });
 
-  test('stage 30 role swaps preserve entities and overlap taps choose nearest',
-      () {
-    final bosses = <BossBalloon>[
-      BossBalloon(
-        id: 0,
-        position: const Offset(100, 100),
-        velocity: const Offset(80, 25),
-        size: 200,
-        maxHp: 12,
-      ),
-      BossBalloon(
-        id: 1,
-        position: const Offset(200, 100),
-        velocity: const Offset(-65, -30),
-        size: 200,
-        maxHp: 12,
-        isFake: true,
-      ),
-    ];
-    final positions = bosses.map((boss) => boss.position).toList();
-    final velocities = bosses.map((boss) => boss.velocity).toList();
-    final state = Stage30BossState()..realBossId = 1;
-    applyStage30BossRoles(bosses, state);
-    expect(bosses[0].isFake, isTrue);
-    expect(bosses[1].isFake, isFalse);
-    expect(bosses.map((boss) => boss.position), orderedEquals(positions));
-    expect(bosses.map((boss) => boss.velocity), orderedEquals(velocities));
+  test(
+    'stage 30 role swaps preserve entities and overlap taps choose nearest',
+    () {
+      final bosses = <BossBalloon>[
+        BossBalloon(
+          id: 0,
+          position: const Offset(100, 100),
+          velocity: const Offset(80, 25),
+          size: 200,
+          maxHp: 12,
+        ),
+        BossBalloon(
+          id: 1,
+          position: const Offset(200, 100),
+          velocity: const Offset(-65, -30),
+          size: 200,
+          maxHp: 12,
+          isFake: true,
+        ),
+      ];
+      final positions = bosses.map((boss) => boss.position).toList();
+      final velocities = bosses.map((boss) => boss.velocity).toList();
+      final state = Stage30BossState()..realBossId = 1;
+      applyStage30BossRoles(bosses, state);
+      expect(bosses[0].isFake, isTrue);
+      expect(bosses[1].isFake, isFalse);
+      expect(bosses.map((boss) => boss.position), orderedEquals(positions));
+      expect(bosses.map((boss) => boss.velocity), orderedEquals(velocities));
 
-    expect(
-      closestStage30BossForTap(bosses, const Offset(270, 190))?.id,
-      1,
-    );
-    expect(
-      closestStage30BossForTap(bosses, const Offset(230, 190))?.id,
-      0,
-    );
-    expect(
-      closestStage30BossForTap(bosses, const Offset(250, 190))?.id,
-      1,
-    );
-    expect(
-      closestStage30BossForTap(bosses, const Offset(20, 20)),
-      isNull,
-    );
-  });
+      expect(closestStage30BossForTap(bosses, const Offset(270, 190))?.id, 1);
+      expect(closestStage30BossForTap(bosses, const Offset(230, 190))?.id, 0);
+      expect(closestStage30BossForTap(bosses, const Offset(250, 190))?.id, 1);
+      expect(closestStage30BossForTap(bosses, const Offset(20, 20)), isNull);
+    },
+  );
 
   test('home stage page derives from the saved next playable stage', () {
     expect(homeStagePageForProgress(1), 0);
@@ -479,8 +463,9 @@ void main() {
     expect(matrix[19], 0);
   });
 
-  testWidgets('every balloon definition uses the shared fake renderer path',
-      (tester) async {
+  testWidgets('every balloon definition uses the shared fake renderer path', (
+    tester,
+  ) async {
     for (final definition in BalloonSkinCatalog.definitions) {
       final key = ValueKey('shared-fake-${definition.id}');
       await tester.pumpWidget(
@@ -555,9 +540,7 @@ void main() {
     final beforeBoundary = RankingWeek.forInstant(
       DateTime.utc(2026, 8, 10, 7, 59, 59),
     );
-    final atBoundary = RankingWeek.forInstant(
-      DateTime.utc(2026, 8, 10, 8),
-    );
+    final atBoundary = RankingWeek.forInstant(DateTime.utc(2026, 8, 10, 8));
 
     expect(beforeBoundary.id, '2026-08-03');
     expect(atBoundary.id, '2026-08-10');
@@ -567,26 +550,28 @@ void main() {
     expect(atBoundary.nextStartKst.hour, 17);
   });
 
-  test('mock ranking provides a sorted current top 20 and weekly leaders',
-      () async {
-    const repository = MockRankingRepository();
-    final week = RankingWeek.forInstant(DateTime.utc(2026, 8, 12));
-    final entries = await repository.fetchCurrentWeekTop20(week);
-    final current = await repository.fetchCurrentWeekLeader(week);
-    final previous = await repository.fetchPreviousWeekLeader(week);
+  test(
+    'mock ranking provides a sorted current top 20 and weekly leaders',
+    () async {
+      const repository = MockRankingRepository();
+      final week = RankingWeek.forInstant(DateTime.utc(2026, 8, 12));
+      final entries = await repository.fetchCurrentWeekTop20(week);
+      final current = await repository.fetchCurrentWeekLeader(week);
+      final previous = await repository.fetchPreviousWeekLeader(week);
 
-    expect(entries, hasLength(20));
-    expect(
-      entries.map((entry) => entry.rank),
-      orderedEquals(List.generate(20, (index) => index + 1)),
-    );
-    for (var index = 1; index < entries.length; index++) {
-      expect(entries[index - 1].score, greaterThan(entries[index].score));
-    }
-    expect(entries.every((entry) => entry.weekId == week.id), isTrue);
-    expect(current?.rank, 1);
-    expect(previous?.weekId, week.previous.id);
-  });
+      expect(entries, hasLength(20));
+      expect(
+        entries.map((entry) => entry.rank),
+        orderedEquals(List.generate(20, (index) => index + 1)),
+      );
+      for (var index = 1; index < entries.length; index++) {
+        expect(entries[index - 1].score, greaterThan(entries[index].score));
+      }
+      expect(entries.every((entry) => entry.weekId == week.id), isTrue);
+      expect(current?.rank, 1);
+      expect(previous?.weekId, week.previous.id);
+    },
+  );
 
   test('unsupported haptics never interrupt gameplay', () async {
     HapticService.setPerformerForTest(() async {
@@ -727,61 +712,65 @@ void main() {
   });
 
   test(
-      'rarity grouping, descriptions, variants, and special spawn are data driven',
-      () {
-    final counts = <BalloonRarity, int>{
-      for (final rarity in BalloonRarity.values)
-        rarity: BalloonSkinCatalog.shopDefinitions
-            .where((definition) => definition.rarity == rarity)
-            .length,
-    };
-    expect(counts, {
-      BalloonRarity.common: 4,
-      BalloonRarity.rare: 3,
-      BalloonRarity.heroic: 2,
-      BalloonRarity.legendary: 2,
-    });
-    expect(
-      BalloonSkinCatalog.definitions
-          .where((definition) => definition.rarity != BalloonRarity.common)
-          .every((definition) => definition.showsDescription),
-      isTrue,
-    );
+    'rarity grouping, descriptions, variants, and special spawn are data driven',
+    () {
+      final counts = <BalloonRarity, int>{
+        for (final rarity in BalloonRarity.values)
+          rarity: BalloonSkinCatalog.shopDefinitions
+              .where((definition) => definition.rarity == rarity)
+              .length,
+      };
+      expect(counts, {
+        BalloonRarity.common: 4,
+        BalloonRarity.rare: 3,
+        BalloonRarity.heroic: 2,
+        BalloonRarity.legendary: 2,
+      });
+      expect(
+        BalloonSkinCatalog.definitions
+            .where((definition) => definition.rarity != BalloonRarity.common)
+            .every((definition) => definition.showsDescription),
+        isTrue,
+      );
 
-    final wari = BalloonSkinCatalog.byIdOrDefault('balloon-wari');
-    expect(wari.variantAssetPaths, hasLength(3));
-    expect(wari.imageColorMode, BalloonImageColorMode.original);
-    expect(wari.chooseVisualVariant(0), 0);
-    expect(wari.chooseVisualVariant(0.34), 1);
-    expect(wari.chooseVisualVariant(0.99), 2);
+      final wari = BalloonSkinCatalog.byIdOrDefault('balloon-wari');
+      expect(wari.variantAssetPaths, hasLength(3));
+      expect(wari.imageColorMode, BalloonImageColorMode.original);
+      expect(wari.chooseVisualVariant(0), 0);
+      expect(wari.chooseVisualVariant(0.34), 1);
+      expect(wari.chooseVisualVariant(0.99), 2);
 
-    expect(
-      BalloonSkinCatalog.byIdOrDefault('balloon-star').description,
-      '조용하지만 은근 튀는 편',
-    );
-    expect(
-      BalloonSkinCatalog.byIdOrDefault('balloon-flower').description,
-      '화사하고 기분파',
-    );
+      expect(
+        BalloonSkinCatalog.byIdOrDefault('balloon-star').description,
+        '조용하지만 은근 튀는 편',
+      );
+      expect(
+        BalloonSkinCatalog.byIdOrDefault('balloon-flower').description,
+        '화사하고 기분파',
+      );
 
-    final kicks = BalloonSkinCatalog.byIdOrDefault('balloon-kicks');
-    expect(kicks.chooseSpecialSpawn(0.009), isFalse);
-    expect(kicks.chooseSpecialSpawn(0.01), isFalse);
-    expect(kicks.chooseSpecialSpawn(0.5), isFalse);
+      final kicks = BalloonSkinCatalog.byIdOrDefault('balloon-kicks');
+      expect(kicks.chooseSpecialSpawn(0.009), isFalse);
+      expect(kicks.chooseSpecialSpawn(0.01), isFalse);
+      expect(kicks.chooseSpecialSpawn(0.5), isFalse);
 
-    final muggy = BalloonSkinCatalog.byIdOrDefault('balloon-jello');
-    expect(muggy.popSoundAssetPath, 'assets/images/muggy_break.mp3.mp3');
-    final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
-    expect(gemi.hitToolAssetPath, 'assets/images/gemi_pickaxe_asset.png');
-    expect(gemi.hitSoundAssetPath, 'assets/images/gemi_pickaxe_hit.mp3.mp3');
-    expect(gemi.popSoundAssetPath, 'assets/images/gemi_break.mp3.mp3');
-    final shushu = BalloonSkinCatalog.byIdOrDefault('balloon-chouchou');
-    expect(shushu.imageColorMode, BalloonImageColorMode.original);
-    expect(shushu.hitToolAssetPath, 'assets/images/shushu_fork_asset.png');
-    expect(shushu.hitSoundAssetPath, 'assets/images/shushu_fork_hit.mp3.mp3');
-    expect(
-        shushu.popSoundAssetPath, 'assets/images/shushu_cream_burst.mp3.mp3');
-  });
+      final muggy = BalloonSkinCatalog.byIdOrDefault('balloon-jello');
+      expect(muggy.popSoundAssetPath, 'assets/images/muggy_break.mp3.mp3');
+      final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
+      expect(gemi.hitToolAssetPath, 'assets/images/gemi_pickaxe_asset.png');
+      expect(gemi.hitSoundAssetPath, 'assets/images/gemi_pickaxe_hit.mp3.mp3');
+      expect(gemi.popSoundAssetPath, 'assets/images/gemi_break.mp3.mp3');
+      expect(gemi.shardAssetPath, 'assets/images/gemi_shard_runtime.png');
+      final shushu = BalloonSkinCatalog.byIdOrDefault('balloon-chouchou');
+      expect(shushu.imageColorMode, BalloonImageColorMode.original);
+      expect(shushu.hitToolAssetPath, 'assets/images/shushu_fork_asset.png');
+      expect(shushu.hitSoundAssetPath, 'assets/images/shushu_fork_hit.mp3.mp3');
+      expect(
+        shushu.popSoundAssetPath,
+        'assets/images/shushu_cream_burst.mp3.mp3',
+      );
+    },
+  );
 
   test('skin metadata does not alter any stage rule', () {
     final baseline = [
@@ -801,78 +790,86 @@ void main() {
     }
   });
 
-  testWidgets('kicks rotation is removed and legendary backgrounds are shared',
-      (tester) async {
-    final kicks = BalloonSkinCatalog.byIdOrDefault('balloon-kicks');
-    await tester.pumpWidget(MaterialApp(
-      home: Row(children: [
-        SizedBox(
-          key: const ValueKey('kicks-normal'),
-          width: 100,
-          height: 120,
-          child: BalloonSkinRenderer(
-            definition: kicks,
-            color: kicks.previewColor,
-            specialVisual: false,
-            animationPhase: 1,
+  testWidgets(
+    'kicks rotation is removed and legendary backgrounds are shared',
+    (tester) async {
+      final kicks = BalloonSkinCatalog.byIdOrDefault('balloon-kicks');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Row(
+            children: [
+              SizedBox(
+                key: const ValueKey('kicks-normal'),
+                width: 100,
+                height: 120,
+                child: BalloonSkinRenderer(
+                  definition: kicks,
+                  color: kicks.previewColor,
+                  specialVisual: false,
+                  animationPhase: 1,
+                ),
+              ),
+              SizedBox(
+                key: const ValueKey('kicks-spin'),
+                width: 100,
+                height: 120,
+                child: BalloonSkinRenderer(
+                  definition: kicks,
+                  color: kicks.previewColor,
+                  specialVisual: true,
+                  animationPhase: 1,
+                ),
+              ),
+            ],
           ),
         ),
-        SizedBox(
-          key: const ValueKey('kicks-spin'),
-          width: 100,
-          height: 120,
-          child: BalloonSkinRenderer(
-            definition: kicks,
-            color: kicks.previewColor,
-            specialVisual: true,
-            animationPhase: 1,
-          ),
-        ),
-      ]),
-    ));
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('kicks-normal')),
-        matching: find.byType(Transform),
-      ),
-      findsNothing,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('kicks-spin')),
-        matching: find.byType(Transform),
-      ),
-      findsNothing,
-    );
-
-    for (final entry in const [
-      (
-        'balloon-lumen',
-        'assets/images/gemi_background_mobile.png',
-        'assets/images/gemi_background_asset.png',
-      ),
-      (
-        'balloon-chouchou',
-        'assets/images/shushu_background_mobile.png',
-        'assets/images/shushu_background_asset.png',
-      ),
-    ]) {
-      final definition = BalloonSkinCatalog.byIdOrDefault(entry.$1);
-      await tester.pumpWidget(MaterialApp(
-        home: GameBalloonBackground(definition: definition),
-      ));
-      final image = tester.widget<Image>(find.byType(Image));
-      expect(assetNameOf(image.image), entry.$2);
-      expect(
-        BalloonBackgroundRegistry.definitionFor(definition.background)
-            .assetPath,
-        entry.$3,
       );
-    }
-  });
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('kicks-normal')),
+          matching: find.byType(Transform),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('kicks-spin')),
+          matching: find.byType(Transform),
+        ),
+        findsNothing,
+      );
 
-  testWidgets('star and image mochi share normal boss and fake render paths',
-      (tester) async {
+      for (final entry in const [
+        (
+          'balloon-lumen',
+          'assets/images/gemi_background_mobile.png',
+          'assets/images/gemi_background_asset.png',
+        ),
+        (
+          'balloon-chouchou',
+          'assets/images/shushu_background_mobile.png',
+          'assets/images/shushu_background_asset.png',
+        ),
+      ]) {
+        final definition = BalloonSkinCatalog.byIdOrDefault(entry.$1);
+        await tester.pumpWidget(
+          MaterialApp(home: GameBalloonBackground(definition: definition)),
+        );
+        final image = tester.widget<Image>(find.byType(Image));
+        expect(assetNameOf(image.image), entry.$2);
+        expect(
+          BalloonBackgroundRegistry.definitionFor(
+            definition.background,
+          ).assetPath,
+          entry.$3,
+        );
+      }
+    },
+  );
+
+  testWidgets('star and image mochi share normal boss and fake render paths', (
+    tester,
+  ) async {
     for (final id in ['balloon-star', 'balloon-rabbit']) {
       final definition = BalloonSkinCatalog.byIdOrDefault(id);
       await tester.pumpWidget(
@@ -901,10 +898,7 @@ void main() {
       for (final contextName in ['normal', 'boss', 'fake', 'fake-boss']) {
         final scope = find.byKey(ValueKey('$id-$contextName'));
         expect(
-          find.descendant(
-            of: scope,
-            matching: find.byType(BalloonSkinArtwork),
-          ),
+          find.descendant(of: scope, matching: find.byType(BalloonSkinArtwork)),
           findsOneWidget,
         );
         expect(
@@ -925,59 +919,60 @@ void main() {
     }
   });
 
-  testWidgets('preview and gameplay use the same optional background renderer',
-      (tester) async {
-    const mock = BalloonSkinDefinition(
-      id: 'mock-background-skin',
-      displayName: 'Mock',
-      price: 0,
-      rarity: BalloonRarity.legendary,
-      rendererType: BalloonRendererType.painted,
-      colorPalette: [Colors.pink],
-      popEffectType: BalloonPopEffectType.shards,
-      popSoundType: BalloonPopSoundType.basic,
-      isDefault: false,
-      supportsBossSkin: true,
-      shopOrder: 99,
-      previewColor: Colors.pink,
-      background: BalloonBackgroundType.galaxy,
-    );
+  testWidgets(
+    'preview and gameplay use the same optional background renderer',
+    (tester) async {
+      const mock = BalloonSkinDefinition(
+        id: 'mock-background-skin',
+        displayName: 'Mock',
+        price: 0,
+        rarity: BalloonRarity.legendary,
+        rendererType: BalloonRendererType.painted,
+        colorPalette: [Colors.pink],
+        popEffectType: BalloonPopEffectType.shards,
+        popSoundType: BalloonPopSoundType.basic,
+        isDefault: false,
+        supportsBossSkin: true,
+        shopOrder: 99,
+        previewColor: Colors.pink,
+        background: BalloonBackgroundType.galaxy,
+      );
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: GameBalloonBackground(definition: mock),
-      ),
-    );
-    final gameBackground = tester.widget<BalloonBackgroundRenderer>(
-      find.byKey(const ValueKey('game-balloon-background')),
-    );
-    expect(gameBackground.background, BalloonBackgroundType.galaxy);
-    expect(gameBackground.fit, BoxFit.cover);
+      await tester.pumpWidget(
+        const MaterialApp(home: GameBalloonBackground(definition: mock)),
+      );
+      final gameBackground = tester.widget<BalloonBackgroundRenderer>(
+        find.byKey(const ValueKey('game-balloon-background')),
+      );
+      expect(gameBackground.background, BalloonBackgroundType.galaxy);
+      expect(gameBackground.fit, BoxFit.cover);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: BalloonPreviewDialog(
-            definition: mock,
-            productProvider: () => StoreProduct.fromBalloonSkin(mock),
-            onAction: () {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalloonPreviewDialog(
+              definition: mock,
+              productProvider: () => StoreProduct.fromBalloonSkin(mock),
+              onAction: () {},
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
-    final previewBackground = tester.widget<BalloonBackgroundRenderer>(
-      find.byKey(const ValueKey('balloon-preview-background')),
-    );
-    expect(previewBackground.background, gameBackground.background);
-    expect(previewBackground.fit, gameBackground.fit);
+      );
+      await tester.pump();
+      final previewBackground = tester.widget<BalloonBackgroundRenderer>(
+        find.byKey(const ValueKey('balloon-preview-background')),
+      );
+      expect(previewBackground.background, gameBackground.background);
+      expect(previewBackground.fit, gameBackground.fit);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-  });
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
 
-  testWidgets('heart balloon asset has a fully transparent surrounding area',
-      (tester) async {
+  testWidgets('heart balloon asset has a fully transparent surrounding area', (
+    tester,
+  ) async {
     await tester.runAsync(() async {
       final asset = await rootBundle.load('assets/images/heart_balloon.png');
       final codec = await ui.instantiateImageCodec(
@@ -1020,8 +1015,9 @@ void main() {
     });
   });
 
-  testWidgets('mochi uses one optimized transparent image asset',
-      (tester) async {
+  testWidgets('mochi uses one optimized transparent image asset', (
+    tester,
+  ) async {
     await tester.runAsync(() async {
       final asset = await rootBundle.load('assets/images/mochi_balloon.png');
       final codec = await ui.instantiateImageCodec(
@@ -1046,21 +1042,24 @@ void main() {
     });
   });
 
-  testWidgets('mochi five colors preserve original facial detail overlay',
-      (tester) async {
+  testWidgets('mochi five colors preserve original facial detail overlay', (
+    tester,
+  ) async {
     final mochi = BalloonSkinCatalog.byIdOrDefault('balloon-rabbit');
     expect(mochi.colorPalette, hasLength(5));
     for (var index = 0; index < mochi.colorPalette.length; index++) {
-      await tester.pumpWidget(MaterialApp(
-        home: SizedBox(
-          width: 120,
-          height: 160,
-          child: BalloonSkinRenderer(
-            definition: mochi,
-            color: mochi.colorPalette[index],
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 120,
+            height: 160,
+            child: BalloonSkinRenderer(
+              definition: mochi,
+              color: mochi.colorPalette[index],
+            ),
           ),
         ),
-      ));
+      );
       expect(find.byType(BalloonSkinArtwork), findsOneWidget);
       expect(
         tester
@@ -1082,20 +1081,33 @@ void main() {
             )
             .clipper!
             .getClip(const Size(398, 512));
-        expect(detailClip.contains(const Offset(100, 100)), isFalse,
-            reason: 'inner ears must follow the body color variant');
-        expect(detailClip.contains(const Offset(110, 305)), isFalse,
-            reason: 'cheeks must follow the body color variant');
-        expect(detailClip.contains(const Offset(148, 286)), isTrue,
-            reason: 'eyes must keep their original detail colors');
-        expect(detailClip.contains(const Offset(199, 307)), isTrue,
-            reason: 'the pink nose must keep its original color');
+        expect(
+          detailClip.contains(const Offset(100, 100)),
+          isFalse,
+          reason: 'inner ears must follow the body color variant',
+        );
+        expect(
+          detailClip.contains(const Offset(110, 305)),
+          isFalse,
+          reason: 'cheeks must follow the body color variant',
+        );
+        expect(
+          detailClip.contains(const Offset(148, 286)),
+          isTrue,
+          reason: 'eyes must keep their original detail colors',
+        );
+        expect(
+          detailClip.contains(const Offset(199, 307)),
+          isTrue,
+          reason: 'the pink nose must keep its original color',
+        );
       }
     }
   });
 
-  testWidgets('all six heart colors preserve the asset alpha mask',
-      (tester) async {
+  testWidgets('all six heart colors preserve the asset alpha mask', (
+    tester,
+  ) async {
     final definition = BalloonSkinCatalog.byIdOrDefault('balloon-heart');
     final colors = definition.colorPalette;
     await tester.pumpWidget(
@@ -1136,10 +1148,7 @@ void main() {
         BalloonSkinArtwork.usesOriginalAsset(definition, colors[index]),
         index == 0,
       );
-      final matrix = BalloonSkinArtwork.colorMatrix(
-        definition,
-        colors[index],
-      );
+      final matrix = BalloonSkinArtwork.colorMatrix(definition, colors[index]);
       expect(matrix.sublist(15), <double>[0, 0, 0, 1, 0]);
       expect(matrix[4], 0);
       expect(matrix[9], 0);
@@ -1147,8 +1156,9 @@ void main() {
     }
   });
 
-  testWidgets('shop, normal, and boss pink use the same raw heart artwork',
-      (tester) async {
+  testWidgets('shop, normal, and boss pink use the same raw heart artwork', (
+    tester,
+  ) async {
     final definition = BalloonSkinCatalog.byIdOrDefault('balloon-heart');
     await tester.pumpWidget(
       MaterialApp(
@@ -1196,25 +1206,27 @@ void main() {
     }
   });
 
-  test('30fps elapsed-time integration preserves movement and caps long frames',
-      () {
-    const speed = 120.0;
-    final distanceAt30Fps = List.filled(
-      30,
-      calculateFrameDelta(const Duration(microseconds: 33333)),
-    ).fold<double>(0, (distance, dt) => distance + speed * dt);
-    final distanceAt60Fps = List.filled(
-      60,
-      calculateFrameDelta(const Duration(microseconds: 16667)),
-    ).fold<double>(0, (distance, dt) => distance + speed * dt);
+  test(
+    '30fps elapsed-time integration preserves movement and caps long frames',
+    () {
+      const speed = 120.0;
+      final distanceAt30Fps = List.filled(
+        30,
+        calculateFrameDelta(const Duration(microseconds: 33333)),
+      ).fold<double>(0, (distance, dt) => distance + speed * dt);
+      final distanceAt60Fps = List.filled(
+        60,
+        calculateFrameDelta(const Duration(microseconds: 16667)),
+      ).fold<double>(0, (distance, dt) => distance + speed * dt);
 
-    expect(gameLoopInterval, const Duration(milliseconds: 33));
-    expect((distanceAt30Fps - distanceAt60Fps).abs(), lessThan(0.01));
-    expect(
-      calculateFrameDelta(const Duration(milliseconds: 250)),
-      maxFrameDeltaSeconds,
-    );
-  });
+      expect(gameLoopInterval, const Duration(milliseconds: 33));
+      expect((distanceAt30Fps - distanceAt60Fps).abs(), lessThan(0.01));
+      expect(
+        calculateFrameDelta(const Duration(milliseconds: 250)),
+        maxFrameDeltaSeconds,
+      );
+    },
+  );
 
   test('game loop start always cancels the previous timer', () {
     final timers = <Timer>[];
@@ -1303,34 +1315,36 @@ void main() {
     expect(CoinService.balance, 32);
   });
 
-  test('coin packages and disabled purchase service never grant coins',
-      () async {
-    expect(
-      coinPackages.map((package) => package.id),
-      orderedEquals(['coin_300', 'coin_700', 'coin_1500', 'coin_3500']),
-    );
-    expect(
-      coinPackages.map((package) => package.coinAmount),
-      orderedEquals([300, 700, 1500, 3500]),
-    );
-    expect(
-      coinPackages.map((package) => package.priceWon),
-      orderedEquals([1500, 3000, 5900, 11900]),
-    );
-    expect(
-      coinPackages.map((package) => package.displayPrice),
-      orderedEquals(['₩1,500', '₩3,000', '₩5,900', '₩11,900']),
-    );
+  test(
+    'coin packages and disabled purchase service never grant coins',
+    () async {
+      expect(
+        coinPackages.map((package) => package.id),
+        orderedEquals(['coin_300', 'coin_700', 'coin_1500', 'coin_3500']),
+      );
+      expect(
+        coinPackages.map((package) => package.coinAmount),
+        orderedEquals([300, 700, 1500, 3500]),
+      );
+      expect(
+        coinPackages.map((package) => package.priceWon),
+        orderedEquals([1500, 3000, 5900, 11900]),
+      );
+      expect(
+        coinPackages.map((package) => package.displayPrice),
+        orderedEquals(['₩1,500', '₩3,000', '₩5,900', '₩11,900']),
+      );
 
-    ProgressStorage.addCoins(9133);
-    final before = CoinService.balance;
-    final result = await const DisabledCoinPurchaseService().purchase(
-      coinPackages.first,
-    );
-    expect(result.status, CoinPurchaseStatus.unavailable);
-    expect(result.message, '결제 기능 준비 중입니다.');
-    expect(CoinService.balance, before);
-  });
+      ProgressStorage.addCoins(9133);
+      final before = CoinService.balance;
+      final result = await const DisabledCoinPurchaseService().purchase(
+        coinPackages.first,
+      );
+      expect(result.status, CoinPurchaseStatus.unavailable);
+      expect(result.message, '결제 기능 준비 중입니다.');
+      expect(CoinService.balance, before);
+    },
+  );
 
   test('purchase service charges once and persists ownership', () {
     ProgressStorage.addCoins(320);
@@ -1452,8 +1466,9 @@ void main() {
     }
   });
 
-  testWidgets('home and store share the persisted coin balance',
-      (tester) async {
+  testWidgets('home and store share the persisted coin balance', (
+    tester,
+  ) async {
     ProgressStorage.addCoins(1234);
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
@@ -1470,8 +1485,9 @@ void main() {
     expect(find.text('1,234'), findsOneWidget);
   });
 
-  testWidgets('home coin add opens C-01 without granting local coins',
-      (tester) async {
+  testWidgets('home coin add opens C-01 without granting local coins', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 568);
     addTearDown(tester.view.resetPhysicalSize);
@@ -1513,9 +1529,7 @@ void main() {
     expect(CoinService.balance, 9133);
 
     tester
-        .widget<IconButton>(
-          find.byKey(const ValueKey('coin-purchase-back')),
-        )
+        .widget<IconButton>(find.byKey(const ValueKey('coin-purchase-back')))
         .onPressed!();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -1526,8 +1540,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('home uses shared top controls and four-item navigation',
-      (tester) async {
+  testWidgets('home uses shared top controls and four-item navigation', (
+    tester,
+  ) async {
     ProgressStorage.saveScore(128);
     ProgressStorage.saveScore(94);
     await tester.pumpWidget(const BalloonPopApp());
@@ -1580,8 +1595,9 @@ void main() {
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
   });
 
-  testWidgets('home initially shows the stage page containing saved progress',
-      (tester) async {
+  testWidgets('home initially shows the stage page containing saved progress', (
+    tester,
+  ) async {
     ProgressStorage.advanceNextPlayableStage(21);
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
@@ -1607,8 +1623,9 @@ void main() {
     expect(find.text('21 STAGE'), findsOneWidget);
   });
 
-  testWidgets('initial progress keeps the first home stage page',
-      (tester) async {
+  testWidgets('initial progress keeps the first home stage page', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
 
@@ -1617,42 +1634,45 @@ void main() {
     expect(find.text('1 ~ 10'), findsOneWidget);
   });
 
-  test('nickname and preference services validate and persist values',
-      () async {
-    expect(SettingsService.nickname, isNull);
-    expect(SettingsService.saveNickname(''), isFalse);
-    expect(SettingsService.saveNickname(' '), isFalse);
-    expect(SettingsService.saveNickname('A'), isFalse);
-    expect(SettingsService.saveNickname('12345678901'), isFalse);
-    expect(SettingsService.saveNickname('  POPPOP  '), isTrue);
-    expect(SettingsService.nickname, 'POPPOP');
+  test(
+    'nickname and preference services validate and persist values',
+    () async {
+      expect(SettingsService.nickname, isNull);
+      expect(SettingsService.saveNickname(''), isFalse);
+      expect(SettingsService.saveNickname(' '), isFalse);
+      expect(SettingsService.saveNickname('A'), isFalse);
+      expect(SettingsService.saveNickname('12345678901'), isFalse);
+      expect(SettingsService.saveNickname('  POPPOP  '), isTrue);
+      expect(SettingsService.nickname, 'POPPOP');
 
-    SettingsService.setSoundEnabled(false);
-    PopSound.play();
-    PopSound.playHeart();
-    PopSound.playBossExplosion();
-    expect(PopSound.basicPlayCount, 0);
-    expect(PopSound.heartPlayCount, 0);
-    expect(PopSound.bossExplosionPlayCount, 0);
+      SettingsService.setSoundEnabled(false);
+      PopSound.play();
+      PopSound.playHeart();
+      PopSound.playBossExplosion();
+      expect(PopSound.basicPlayCount, 0);
+      expect(PopSound.heartPlayCount, 0);
+      expect(PopSound.bossExplosionPlayCount, 0);
 
-    SettingsService.setSoundEnabled(true);
-    PopSound.play();
-    expect(PopSound.basicPlayCount, 1);
+      SettingsService.setSoundEnabled(true);
+      PopSound.play();
+      expect(PopSound.basicPlayCount, 1);
 
-    var hapticCount = 0;
-    HapticService.setPerformerForTest(() async => hapticCount++);
-    SettingsService.setHapticEnabled(false);
-    HapticService.shortImpact();
-    await Future<void>.delayed(Duration.zero);
-    expect(hapticCount, 0);
-    SettingsService.setHapticEnabled(true);
-    HapticService.shortImpact();
-    await Future<void>.delayed(Duration.zero);
-    expect(hapticCount, 1);
-  });
+      var hapticCount = 0;
+      HapticService.setPerformerForTest(() async => hapticCount++);
+      SettingsService.setHapticEnabled(false);
+      HapticService.shortImpact();
+      await Future<void>.delayed(Duration.zero);
+      expect(hapticCount, 0);
+      SettingsService.setHapticEnabled(true);
+      HapticService.shortImpact();
+      await Future<void>.delayed(Duration.zero);
+      expect(hapticCount, 1);
+    },
+  );
 
-  testWidgets('new users complete ON-01 once and return directly to home',
-      (tester) async {
+  testWidgets('new users complete ON-01 once and return directly to home', (
+    tester,
+  ) async {
     ProgressStorage.clear();
 
     await tester.pumpWidget(const BalloonPopApp());
@@ -1690,16 +1710,14 @@ void main() {
     expect(find.text('최고 기록'), findsOneWidget);
   });
 
-  testWidgets('existing user data survives first ON-01 migration',
-      (tester) async {
+  testWidgets('existing user data survives first ON-01 migration', (
+    tester,
+  ) async {
     ProgressStorage.clear();
     ProgressStorage.addCoins(1000);
     ProgressStorage.unlockSecondSection();
     ProgressStorage.saveScore(88);
-    expect(
-      ProgressStorage.tryPurchaseProduct('balloon-heart', 100),
-      isTrue,
-    );
+    expect(ProgressStorage.tryPurchaseProduct('balloon-heart', 100), isTrue);
     ProgressStorage.setEquippedProductId('balloon', 'balloon-heart');
     SettingsService.saveNickname('기존사용자');
     SettingsService.setSoundEnabled(false);
@@ -1720,137 +1738,153 @@ void main() {
     expect(ProgressStorage.isSecondSectionUnlocked(), isTrue);
     expect(ProgressStorage.bestScore(), 88);
     expect(PurchaseService.ownedProductIds, contains('balloon-heart'));
-    expect(
-      ProgressStorage.equippedProductId('balloon'),
-      'balloon-heart',
-    );
+    expect(ProgressStorage.equippedProductId('balloon'), 'balloon-heart');
     expect(SettingsService.soundEnabled, isFalse);
     expect(SettingsService.hapticEnabled, isFalse);
     expect(SettingsService.nickname, '기존사용자');
     expect(SettingsService.nicknameOnboardingCompleted, isTrue);
   });
 
-  testWidgets('home ranking button opens R-01 with ordered top 20 and returns',
-      (tester) async {
-    SettingsService.saveNickname('시원이');
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-
-    await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(WeeklyRankingPage), findsOneWidget);
-    expect(find.byKey(const ValueKey('ranking-week-info')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('previous-week-leader-card')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('current-week-leader-card')),
-      findsOneWidget,
-    );
-    final rows = tester.widgetList<RankingEntryRow>(
-      find.byType(RankingEntryRow),
-    );
-    expect(rows, hasLength(20));
-    expect(
-      rows.map((row) => row.entry.rank),
-      orderedEquals(List.generate(20, (index) => index + 1)),
-    );
-    final scores = rows.map((row) => row.entry.score).toList();
-    expect(scores, orderedEquals([...scores]..sort((a, b) => b.compareTo(a))));
-    expect(find.byKey(const ValueKey('ranking-top-accent-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('ranking-top-accent-2')), findsOneWidget);
-    expect(find.byKey(const ValueKey('ranking-top-accent-3')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('ranking-current-user-badge')),
-      findsOneWidget,
-    );
-
-    await tester.ensureVisible(find.byKey(const ValueKey('ranking-row-20')));
-    await tester.pump();
-    expect(find.byKey(const ValueKey('ranking-row-20')), findsOneWidget);
-    expect(tester.takeException(), isNull);
-
-    await tester.drag(
-      find.byKey(const ValueKey('ranking-scroll')),
-      const Offset(0, 1800),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('ranking-back-button')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.pump();
-    expect(find.text('최고 기록'), findsOneWidget);
-  });
-
   testWidgets(
-      'ranking supports outside-top20, loading, empty, and error states',
-      (tester) async {
-    final fixedNow = DateTime.utc(2026, 8, 12);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: WeeklyRankingPage(
-          currentNickname: '목록밖테스터',
-          now: () => fixedNow,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    for (var drag = 0; drag < 6; drag++) {
+    'home ranking button opens R-01 with ordered top 20 and returns',
+    (tester) async {
+      SettingsService.saveNickname('시원이');
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WeeklyRankingPage), findsOneWidget);
+      expect(find.byKey(const ValueKey('ranking-week-info')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('previous-week-leader-card')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('current-week-leader-card')),
+        findsOneWidget,
+      );
+      final rows = tester.widgetList<RankingEntryRow>(
+        find.byType(RankingEntryRow),
+      );
+      expect(rows, hasLength(20));
+      expect(
+        rows.map((row) => row.entry.rank),
+        orderedEquals(List.generate(20, (index) => index + 1)),
+      );
+      final scores = rows.map((row) => row.entry.score).toList();
+      expect(
+        scores,
+        orderedEquals([...scores]..sort((a, b) => b.compareTo(a))),
+      );
+      expect(
+        find.byKey(const ValueKey('ranking-top-accent-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('ranking-top-accent-2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('ranking-top-accent-3')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('ranking-current-user-badge')),
+        findsOneWidget,
+      );
+
+      await tester.ensureVisible(find.byKey(const ValueKey('ranking-row-20')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('ranking-row-20')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
       await tester.drag(
         find.byKey(const ValueKey('ranking-scroll')),
-        const Offset(0, -400),
+        const Offset(0, 1800),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('ranking-back-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      expect(find.text('최고 기록'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'ranking supports outside-top20, loading, empty, and error states',
+    (tester) async {
+      final fixedNow = DateTime.utc(2026, 8, 12);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WeeklyRankingPage(
+            currentNickname: '목록밖테스터',
+            now: () => fixedNow,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (var drag = 0; drag < 6; drag++) {
+        await tester.drag(
+          find.byKey(const ValueKey('ranking-scroll')),
+          const Offset(0, -400),
+        );
+        await tester.pump();
+      }
+      expect(
+        find.byKey(const ValueKey('ranking-outside-top20-card')),
+        findsOneWidget,
+      );
+      expect(find.text('34위'), findsOneWidget);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WeeklyRankingPage(
+            key: const ValueKey('ranking-loading-page'),
+            repository: _LoadingRankingRepository(),
+            now: () => fixedNow,
+          ),
+        ),
       );
       await tester.pump();
-    }
-    expect(
-      find.byKey(const ValueKey('ranking-outside-top20-card')),
-      findsOneWidget,
-    );
-    expect(find.text('34위'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ranking-loading')), findsOneWidget);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: WeeklyRankingPage(
-          key: const ValueKey('ranking-loading-page'),
-          repository: _LoadingRankingRepository(),
-          now: () => fixedNow,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WeeklyRankingPage(
+            key: const ValueKey('ranking-empty-page'),
+            repository: const _EmptyRankingRepository(),
+            now: () => fixedNow,
+          ),
         ),
-      ),
-    );
-    await tester.pump();
-    expect(find.byKey(const ValueKey('ranking-loading')), findsOneWidget);
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('ranking-empty')), findsOneWidget);
+      expect(find.text('이번 주 랭킹이 아직 없어요.'), findsOneWidget);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: WeeklyRankingPage(
-          key: const ValueKey('ranking-empty-page'),
-          repository: const _EmptyRankingRepository(),
-          now: () => fixedNow,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WeeklyRankingPage(
+            key: const ValueKey('ranking-error-page'),
+            repository: const _ErrorRankingRepository(),
+            now: () => fixedNow,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('ranking-empty')), findsOneWidget);
-    expect(find.text('이번 주 랭킹이 아직 없어요.'), findsOneWidget);
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('ranking-error')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('ranking-retry-button')),
+        findsOneWidget,
+      );
+    },
+  );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: WeeklyRankingPage(
-          key: const ValueKey('ranking-error-page'),
-          repository: const _ErrorRankingRepository(),
-          now: () => fixedNow,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('ranking-error')), findsOneWidget);
-    expect(find.byKey(const ValueKey('ranking-retry-button')), findsOneWidget);
-  });
-
-  testWidgets('R-01 fits a narrow mobile viewport without overflow',
-      (tester) async {
+  testWidgets('R-01 fits a narrow mobile viewport without overflow', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 667);
     addTearDown(tester.view.resetPhysicalSize);
@@ -1881,8 +1915,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('home and store open the same settings page and return',
-      (tester) async {
+  testWidgets('home and store open the same settings page and return', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
 
@@ -1904,8 +1939,9 @@ void main() {
     expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
   });
 
-  testWidgets('settings content remains scrollable without mobile overflow',
-      (tester) async {
+  testWidgets('settings content remains scrollable without mobile overflow', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 667);
     addTearDown(tester.view.resetPhysicalSize);
@@ -1923,45 +1959,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('nickname dialog validates, trims, updates, and survives reload',
-      (tester) async {
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-    await openSettings(tester);
+  testWidgets(
+    'nickname dialog validates, trims, updates, and survives reload',
+    (tester) async {
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+      await openSettings(tester);
 
-    await tester.tap(find.byKey(const ValueKey('settings-nickname-row')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('nickname-dialog')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('settings-nickname-row')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('nickname-dialog')), findsOneWidget);
 
-    await tester.enterText(find.byKey(const ValueKey('nickname-input')), ' ');
-    await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
-    await tester.pump();
-    expect(find.text('닉네임은 2자 이상 10자 이하로 입력해 주세요.'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('nickname-input')), ' ');
+      await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
+      await tester.pump();
+      expect(find.text('닉네임은 2자 이상 10자 이하로 입력해 주세요.'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const ValueKey('nickname-input')), 'A');
-    await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
-    await tester.pump();
-    expect(find.byKey(const ValueKey('nickname-dialog')), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('nickname-input')), 'A');
+      await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('nickname-dialog')), findsOneWidget);
 
-    await tester.enterText(
-      find.byKey(const ValueKey('nickname-input')),
-      '  팝팝  ',
-    );
-    await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('팝팝'), findsOneWidget);
-    expect(SettingsService.nickname, '팝팝');
+      await tester.enterText(
+        find.byKey(const ValueKey('nickname-input')),
+        '  팝팝  ',
+      );
+      await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('팝팝'), findsOneWidget);
+      expect(SettingsService.nickname, '팝팝');
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-    await openSettings(tester);
-    expect(find.text('팝팝'), findsOneWidget);
-  });
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+      await openSettings(tester);
+      expect(find.text('팝팝'), findsOneWidget);
+    },
+  );
 
-  testWidgets('information rows open replaceable SET-03 to SET-05 pages',
-      (tester) async {
+  testWidgets('information rows open replaceable SET-03 to SET-05 pages', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await openSettings(tester);
@@ -1982,8 +2021,9 @@ void main() {
     }
   });
 
-  testWidgets('disabled sound blocks preview and disabled haptics block play',
-      (tester) async {
+  testWidgets('disabled sound blocks preview and disabled haptics block play', (
+    tester,
+  ) async {
     var hapticCount = 0;
     HapticService.setPerformerForTest(() async => hapticCount++);
     await tester.pumpWidget(const BalloonPopApp());
@@ -2035,15 +2075,13 @@ void main() {
     );
   });
 
-  testWidgets('data reset cancellation preserves and confirmation clears all',
-      (tester) async {
+  testWidgets('data reset cancellation preserves and confirmation clears all', (
+    tester,
+  ) async {
     ProgressStorage.addCoins(1000);
     ProgressStorage.unlockSecondSection();
     ProgressStorage.saveScore(99);
-    expect(
-      ProgressStorage.tryPurchaseProduct('balloon-heart', 100),
-      isTrue,
-    );
+    expect(ProgressStorage.tryPurchaseProduct('balloon-heart', 100), isTrue);
     ProgressStorage.setEquippedProductId('balloon', 'balloon-heart');
     SettingsService.saveNickname('테스터');
     SettingsService.setSoundEnabled(false);
@@ -2098,8 +2136,9 @@ void main() {
     expect(find.byType(NicknameOnboardingPage), findsOneWidget);
   });
 
-  testWidgets('hidden developer coin flow rejects a wrong password',
-      (tester) async {
+  testWidgets('hidden developer coin flow rejects a wrong password', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     final coinTarget = find.byKey(const ValueKey('home-coin-dev-tap-target'));
@@ -2126,62 +2165,61 @@ void main() {
     expect(CoinService.balance, 0);
   });
 
-  testWidgets('hidden developer coin flow can grant repeatedly and updates HUD',
-      (tester) async {
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-    final coinTarget = find.byKey(const ValueKey('home-coin-dev-tap-target'));
+  testWidgets(
+    'hidden developer coin flow can grant repeatedly and updates HUD',
+    (tester) async {
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+      final coinTarget = find.byKey(const ValueKey('home-coin-dev-tap-target'));
 
-    for (var tap = 0; tap < 7; tap++) {
-      await tester.tap(coinTarget);
-    }
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.enterText(
-      find.byKey(const ValueKey('dev-coin-password-input')),
-      tempDevCoinPassword,
-    );
-    final confirm = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('dev-coin-confirm')),
-    );
-    confirm.onPressed!.call();
-    confirm.onPressed!.call();
-    await tester.pump(const Duration(milliseconds: 800));
+      for (var tap = 0; tap < 7; tap++) {
+        await tester.tap(coinTarget);
+      }
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.enterText(
+        find.byKey(const ValueKey('dev-coin-password-input')),
+        tempDevCoinPassword,
+      );
+      final confirm = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('dev-coin-confirm')),
+      );
+      confirm.onPressed!.call();
+      confirm.onPressed!.call();
+      await tester.pump(const Duration(milliseconds: 800));
 
-    expect(CoinService.balance, tempDevCoinGrantAmount);
-    expect(
-      find.text('테스트 코인 10,000개가 추가되었습니다.'),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('home-coin-hud')),
-        matching: find.text('10,000'),
-      ),
-      findsOneWidget,
-    );
+      expect(CoinService.balance, tempDevCoinGrantAmount);
+      expect(find.text('테스트 코인 10,000개가 추가되었습니다.'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-coin-hud')),
+          matching: find.text('10,000'),
+        ),
+        findsOneWidget,
+      );
 
-    for (var tap = 0; tap < 7; tap++) {
-      await tester.tap(coinTarget);
-    }
-    await tester.pump(const Duration(milliseconds: 350));
-    await tester.enterText(
-      find.byKey(const ValueKey('dev-coin-password-input')),
-      tempDevCoinPassword,
-    );
-    await tester.tap(find.byKey(const ValueKey('dev-coin-confirm')));
-    await tester.pump(const Duration(milliseconds: 800));
-    expect(CoinService.balance, tempDevCoinGrantAmount * 2);
+      for (var tap = 0; tap < 7; tap++) {
+        await tester.tap(coinTarget);
+      }
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.enterText(
+        find.byKey(const ValueKey('dev-coin-password-input')),
+        tempDevCoinPassword,
+      );
+      await tester.tap(find.byKey(const ValueKey('dev-coin-confirm')));
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(CoinService.balance, tempDevCoinGrantAmount * 2);
 
-    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
-    await tester.pumpAndSettle();
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('home-coin-hud')),
-        matching: find.text('20,000'),
-      ),
-      findsOneWidget,
-    );
-  });
+      await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('home-coin-hud')),
+          matching: find.text('20,000'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('shop opens the balloon product list directly', (tester) async {
     tester.view.physicalSize = const Size(390, 667);
@@ -2200,7 +2238,9 @@ void main() {
     expect(find.byKey(const ValueKey('home-nav-event')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-nav-ranking')), findsOneWidget);
     expect(
-        find.byKey(const ValueKey('home-nav-selected-store')), findsOneWidget);
+      find.byKey(const ValueKey('home-nav-selected-store')),
+      findsOneWidget,
+    );
     expect(find.byType(HomeFloatingBalloons), findsNothing);
     expect(find.byKey(const ValueKey('store-category-grid')), findsNothing);
     expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
@@ -2208,7 +2248,9 @@ void main() {
     expect(find.byKey(const ValueKey('store-vertical-scroll')), findsNothing);
     expect(find.byKey(const ValueKey('store-detail-scroll')), findsOneWidget);
     expect(
-        find.byKey(const ValueKey('store-bottom-nav-slide')), findsOneWidget);
+      find.byKey(const ValueKey('store-bottom-nav-slide')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('store-filter-all')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-owned')), findsOneWidget);
     expect(find.byKey(const ValueKey('store-filter-unowned')), findsOneWidget);
@@ -2218,10 +2260,14 @@ void main() {
     expect(storeRarityPageCount(8), 1);
     expect(storeRarityPageCount(9), 2);
     expect(storeRarityPageCount(17), 3);
-    expect(find.byKey(const ValueKey('store-rarity-header-common')),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('store-rarity-grid-common-single')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('store-rarity-header-common')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('store-rarity-grid-common-single')),
+      findsOneWidget,
+    );
     expect(find.byType(PageView), findsNothing);
     final firstGrid = tester.widget<GridView>(
       find.byKey(const ValueKey('store-rarity-grid-common-single')),
@@ -2231,8 +2277,10 @@ void main() {
     expect(firstDelegate.crossAxisCount, 4);
     expect(firstGrid.childrenDelegate.estimatedChildCount, 8);
     for (var slot = 4; slot < 8; slot++) {
-      expect(find.byKey(ValueKey('store-placeholder-common-$slot')),
-          findsOneWidget);
+      expect(
+        find.byKey(ValueKey('store-placeholder-common-$slot')),
+        findsOneWidget,
+      );
     }
 
     expect(
@@ -2251,14 +2299,12 @@ void main() {
           .onTap,
       isNotNull,
     );
-    final cardRects = [
-      'balloon-default',
-      'balloon-heart',
-      'balloon-star',
-      'balloon-flower',
-    ]
-        .map((id) => tester.getRect(find.byKey(ValueKey('store-product-$id'))))
-        .toList();
+    final cardRects =
+        ['balloon-default', 'balloon-heart', 'balloon-star', 'balloon-flower']
+            .map(
+              (id) => tester.getRect(find.byKey(ValueKey('store-product-$id'))),
+            )
+            .toList();
     expect(cardRects[0].top, cardRects[1].top);
     expect(cardRects[1].top, cardRects[2].top);
     expect(cardRects[2].top, cardRects[3].top);
@@ -2278,11 +2324,15 @@ void main() {
       scrollable: storeScrollable,
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('store-rarity-grid-rare-single')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('store-rarity-grid-rare-single')),
+      findsOneWidget,
+    );
     for (var slot = 3; slot < 8; slot++) {
       expect(
-          find.byKey(ValueKey('store-placeholder-rare-$slot')), findsOneWidget);
+        find.byKey(ValueKey('store-placeholder-rare-$slot')),
+        findsOneWidget,
+      );
     }
     expect(
       tester
@@ -2298,11 +2348,15 @@ void main() {
       scrollable: storeScrollable,
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('store-rarity-grid-heroic-single')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('store-rarity-grid-heroic-single')),
+      findsOneWidget,
+    );
     for (var slot = 2; slot < 8; slot++) {
-      expect(find.byKey(ValueKey('store-placeholder-heroic-$slot')),
-          findsOneWidget);
+      expect(
+        find.byKey(ValueKey('store-placeholder-heroic-$slot')),
+        findsOneWidget,
+      );
     }
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('store-rarity-header-legendary')),
@@ -2310,11 +2364,15 @@ void main() {
       scrollable: storeScrollable,
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('store-rarity-grid-legendary-single')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('store-rarity-grid-legendary-single')),
+      findsOneWidget,
+    );
     for (var slot = 2; slot < 8; slot++) {
-      expect(find.byKey(ValueKey('store-placeholder-legendary-$slot')),
-          findsOneWidget);
+      expect(
+        find.byKey(ValueKey('store-placeholder-legendary-$slot')),
+        findsOneWidget,
+      );
     }
 
     await tester.tap(find.byKey(const ValueKey('store-filter-owned')));
@@ -2322,24 +2380,32 @@ void main() {
     await tester.drag(storeScrollable, const Offset(0, 2000));
     await tester.pumpAndSettle();
     expect(find.byType(StoreProductCard), findsOneWidget);
-    expect(find.byKey(const ValueKey('store-product-balloon-default')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('store-product-balloon-default')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('store-filter-unowned')));
     await tester.pump();
     expect(find.byType(StoreProductCard), findsAtLeastNWidgets(3));
-    expect(find.byKey(const ValueKey('store-product-balloon-heart')),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('store-product-balloon-star')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('store-product-balloon-heart')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('store-product-balloon-star')),
+      findsOneWidget,
+    );
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('store-rarity-header-rare')),
       180,
       scrollable: storeScrollable,
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('store-product-balloon-rabbit')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('store-product-balloon-rabbit')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('store-filter-limited')));
     await tester.pump();
@@ -2356,7 +2422,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('event-coming-soon')), findsOneWidget);
     expect(
-        find.byKey(const ValueKey('home-nav-selected-event')), findsOneWidget);
+      find.byKey(const ValueKey('home-nav-selected-event')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
     await tester.pumpAndSettle();
@@ -2369,87 +2437,138 @@ void main() {
     await tester.pump();
     expect(find.text('최고 기록'), findsOneWidget);
     expect(
-        find.byKey(const ValueKey('home-nav-selected-home')), findsOneWidget);
+      find.byKey(const ValueKey('home-nav-selected-home')),
+      findsOneWidget,
+    );
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
   });
 
   testWidgets(
-      'balloon preview reuses renderer effects and sound and cleans up on close',
-      (tester) async {
-    var hapticCount = 0;
-    HapticService.setPerformerForTest(() async {
-      hapticCount++;
-    });
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
-    await tester.pumpAndSettle();
+    'balloon preview reuses renderer effects and sound and cleans up on close',
+    (tester) async {
+      var hapticCount = 0;
+      HapticService.setPerformerForTest(() async {
+        hapticCount++;
+      });
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+      await tester.pumpAndSettle();
 
-    await openBalloonPreview(tester, 'balloon-default');
-    expect(find.text('기본 풍선'), findsWidgets);
-    expect(
-        find.byKey(const ValueKey('balloon-preview-rarity')), findsOneWidget);
-    final previewRenderer = tester.widget<BalloonSkinRenderer>(
-      find.descendant(
-        of: find.byKey(const ValueKey('balloon-preview-renderer')),
-        matching: find.byType(BalloonSkinRenderer),
+      await openBalloonPreview(tester, 'balloon-default');
+      expect(find.text('기본 풍선'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('balloon-preview-rarity')),
+        findsOneWidget,
+      );
+      final previewRenderer = tester.widget<BalloonSkinRenderer>(
+        find.descendant(
+          of: find.byKey(const ValueKey('balloon-preview-renderer')),
+          matching: find.byType(BalloonSkinRenderer),
+        ),
+      );
+      expect(previewRenderer.definition, BalloonSkinCatalog.defaultSkin);
+      expect(
+        tester
+            .widget<BalloonBackgroundRenderer>(
+              find.byKey(const ValueKey('balloon-preview-background')),
+            )
+            .background,
+        BalloonBackgroundType.none,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('balloon-preview-action')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(PopSound.basicPlayCount, 0);
+
+      await tester.pump(const Duration(milliseconds: 810));
+      final effects = tester
+          .widget<CustomPaint>(
+            find.byKey(const ValueKey('balloon-preview-effects')),
+          )
+          .painter! as EffectsPainter;
+      expect(PopSound.basicPlayCount, 1);
+      expect(effects.pieceCount, inInclusiveRange(6, 8));
+      expect(effects.ringCount, 1);
+      expect(hapticCount, 0);
+      expect(CoinService.balance, 0);
+
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('balloon-preview-renderer')),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(milliseconds: 1010));
+      expect(PopSound.basicPlayCount, 2);
+      expect(hapticCount, 0);
+
+      await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
+      await tester.pumpAndSettle();
+      final soundCountAfterClose = PopSound.basicPlayCount;
+      await tester.pump(const Duration(seconds: 3));
+      expect(
+        find.byKey(const ValueKey('balloon-preview-dialog')),
+        findsNothing,
+      );
+      expect(PopSound.basicPlayCount, soundCountAfterClose);
+      expect(hapticCount, 0);
+
+      await openBalloonPreview(tester, 'balloon-default');
+      await tester.tapAt(const Offset(2, 2));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('balloon-preview-dialog')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('gemi preview uses eight color-tinted official shard images', (
+    tester,
+  ) async {
+    final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BalloonPreviewDialog(
+          definition: gemi,
+          productProvider: () => StoreProduct.fromBalloonSkin(gemi),
+          onAction: () {},
+        ),
       ),
     );
-    expect(previewRenderer.definition, BalloonSkinCatalog.defaultSkin);
-    expect(
-      tester
-          .widget<BalloonBackgroundRenderer>(
-            find.byKey(const ValueKey('balloon-preview-background')),
-          )
-          .background,
-      BalloonBackgroundType.none,
-    );
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey('balloon-preview-action')),
-          )
-          .onPressed,
-      isNull,
-    );
-    expect(PopSound.basicPlayCount, 0);
 
-    await tester.pump(const Duration(milliseconds: 810));
-    final effects = tester
-        .widget<CustomPaint>(
-          find.byKey(const ValueKey('balloon-preview-effects')),
+    await tester.pump(const Duration(milliseconds: 1000));
+    await tester.pump(const Duration(milliseconds: 160));
+
+    final effectLayer = find.byKey(
+      const ValueKey('balloon-preview-asset-effects'),
+    );
+    expect(effectLayer, findsOneWidget);
+    final shardImages = tester
+        .widgetList<Image>(
+          find.descendant(of: effectLayer, matching: find.byType(Image)),
         )
-        .painter! as EffectsPainter;
-    expect(PopSound.basicPlayCount, 1);
-    expect(effects.pieceCount, inInclusiveRange(6, 8));
-    expect(effects.ringCount, 1);
-    expect(hapticCount, 0);
-    expect(CoinService.balance, 0);
-
-    await tester.pump(const Duration(milliseconds: 1200));
-    await tester.pump();
+        .where(
+          (image) =>
+              assetNameOf(image.image) ==
+              'assets/images/gemi_shard_runtime.png',
+        );
+    expect(shardImages, hasLength(8));
     expect(
-        find.byKey(const ValueKey('balloon-preview-renderer')), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 1010));
-    expect(PopSound.basicPlayCount, 2);
-    expect(hapticCount, 0);
-
-    await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
-    await tester.pumpAndSettle();
-    final soundCountAfterClose = PopSound.basicPlayCount;
-    await tester.pump(const Duration(seconds: 3));
-    expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsNothing);
-    expect(PopSound.basicPlayCount, soundCountAfterClose);
-    expect(hapticCount, 0);
-
-    await openBalloonPreview(tester, 'balloon-default');
-    await tester.tapAt(const Offset(2, 2));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('balloon-preview-dialog')), findsNothing);
+      find.descendant(of: effectLayer, matching: find.byType(ColorFiltered)),
+      findsNWidgets(8),
+    );
   });
 
-  testWidgets('real balloon card surfaces open the shared preview',
-      (tester) async {
+  testWidgets('real balloon card surfaces open the shared preview', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
@@ -2469,8 +2588,9 @@ void main() {
     expect(find.byType(StoreComingSoonCard), findsAtLeastNWidgets(4));
   });
 
-  testWidgets('buying a store product updates coins and survives reload',
-      (tester) async {
+  testWidgets('buying a store product updates coins and survives reload', (
+    tester,
+  ) async {
     ProgressStorage.addCoins(600);
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
@@ -2478,8 +2598,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await scrollToStoreProduct(tester, 'balloon-rabbit');
-    final productCard =
-        find.byKey(const ValueKey('store-product-balloon-rabbit'));
+    final productCard = find.byKey(
+      const ValueKey('store-product-balloon-rabbit'),
+    );
     expect(
       find.descendant(of: productCard, matching: find.text('500')),
       findsOneWidget,
@@ -2533,8 +2654,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pumpAndSettle();
     await scrollToStoreProduct(tester, 'balloon-rabbit');
-    final reloadedCard =
-        find.byKey(const ValueKey('store-product-balloon-rabbit'));
+    final reloadedCard = find.byKey(
+      const ValueKey('store-product-balloon-rabbit'),
+    );
     expect(
       find.descendant(of: reloadedCard, matching: find.text('사용 중')),
       findsOneWidget,
@@ -2546,8 +2668,9 @@ void main() {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tapSectionStart(tester, 1);
-    final gameplayRenderers = tester
-        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer));
+    final gameplayRenderers = tester.widgetList<BalloonSkinRenderer>(
+      find.byType(BalloonSkinRenderer),
+    );
     expect(gameplayRenderers, isNotEmpty);
     expect(
       gameplayRenderers.every(
@@ -2557,8 +2680,9 @@ void main() {
     );
   });
 
-  testWidgets('insufficient coins do not purchase or charge a product',
-      (tester) async {
+  testWidgets('insufficient coins do not purchase or charge a product', (
+    tester,
+  ) async {
     ProgressStorage.addCoins(100);
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
@@ -2569,8 +2693,9 @@ void main() {
     await tapBalloonPreviewAction(tester);
     expect(find.text('코인이 부족해요!'), findsOneWidget);
     expect(CoinService.balance, 100);
-    final productCard =
-        find.byKey(const ValueKey('store-product-balloon-rabbit'));
+    final productCard = find.byKey(
+      const ValueKey('store-product-balloon-rabbit'),
+    );
     expect(
       find.descendant(of: productCard, matching: find.text('500')),
       findsOneWidget,
@@ -2582,147 +2707,152 @@ void main() {
   });
 
   testWidgets(
-      'heart balloon can be bought, equipped, rendered, and popped with hearts',
-      (tester) async {
-    ProgressStorage.addCoins(100);
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
-    await tester.pumpAndSettle();
+    'heart balloon can be bought, equipped, rendered, and popped with hearts',
+    (tester) async {
+      ProgressStorage.addCoins(100);
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+      await tester.pumpAndSettle();
 
-    final heartCard = find.byKey(
-      const ValueKey('store-product-balloon-heart'),
-    );
-    final storeHeartImage = tester.widget<Image>(
-      find.descendant(of: heartCard, matching: find.byType(Image)),
-    );
-    expect(storeHeartImage.color, isNull);
-    expect(storeHeartImage.colorBlendMode, isNull);
-    expect(
-      find.descendant(of: heartCard, matching: find.byType(ColorFiltered)),
-      findsNothing,
-    );
-    expect(
-      find.descendant(of: heartCard, matching: find.byType(BalloonSkinArtwork)),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: heartCard, matching: find.text('일반')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: heartCard, matching: find.text('100')),
-      findsOneWidget,
-    );
-
-    var previewHapticCount = 0;
-    HapticService.setPerformerForTest(() async {
-      previewHapticCount++;
-    });
-    await openBalloonPreview(tester, 'balloon-heart');
-    expect(find.text('하트'), findsWidgets);
-    final previewRenderer = tester.widget<BalloonSkinRenderer>(
-      find.descendant(
-        of: find.byKey(const ValueKey('balloon-preview-renderer')),
-        matching: find.byType(BalloonSkinRenderer),
-      ),
-    );
-    expect(previewRenderer.definition.id, 'balloon-heart');
-    expect(previewRenderer.color, previewRenderer.definition.previewColor);
-    await tester.pump(const Duration(milliseconds: 810));
-    final previewEffects = tester
-        .widget<CustomPaint>(
-          find.byKey(const ValueKey('balloon-preview-effects')),
-        )
-        .painter! as EffectsPainter;
-    expect(previewEffects.heartPieceCount, 5);
-    expect(PopSound.heartPlayCount, 1);
-    expect(previewHapticCount, 0);
-    await tester.pump(const Duration(milliseconds: 1200));
-    await tester.pump();
-    final recoloredPreview = tester.widget<BalloonSkinRenderer>(
-      find.descendant(
-        of: find.byKey(const ValueKey('balloon-preview-renderer')),
-        matching: find.byType(BalloonSkinRenderer),
-      ),
-    );
-    expect(
-      recoloredPreview.definition.colorPalette,
-      contains(recoloredPreview.color),
-    );
-    expect(recoloredPreview.color, isNot(previewRenderer.color));
-    await tapBalloonPreviewAction(tester);
-    expect(CoinService.balance, 0);
-    expect(
-      find.descendant(of: heartCard, matching: find.text('사용하기')),
-      findsOneWidget,
-    );
-
-    await tapBalloonPreviewAction(tester);
-    expect(
-      PurchaseService.equippedProductId(
-        StoreCategory.balloon.name,
-        defaultProductId: 'balloon-default',
-      ),
-      'balloon-heart',
-    );
-    expect(
-      find.descendant(of: heartCard, matching: find.text('사용 중')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
-    await tester.pumpAndSettle();
-    PopSound.resetDebug();
-
-    // Existing persisted IDs remain valid after the catalog migration.
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-    expect(PurchaseService.ownedProductIds, contains('balloon-heart'));
-    expect(
-      PurchaseService.equippedProductId(
-        StoreCategory.balloon.name,
-        defaultProductId: BalloonSkinCatalog.defaultId,
-      ),
-      'balloon-heart',
-    );
-    await tapSectionStart(tester, 1);
-
-    final heartSprites = tester
-        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
-        .where((renderer) => renderer.definition.id == 'balloon-heart');
-    expect(heartSprites, hasLength(2));
-    expect(heartSprites.first.color, isNot(heartSprites.last.color));
-    for (final heartSprite in heartSprites) {
-      final spriteFinder = find.byWidget(heartSprite);
+      final heartCard = find.byKey(
+        const ValueKey('store-product-balloon-heart'),
+      );
+      final storeHeartImage = tester.widget<Image>(
+        find.descendant(of: heartCard, matching: find.byType(Image)),
+      );
+      expect(storeHeartImage.color, isNull);
+      expect(storeHeartImage.colorBlendMode, isNull);
+      expect(
+        find.descendant(of: heartCard, matching: find.byType(ColorFiltered)),
+        findsNothing,
+      );
       expect(
         find.descendant(
-          of: spriteFinder,
+          of: heartCard,
           matching: find.byType(BalloonSkinArtwork),
         ),
         findsOneWidget,
       );
-      final gameImage = tester.widget<Image>(
-        find.descendant(of: spriteFinder, matching: find.byType(Image)),
+      expect(
+        find.descendant(of: heartCard, matching: find.text('일반')),
+        findsOneWidget,
       );
-      expect(gameImage.color, isNull);
-      expect(gameImage.colorBlendMode, isNull);
-    }
+      expect(
+        find.descendant(of: heartCard, matching: find.text('100')),
+        findsOneWidget,
+      );
 
-    await tapGameTarget(tester, 0);
-    final effectsPainter = tester
-        .widgetList<CustomPaint>(find.byType(CustomPaint))
-        .map((paint) => paint.painter)
-        .whereType<EffectsPainter>()
-        .single;
-    expect(effectsPainter.heartPieceCount, 5);
-    expect(PopSound.heartPlayCount, 1);
-  });
+      var previewHapticCount = 0;
+      HapticService.setPerformerForTest(() async {
+        previewHapticCount++;
+      });
+      await openBalloonPreview(tester, 'balloon-heart');
+      expect(find.text('하트'), findsWidgets);
+      final previewRenderer = tester.widget<BalloonSkinRenderer>(
+        find.descendant(
+          of: find.byKey(const ValueKey('balloon-preview-renderer')),
+          matching: find.byType(BalloonSkinRenderer),
+        ),
+      );
+      expect(previewRenderer.definition.id, 'balloon-heart');
+      expect(previewRenderer.color, previewRenderer.definition.previewColor);
+      await tester.pump(const Duration(milliseconds: 810));
+      final previewEffects = tester
+          .widget<CustomPaint>(
+            find.byKey(const ValueKey('balloon-preview-effects')),
+          )
+          .painter! as EffectsPainter;
+      expect(previewEffects.heartPieceCount, 5);
+      expect(PopSound.heartPlayCount, 1);
+      expect(previewHapticCount, 0);
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pump();
+      final recoloredPreview = tester.widget<BalloonSkinRenderer>(
+        find.descendant(
+          of: find.byKey(const ValueKey('balloon-preview-renderer')),
+          matching: find.byType(BalloonSkinRenderer),
+        ),
+      );
+      expect(
+        recoloredPreview.definition.colorPalette,
+        contains(recoloredPreview.color),
+      );
+      expect(recoloredPreview.color, isNot(previewRenderer.color));
+      await tapBalloonPreviewAction(tester);
+      expect(CoinService.balance, 0);
+      expect(
+        find.descendant(of: heartCard, matching: find.text('사용하기')),
+        findsOneWidget,
+      );
 
-  testWidgets('store header cards and navigation fit tall mobile and desktop',
-      (tester) async {
+      await tapBalloonPreviewAction(tester);
+      expect(
+        PurchaseService.equippedProductId(
+          StoreCategory.balloon.name,
+          defaultProductId: 'balloon-default',
+        ),
+        'balloon-heart',
+      );
+      expect(
+        find.descendant(of: heartCard, matching: find.text('사용 중')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
+      await tester.pumpAndSettle();
+      PopSound.resetDebug();
+
+      // Existing persisted IDs remain valid after the catalog migration.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+      expect(PurchaseService.ownedProductIds, contains('balloon-heart'));
+      expect(
+        PurchaseService.equippedProductId(
+          StoreCategory.balloon.name,
+          defaultProductId: BalloonSkinCatalog.defaultId,
+        ),
+        'balloon-heart',
+      );
+      await tapSectionStart(tester, 1);
+
+      final heartSprites = tester
+          .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+          .where((renderer) => renderer.definition.id == 'balloon-heart');
+      expect(heartSprites, hasLength(2));
+      expect(heartSprites.first.color, isNot(heartSprites.last.color));
+      for (final heartSprite in heartSprites) {
+        final spriteFinder = find.byWidget(heartSprite);
+        expect(
+          find.descendant(
+            of: spriteFinder,
+            matching: find.byType(BalloonSkinArtwork),
+          ),
+          findsOneWidget,
+        );
+        final gameImage = tester.widget<Image>(
+          find.descendant(of: spriteFinder, matching: find.byType(Image)),
+        );
+        expect(gameImage.color, isNull);
+        expect(gameImage.colorBlendMode, isNull);
+      }
+
+      await tapGameTarget(tester, 0);
+      final effectsPainter = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .map((paint) => paint.painter)
+          .whereType<EffectsPainter>()
+          .single;
+      expect(effectsPainter.heartPieceCount, 5);
+      expect(PopSound.heartPlayCount, 1);
+    },
+  );
+
+  testWidgets('store header cards and navigation fit tall mobile and desktop', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -2736,23 +2866,27 @@ void main() {
       await tester.pumpWidget(const BalloonPopApp());
       await tester.pump();
 
-      final homeCoinSize =
-          tester.getSize(find.byKey(const ValueKey('home-coin-hud')));
+      final homeCoinSize = tester.getSize(
+        find.byKey(const ValueKey('home-coin-hud')),
+      );
       final homeSettingsSize = tester.getSize(
         find.byKey(const ValueKey('home-settings-button')),
       );
-      final homeNavigationSize =
-          tester.getSize(find.byKey(const ValueKey('home-nav-shop')));
+      final homeNavigationSize = tester.getSize(
+        find.byKey(const ValueKey('home-nav-shop')),
+      );
       final homeNavigationBarSize = tester.getSize(
         find.byKey(const ValueKey('main-bottom-navigation-bar')),
       );
-      final homeCoinRect =
-          tester.getRect(find.byKey(const ValueKey('home-coin-hud')));
+      final homeCoinRect = tester.getRect(
+        find.byKey(const ValueKey('home-coin-hud')),
+      );
       final homeSettingsRect = tester.getRect(
         find.byKey(const ValueKey('home-settings-button')),
       );
-      final homeNavigationRect =
-          tester.getRect(find.byKey(const ValueKey('home-nav-shop')));
+      final homeNavigationRect = tester.getRect(
+        find.byKey(const ValueKey('home-nav-shop')),
+      );
       final homeNavigationBarRect = tester.getRect(
         find.byKey(const ValueKey('main-bottom-navigation-bar')),
       );
@@ -2763,18 +2897,21 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
       await tester.pumpAndSettle();
 
-      final coinRect =
-          tester.getRect(find.byKey(const ValueKey('home-coin-hud')));
+      final coinRect = tester.getRect(
+        find.byKey(const ValueKey('home-coin-hud')),
+      );
       final settingsRect = tester.getRect(
         find.byKey(const ValueKey('home-settings-button')),
       );
-      final navRect =
-          tester.getRect(find.byKey(const ValueKey('home-nav-shop')));
+      final navRect = tester.getRect(
+        find.byKey(const ValueKey('home-nav-shop')),
+      );
       final navigationBarRect = tester.getRect(
         find.byKey(const ValueKey('main-bottom-navigation-bar')),
       );
-      final filterRect =
-          tester.getRect(find.byKey(const ValueKey('store-filter-all')));
+      final filterRect = tester.getRect(
+        find.byKey(const ValueKey('store-filter-all')),
+      );
       final firstProductRect = tester.getRect(
         find.byKey(const ValueKey('store-product-balloon-default')),
       );
@@ -2806,8 +2943,9 @@ void main() {
     }
   });
 
-  testWidgets('home controls remain inside short and tall mobile viewports',
-      (tester) async {
+  testWidgets('home controls remain inside short and tall mobile viewports', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -2815,7 +2953,7 @@ void main() {
     for (final size in const [
       Size(390, 667),
       Size(390, 844),
-      Size(1280, 900)
+      Size(1280, 900),
     ]) {
       tester.view.physicalSize = size;
       await tester.pumpWidget(const BalloonPopApp());
@@ -2827,8 +2965,9 @@ void main() {
       final settingsRect = tester.getRect(
         find.byKey(const ValueKey('home-settings-button')),
       );
-      final homeRect =
-          tester.getRect(find.byKey(const ValueKey('home-nav-home')));
+      final homeRect = tester.getRect(
+        find.byKey(const ValueKey('home-nav-home')),
+      );
       final rankingRect = tester.getRect(
         find.byKey(const ValueKey('home-nav-ranking')),
       );
@@ -2843,8 +2982,9 @@ void main() {
     }
   });
 
-  testWidgets('home balloons animate independently and stop during gameplay',
-      (tester) async {
+  testWidgets('home balloons animate independently and stop during gameplay', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
 
@@ -2859,8 +2999,9 @@ void main() {
     expect(tester.binding.transientCallbackCount, 0);
   });
 
-  testWidgets('backgrounded home balloons stop until the app resumes',
-      (tester) async {
+  testWidgets('backgrounded home balloons stop until the app resumes', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
 
@@ -2877,8 +3018,9 @@ void main() {
     expect(tester.getTopLeft(find.byKey(balloonKey)), isNot(pausedPosition));
   });
 
-  testWidgets('1 STAGE starts with two balloons and has no pop text',
-      (tester) async {
+  testWidgets('1 STAGE starts with two balloons and has no pop text', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tapSectionStart(tester, 1);
@@ -2896,8 +3038,9 @@ void main() {
     expect(find.byKey(const ValueKey('game-header-boundary')), findsOneWidget);
     expect(find.byKey(const ValueKey('balloon-raster-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('balloon-raster-1')), findsOneWidget);
-    final basicRenderers = tester
-        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer));
+    final basicRenderers = tester.widgetList<BalloonSkinRenderer>(
+      find.byType(BalloonSkinRenderer),
+    );
     expect(basicRenderers, hasLength(2));
     expect(
       basicRenderers.every(
@@ -2937,8 +3080,9 @@ void main() {
     expect(hapticCount, 1);
   });
 
-  testWidgets('gameplay frames reuse the static background widget',
-      (tester) async {
+  testWidgets('gameplay frames reuse the static background widget', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tapSectionStart(tester, 1);
@@ -2953,8 +3097,9 @@ void main() {
     expect(identical(before, after), isTrue);
   });
 
-  testWidgets('effects use one batched painter instead of particle widgets',
-      (tester) async {
+  testWidgets('effects use one batched painter instead of particle widgets', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tapSectionStart(tester, 1);
@@ -2980,8 +3125,9 @@ void main() {
     );
   });
 
-  testWidgets('the next stage starts only after every balloon is popped',
-      (tester) async {
+  testWidgets('the next stage starts only after every balloon is popped', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tapSectionStart(tester, 1);
@@ -3048,8 +3194,9 @@ void main() {
     expect(find.text('11~20 STAGE 시작 🔒'), findsOneWidget);
   });
 
-  testWidgets('stage ten boss unlocks section and it survives app reload',
-      (tester) async {
+  testWidgets('stage ten boss unlocks section and it survives app reload', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tapSectionStart(tester, 1);
@@ -3114,8 +3261,9 @@ void main() {
     expect(find.text('점수  0'), findsOneWidget);
   });
 
-  testWidgets('two-hit balloon survives first hit and only itself changes',
-      (tester) async {
+  testWidgets('two-hit balloon survives first hit and only itself changes', (
+    tester,
+  ) async {
     ProgressStorage.unlockSecondSection();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
@@ -3152,228 +3300,208 @@ void main() {
   });
 
   testWidgets(
-      'stage 21 uses the equipped skin, applies fake penalty, and clears on normal balloons',
-      (tester) async {
-    ProgressStorage.addCoins(100);
-    expect(
-      PurchaseService.purchase(
-        productId: 'balloon-heart',
-        price: 100,
-        initiallyOwned: false,
-      ),
-      PurchaseResult.success,
-    );
-    expect(
-      PurchaseService.equip(
-        category: StoreCategory.balloon.name,
-        productId: 'balloon-heart',
-        initiallyOwned: false,
-      ),
-      EquipResult.success,
-    );
-    var hapticCount = 0;
-    HapticService.setPerformerForTest(() async => hapticCount++);
+    'stage 21 uses the equipped skin, applies fake penalty, and clears on normal balloons',
+    (tester) async {
+      ProgressStorage.addCoins(100);
+      expect(
+        PurchaseService.purchase(
+          productId: 'balloon-heart',
+          price: 100,
+          initiallyOwned: false,
+        ),
+        PurchaseResult.success,
+      );
+      expect(
+        PurchaseService.equip(
+          category: StoreCategory.balloon.name,
+          productId: 'balloon-heart',
+          initiallyOwned: false,
+        ),
+        EquipResult.success,
+      );
+      var hapticCount = 0;
+      HapticService.setPerformerForTest(() async => hapticCount++);
 
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-    await tester.drag(find.byType(PageView), const Offset(-500, 0));
-    await tester.pump(const Duration(milliseconds: 350));
-    await tapSectionStart(tester, 3);
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+      await tester.drag(find.byType(PageView), const Offset(-500, 0));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tapSectionStart(tester, 3);
 
-    expect(find.text('21 STAGE'), findsOneWidget);
-    expect(find.text('시간  14'), findsOneWidget);
-    expect(find.text('남은 풍선  2'), findsOneWidget);
-    expect(find.byKey(const ValueKey(0)), findsOneWidget);
-    expect(find.byKey(const ValueKey(1)), findsOneWidget);
-    expect(find.byKey(const ValueKey('fake-balloon-2')), findsOneWidget);
-    expect(find.byKey(const ValueKey('fake-balloon-3')), findsOneWidget);
+      expect(find.text('21 STAGE'), findsOneWidget);
+      expect(find.text('시간  14'), findsOneWidget);
+      expect(find.text('남은 풍선  2'), findsOneWidget);
+      expect(find.byKey(const ValueKey(0)), findsOneWidget);
+      expect(find.byKey(const ValueKey(1)), findsOneWidget);
+      expect(find.byKey(const ValueKey('fake-balloon-2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('fake-balloon-3')), findsOneWidget);
 
-    final renderers = tester
-        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
-        .toList(growable: false);
-    expect(renderers, hasLength(4));
-    expect(
-      renderers.every((renderer) => renderer.definition.id == 'balloon-heart'),
-      isTrue,
-    );
-    expect(renderers.where((renderer) => renderer.isFake), hasLength(2));
-    for (final fake in renderers.where((renderer) => renderer.isFake)) {
-      expect(fake.definition.colorPalette, contains(fake.color));
-    }
+      final renderers = tester
+          .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+          .toList(growable: false);
+      expect(renderers, hasLength(4));
+      expect(
+        renderers.every(
+          (renderer) => renderer.definition.id == 'balloon-heart',
+        ),
+        isTrue,
+      );
+      expect(renderers.where((renderer) => renderer.isFake), hasLength(2));
+      for (final fake in renderers.where((renderer) => renderer.isFake)) {
+        expect(fake.definition.colorPalette, contains(fake.color));
+      }
 
-    await tapGameTarget(tester, 'fake-balloon-2');
-    expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
-    expect(find.byKey(const ValueKey('fake-balloon-3')), findsOneWidget);
-    expect(find.text('시간  12'), findsOneWidget);
-    expect(find.text('점수  0'), findsOneWidget);
-    expect(find.text('남은 풍선  2'), findsOneWidget);
-    expect(PopSound.fakePlayCount, 1);
-    expect(hapticCount, 1);
-    final effects = tester
-        .widget<CustomPaint>(
-          find.descendant(
-            of: find.byKey(const ValueKey('effects-boundary')),
-            matching: find.byType(CustomPaint),
-          ),
-        )
-        .painter! as EffectsPainter;
-    expect(effects.feedbackCount, 1);
-    expect(effects.feedbacks.single.text, '-2초');
-    expect(effects.pieceCount, 0);
-    expect(effects.ringCount, 0);
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
+      await tapGameTarget(tester, 'fake-balloon-2');
+      expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
+      expect(find.byKey(const ValueKey('fake-balloon-3')), findsOneWidget);
+      expect(find.text('시간  12'), findsOneWidget);
+      expect(find.text('점수  0'), findsOneWidget);
+      expect(find.text('남은 풍선  2'), findsOneWidget);
+      expect(PopSound.fakePlayCount, 1);
+      expect(hapticCount, 1);
+      final effects = tester
+          .widget<CustomPaint>(
+            find.descendant(
+              of: find.byKey(const ValueKey('effects-boundary')),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .painter! as EffectsPainter;
+      expect(effects.feedbackCount, 1);
+      expect(effects.feedbacks.single.text, '-2초');
+      expect(effects.pieceCount, 0);
+      expect(effects.ringCount, 0);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
 
-    for (final id in const [0, 1]) {
-      await tapGameTarget(tester, id);
-    }
-    expect(find.text('Stage Clear!'), findsOneWidget);
-    expect(find.byKey(const ValueKey('fake-balloon-3')), findsNothing);
-  });
+      for (final id in const [0, 1]) {
+        await tapGameTarget(tester, id);
+      }
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      expect(find.byKey(const ValueKey('fake-balloon-3')), findsNothing);
+    },
+  );
 
   testWidgets(
-      'stage 21, 25, and 29 normal balloons are removed by one gameplay tap',
-      (tester) async {
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-    await tester.drag(find.byType(PageView), const Offset(-500, 0));
-    await tester.pump(const Duration(milliseconds: 350));
-    await tapSectionStart(tester, 3);
+    'stage 21, 25, and 29 normal balloons are removed by one gameplay tap',
+    (tester) async {
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+      await tester.drag(find.byType(PageView), const Offset(-500, 0));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tapSectionStart(tester, 3);
 
-    var nextBalloonId = 0;
-    for (var stage = 21; stage <= 29; stage++) {
-      expect(find.text('$stage STAGE'), findsOneWidget);
-      final config = StageConfig.forStage(stage);
-      expect(config.requiredHits, 1);
+      var nextBalloonId = 0;
+      for (var stage = 21; stage <= 29; stage++) {
+        expect(find.text('$stage STAGE'), findsOneWidget);
+        final config = StageConfig.forStage(stage);
+        expect(config.requiredHits, 1);
 
-      for (var index = 0; index < config.balloonCount; index++) {
-        final id = nextBalloonId + index;
-        expect(find.byKey(ValueKey(id)), findsOneWidget);
-        if ({21, 25, 29}.contains(stage) && index == 0) {
-          await tapGameTargetThroughPointer(tester, id);
-        } else {
-          await tapGameTarget(tester, id);
+        for (var index = 0; index < config.balloonCount; index++) {
+          final id = nextBalloonId + index;
+          expect(find.byKey(ValueKey(id)), findsOneWidget);
+          if ({21, 25, 29}.contains(stage) && index == 0) {
+            await tapGameTargetThroughPointer(tester, id);
+          } else {
+            await tapGameTarget(tester, id);
+          }
+          expect(
+            find.byKey(ValueKey(id)),
+            findsNothing,
+            reason: 'Stage $stage balloon $id must pop on its first tap.',
+          );
         }
-        expect(
-          find.byKey(ValueKey(id)),
-          findsNothing,
-          reason: 'Stage $stage balloon $id must pop on its first tap.',
-        );
-      }
 
-      expect(find.text('Stage Clear!'), findsOneWidget);
-      for (var index = 0; index < config.fakeBalloonCount; index++) {
-        final fakeId = nextBalloonId + config.balloonCount + index;
-        expect(find.byKey(ValueKey('fake-balloon-$fakeId')), findsNothing);
-      }
-      nextBalloonId += config.balloonCount + config.fakeBalloonCount;
+        expect(find.text('Stage Clear!'), findsOneWidget);
+        for (var index = 0; index < config.fakeBalloonCount; index++) {
+          final fakeId = nextBalloonId + config.balloonCount + index;
+          expect(find.byKey(ValueKey('fake-balloon-$fakeId')), findsNothing);
+        }
+        nextBalloonId += config.balloonCount + config.fakeBalloonCount;
 
-      if (stage < 29) {
+        if (stage < 29) {
+          await tester.pump(const Duration(milliseconds: 401));
+        }
+      }
+    },
+  );
+
+  testWidgets(
+    'stage 30 has one real and one persistent fake boss with shared HP',
+    (tester) async {
+      ProgressStorage.addCoins(100);
+      expect(
+        PurchaseService.purchase(
+          productId: 'balloon-heart',
+          price: 100,
+          initiallyOwned: false,
+        ),
+        PurchaseResult.success,
+      );
+      expect(
+        PurchaseService.equip(
+          category: StoreCategory.balloon.name,
+          productId: 'balloon-heart',
+          initiallyOwned: false,
+        ),
+        EquipResult.success,
+      );
+
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(BalloonPopApp(stage30SwapRollForTest: () => 0));
+      await tester.pump();
+      await tester.drag(find.byType(PageView), const Offset(-500, 0));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tapSectionStart(tester, 3);
+
+      var nextBalloonId = 0;
+      for (var stage = 21; stage <= 29; stage++) {
+        final config = StageConfig.forStage(stage);
+        for (var index = 0; index < config.balloonCount; index++) {
+          await tapGameTarget(tester, nextBalloonId + index);
+        }
+        nextBalloonId += config.balloonCount + config.fakeBalloonCount;
         await tester.pump(const Duration(milliseconds: 401));
       }
-    }
-  });
 
-  testWidgets(
-      'stage 30 has one real and one persistent fake boss with shared HP',
-      (tester) async {
-    ProgressStorage.addCoins(100);
-    expect(
-      PurchaseService.purchase(
-        productId: 'balloon-heart',
-        price: 100,
-        initiallyOwned: false,
-      ),
-      PurchaseResult.success,
-    );
-    expect(
-      PurchaseService.equip(
-        category: StoreCategory.balloon.name,
-        productId: 'balloon-heart',
-        initiallyOwned: false,
-      ),
-      EquipResult.success,
-    );
+      expect(find.text('30 STAGE'), findsOneWidget);
+      expect(find.text('시간  18'), findsOneWidget);
+      expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
+      final bosses = tester
+          .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+          .where((candidate) => candidate.isBoss)
+          .toList(growable: false);
+      expect(bosses, hasLength(2));
+      expect(bosses.where((candidate) => candidate.isFake), hasLength(1));
+      expect(
+        bosses.every((candidate) => candidate.definition.id == 'balloon-heart'),
+        isTrue,
+      );
+      expect(bosses.every((candidate) => candidate.hp == 12), isTrue);
+      expect(
+        bosses.where((candidate) => candidate.showBossHealthBar),
+        hasLength(1),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('boss-balloon-0'))),
+        tester.getSize(find.byKey(const ValueKey('boss-balloon-1'))),
+      );
+      final fakeVisual = find.descendant(
+        of: find.byKey(ValueKey(stage30BossTargetKey(tester, fake: true))),
+        matching: find.byType(Opacity),
+      );
+      expect(tester.widget<Opacity>(fakeVisual).opacity, fakeBalloonOpacity);
 
-    tester.view.physicalSize = const Size(800, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      BalloonPopApp(stage30SwapRollForTest: () => 0),
-    );
-    await tester.pump();
-    await tester.drag(find.byType(PageView), const Offset(-500, 0));
-    await tester.pump(const Duration(milliseconds: 350));
-    await tapSectionStart(tester, 3);
-
-    var nextBalloonId = 0;
-    for (var stage = 21; stage <= 29; stage++) {
-      final config = StageConfig.forStage(stage);
-      for (var index = 0; index < config.balloonCount; index++) {
-        await tapGameTarget(tester, nextBalloonId + index);
-      }
-      nextBalloonId += config.balloonCount + config.fakeBalloonCount;
-      await tester.pump(const Duration(milliseconds: 401));
-    }
-
-    expect(find.text('30 STAGE'), findsOneWidget);
-    expect(find.text('시간  18'), findsOneWidget);
-    expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
-    final bosses = tester
-        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
-        .where((candidate) => candidate.isBoss)
-        .toList(growable: false);
-    expect(bosses, hasLength(2));
-    expect(bosses.where((candidate) => candidate.isFake), hasLength(1));
-    expect(
-      bosses.every(
-        (candidate) => candidate.definition.id == 'balloon-heart',
-      ),
-      isTrue,
-    );
-    expect(bosses.every((candidate) => candidate.hp == 12), isTrue);
-    expect(
-        bosses.where((candidate) => candidate.showBossHealthBar), hasLength(1));
-    expect(
-      tester.getSize(find.byKey(const ValueKey('boss-balloon-0'))),
-      tester.getSize(find.byKey(const ValueKey('boss-balloon-1'))),
-    );
-    final fakeVisual = find.descendant(
-      of: find.byKey(
-        ValueKey(stage30BossTargetKey(tester, fake: true)),
-      ),
-      matching: find.byType(Opacity),
-    );
-    expect(tester.widget<Opacity>(fakeVisual).opacity, fakeBalloonOpacity);
-
-    final initialRealKey = stage30BossTargetKey(tester, fake: false);
-    final initialFakeKey = stage30BossTargetKey(tester, fake: true);
-    final initialBossSize =
-        tester.getSize(find.byKey(ValueKey(initialRealKey)));
-    final hpBeforeFakeTap = tester
-        .widget<BalloonSkinRenderer>(
-          find.byKey(
-            ValueKey(
-                initialRealKey.replaceFirst('boss-balloon-', 'boss-skin-')),
-          ),
-        )
-        .hp;
-    final secondsBeforeFakeTap = int.parse(
-      tester
-          .widgetList<Text>(find.byType(Text))
-          .map((widget) => widget.data)
-          .whereType<String>()
-          .singleWhere((text) => text.startsWith('시간  '))
-          .substring('시간  '.length),
-    );
-    PopSound.resetDebug();
-    await tapGameTarget(tester, initialFakeKey);
-    expect(find.byKey(ValueKey(initialFakeKey)), findsOneWidget);
-    expect(stage30BossTargetKey(tester, fake: true), initialFakeKey);
-    expect(
-      tester
+      final initialRealKey = stage30BossTargetKey(tester, fake: false);
+      final initialFakeKey = stage30BossTargetKey(tester, fake: true);
+      final initialBossSize = tester.getSize(
+        find.byKey(ValueKey(initialRealKey)),
+      );
+      final hpBeforeFakeTap = tester
           .widget<BalloonSkinRenderer>(
             find.byKey(
               ValueKey(
@@ -3381,40 +3509,63 @@ void main() {
               ),
             ),
           )
-          .hp,
-      hpBeforeFakeTap,
-    );
-    expect(find.text('시간  ${secondsBeforeFakeTap - 2}'), findsOneWidget);
-    expect(PopSound.fakePlayCount, 1);
+          .hp;
+      final secondsBeforeFakeTap = int.parse(
+        tester
+            .widgetList<Text>(find.byType(Text))
+            .map((widget) => widget.data)
+            .whereType<String>()
+            .singleWhere((text) => text.startsWith('시간  '))
+            .substring('시간  '.length),
+      );
+      PopSound.resetDebug();
+      await tapGameTarget(tester, initialFakeKey);
+      expect(find.byKey(ValueKey(initialFakeKey)), findsOneWidget);
+      expect(stage30BossTargetKey(tester, fake: true), initialFakeKey);
+      expect(
+        tester
+            .widget<BalloonSkinRenderer>(
+              find.byKey(
+                ValueKey(
+                  initialRealKey.replaceFirst('boss-balloon-', 'boss-skin-'),
+                ),
+              ),
+            )
+            .hp,
+        hpBeforeFakeTap,
+      );
+      expect(find.text('시간  ${secondsBeforeFakeTap - 2}'), findsOneWidget);
+      expect(PopSound.fakePlayCount, 1);
 
-    await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
-    expect(stage30BossTargetKey(tester, fake: false), initialFakeKey);
-    expect(stage30BossTargetKey(tester, fake: true), initialRealKey);
-    final afterHit = tester
-        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
-        .where((candidate) => candidate.isBoss)
-        .toList(growable: false);
-    expect(afterHit.where((candidate) => candidate.isFake), hasLength(1));
-    expect(afterHit.every((candidate) => candidate.hp == 11), isTrue);
-    expect(
-      tester.getSize(find.byKey(ValueKey(initialRealKey))).width,
-      lessThan(initialBossSize.width),
-    );
-
-    for (var hit = 1; hit < 12; hit++) {
       await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
-    }
-    expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
-    expect(find.byKey(const ValueKey('boss-balloon-1')), findsNothing);
-    expect(find.text('BOSS CLEAR!'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.byKey(const ValueKey('stage-intro-31')), findsOneWidget);
-    await tester.pump(const Duration(seconds: 2));
-    expect(find.byKey(const ValueKey('stage-intro-31')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
-    await tester.pump();
-    expect(find.text('게임 완료!'), findsOneWidget);
-  });
+      expect(stage30BossTargetKey(tester, fake: false), initialFakeKey);
+      expect(stage30BossTargetKey(tester, fake: true), initialRealKey);
+      final afterHit = tester
+          .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
+          .where((candidate) => candidate.isBoss)
+          .toList(growable: false);
+      expect(afterHit.where((candidate) => candidate.isFake), hasLength(1));
+      expect(afterHit.every((candidate) => candidate.hp == 11), isTrue);
+      expect(
+        tester.getSize(find.byKey(ValueKey(initialRealKey))).width,
+        lessThan(initialBossSize.width),
+      );
+
+      for (var hit = 1; hit < 12; hit++) {
+        await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
+      }
+      expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
+      expect(find.byKey(const ValueKey('boss-balloon-1')), findsNothing);
+      expect(find.text('BOSS CLEAR!'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const ValueKey('stage-intro-31')), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.byKey(const ValueKey('stage-intro-31')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
+      await tester.pump();
+      expect(find.text('게임 완료!'), findsOneWidget);
+    },
+  );
 
   testWidgets('fake sound and haptic follow settings', (tester) async {
     SettingsService.setSoundEnabled(false);
@@ -3434,8 +3585,9 @@ void main() {
     expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
   });
 
-  testWidgets('stage twenty has two independent bosses and scores once each',
-      (tester) async {
+  testWidgets('stage twenty has two independent bosses and scores once each', (
+    tester,
+  ) async {
     ProgressStorage.addCoins(100);
     expect(
       PurchaseService.purchase(
@@ -3466,9 +3618,7 @@ void main() {
       if (stage == 10) {
         expect(
           tester
-              .widgetList<BalloonSkinRenderer>(
-                find.byType(BalloonSkinRenderer),
-              )
+              .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
               .where(
                 (renderer) =>
                     renderer.isBoss &&
@@ -3476,10 +3626,7 @@ void main() {
               ),
           hasLength(1),
         );
-        expect(
-          find.byKey(const ValueKey('boss-skin-0')),
-          findsOneWidget,
-        );
+        expect(find.byKey(const ValueKey('boss-skin-0')), findsOneWidget);
         final stage10HealthFill = tester.widget<FractionallySizedBox>(
           find.descendant(
             of: find.byKey(const ValueKey('boss-skin-0')),
@@ -3542,9 +3689,7 @@ void main() {
     expect(find.byKey(const ValueKey('boss-raster-1')), findsOneWidget);
     expect(find.byType(BalloonSkinRenderer), findsNWidgets(2));
     final heartBosses = tester
-        .widgetList<BalloonSkinRenderer>(
-          find.byType(BalloonSkinRenderer),
-        )
+        .widgetList<BalloonSkinRenderer>(find.byType(BalloonSkinRenderer))
         .where(
           (renderer) =>
               renderer.isBoss && renderer.definition.id == 'balloon-heart',
@@ -3579,22 +3724,14 @@ void main() {
       find.byKey(const ValueKey('boss-balloon-1')),
     );
     final bossAColorBeforeHit = tester
-        .widget<BalloonSkinRenderer>(
-          find.byKey(const ValueKey('boss-skin-0')),
-        )
+        .widget<BalloonSkinRenderer>(find.byKey(const ValueKey('boss-skin-0')))
         .color;
     final bossAHealthFill = find.descendant(
       of: find.byKey(const ValueKey('boss-skin-0')),
       matching: find.byKey(const ValueKey('boss-health-fill')),
     );
-    expect(
-      tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor,
-      1,
-    );
-    expect(
-      tester.getSize(bossAHealthFill).height,
-      11,
-    );
+    expect(tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor, 1);
+    expect(tester.getSize(bossAHealthFill).height, 11);
 
     var hapticCount = 0;
     HapticService.setPerformerForTest(() async {
@@ -3603,17 +3740,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('pause-button')));
     await tester.pump();
     await tapGameTarget(tester, 'boss-balloon-0');
-    expect(
-      tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor,
-      1,
-    );
+    expect(tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor, 1);
     expect(hapticCount, 0);
     await tester.tap(find.byKey(const ValueKey('resume-button')));
     await tester.pump();
-    expect(
-      tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor,
-      1,
-    );
+    expect(tester.widget<FractionallySizedBox>(bossAHealthFill).widthFactor, 1);
 
     await tapGameTarget(tester, 'boss-balloon-0');
     expect(hapticCount, 1);
@@ -3732,8 +3863,9 @@ void main() {
         .map((widget) => widget.data)
         .whereType<String>()
         .singleWhere((text) => text.startsWith('점수  '));
-    final expectedFinalScore =
-        int.parse(finalScoreText.substring('점수  '.length));
+    final expectedFinalScore = int.parse(
+      finalScoreText.substring('점수  '.length),
+    );
     expect(expectedFinalScore, greaterThan(scoreAtStage20Clear));
 
     await tester.pump(const Duration(seconds: 1));
@@ -3786,8 +3918,9 @@ void main() {
     expect(find.text('30 STAGE'), findsNothing);
   });
 
-  testWidgets('home hides progress reset and preserves second-section unlock',
-      (tester) async {
+  testWidgets('home hides progress reset and preserves second-section unlock', (
+    tester,
+  ) async {
     ProgressStorage.unlockSecondSection();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
@@ -3809,9 +3942,7 @@ void main() {
     expect(find.text('시간  10'), findsOneWidget);
 
     tester
-        .widget<FilledButton>(
-          find.byKey(const ValueKey('pause-button')),
-        )
+        .widget<FilledButton>(find.byKey(const ValueKey('pause-button')))
         .onPressed!
         .call();
     await tester.pump();
@@ -3825,9 +3956,7 @@ void main() {
     expect(find.text('점수  0'), findsOneWidget);
 
     tester
-        .widget<FilledButton>(
-          find.byKey(const ValueKey('resume-button')),
-        )
+        .widget<FilledButton>(find.byKey(const ValueKey('resume-button')))
         .onPressed!
         .call();
     await tester.pump(const Duration(seconds: 1));
@@ -3846,10 +3975,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('end-button')));
     await tester.pump(const Duration(milliseconds: 400));
-    expect(
-      find.text('현재 게임을 끝내고 시작 화면으로 돌아갈까요?'),
-      findsOneWidget,
-    );
+    expect(find.text('현재 게임을 끝내고 시작 화면으로 돌아갈까요?'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
     expect(find.text('시간  10'), findsOneWidget);
 
@@ -3860,8 +3986,9 @@ void main() {
     expect(find.text('시간  10'), findsOneWidget);
   });
 
-  testWidgets('confirming end returns to menu and keeps unlock',
-      (tester) async {
+  testWidgets('confirming end returns to menu and keeps unlock', (
+    tester,
+  ) async {
     ProgressStorage.unlockSecondSection();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
@@ -3879,8 +4006,9 @@ void main() {
     expect(find.text('11 STAGE'), findsNothing);
   });
 
-  testWidgets('backgrounding the app pauses without automatic resume',
-      (tester) async {
+  testWidgets('backgrounding the app pauses without automatic resume', (
+    tester,
+  ) async {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await tapSectionStart(tester, 1);
@@ -3895,8 +4023,9 @@ void main() {
     expect(find.text('시간  10'), findsOneWidget);
   });
 
-  testWidgets('legendary tools apply damage only at their impact frame',
-      (tester) async {
+  testWidgets('legendary tools apply damage only at their impact frame', (
+    tester,
+  ) async {
     for (final id in const ['balloon-lumen', 'balloon-chouchou']) {
       ProgressStorage.clear();
       ProgressStorage.setNicknameOnboardingCompleted(true);
@@ -3919,9 +4048,7 @@ void main() {
         EquipResult.success,
       );
 
-      await tester.pumpWidget(
-        const BalloonPopApp(toolHitDeltaForTest: 0.15),
-      );
+      await tester.pumpWidget(const BalloonPopApp(toolHitDeltaForTest: 0.15));
       await tester.pump();
       await tapSectionStart(tester, 1);
       expect(find.byKey(const ValueKey<int>(0)), findsOneWidget);
@@ -3940,16 +4067,16 @@ void main() {
             )
             .painter! as EffectsPainter;
         expect(effectsPainter.pieceCount, 0);
-        final shardImages = tester.widgetList<Image>(find.byType(Image)).where(
-          (image) {
-            try {
-              return assetNameOf(image.image) ==
-                  'assets/images/gemi_shard.png.png';
-            } catch (_) {
-              return false;
-            }
-          },
-        );
+        final shardImages = tester.widgetList<Image>(find.byType(Image)).where((
+          image,
+        ) {
+          try {
+            return assetNameOf(image.image) ==
+                'assets/images/gemi_shard_runtime.png';
+          } catch (_) {
+            return false;
+          }
+        });
         expect(shardImages.length, greaterThanOrEqualTo(8));
       }
 
@@ -3958,8 +4085,9 @@ void main() {
     }
   });
 
-  testWidgets('locked store product uses a compact disabled placeholder',
-      (tester) async {
+  testWidgets('locked store product uses a compact disabled placeholder', (
+    tester,
+  ) async {
     const lockedProduct = StoreProduct(
       id: 'locked-balloon',
       category: StoreCategory.balloon,
@@ -3978,10 +4106,7 @@ void main() {
           body: SizedBox(
             width: 82,
             height: 104,
-            child: StoreProductCard(
-              product: lockedProduct,
-              onPressed: () {},
-            ),
+            child: StoreProductCard(product: lockedProduct, onPressed: () {}),
           ),
         ),
       ),

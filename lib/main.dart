@@ -308,10 +308,7 @@ class Stage30BossState {
   }
 }
 
-void applyStage30BossRoles(
-  List<BossBalloon> bosses,
-  Stage30BossState state,
-) {
+void applyStage30BossRoles(List<BossBalloon> bosses, Stage30BossState state) {
   for (final boss in bosses) {
     boss.isFake = state.isFakeBoss(boss.id);
   }
@@ -634,32 +631,36 @@ void addThemedPieces({
   for (var i = 0; i < count; i++) {
     final angle = pi * 2 * i / count + (random.nextDouble() - 0.5) * 0.45;
     final speed = (big ? 230 : 120) + random.nextDouble() * (big ? 180 : 95);
-    pieces.add(PopPiece(
-      position: center,
-      velocity: Offset(cos(angle) * speed, sin(angle) * speed - 55),
-      color: color,
-      size: (big ? 12 : 8) + random.nextDouble() * (big ? 13 : 7),
-      rotation: random.nextDouble() * pi,
-      spin: (random.nextDouble() - 0.5) * 9,
-      life: big ? 1.15 : 0.72,
-      maxLife: big ? 1.15 : 0.72,
-      shape: shape,
-    ));
+    pieces.add(
+      PopPiece(
+        position: center,
+        velocity: Offset(cos(angle) * speed, sin(angle) * speed - 55),
+        color: color,
+        size: (big ? 12 : 8) + random.nextDouble() * (big ? 13 : 7),
+        rotation: random.nextDouble() * pi,
+        spin: (random.nextDouble() - 0.5) * 9,
+        life: big ? 1.15 : 0.72,
+        maxLife: big ? 1.15 : 0.72,
+        shape: shape,
+      ),
+    );
   }
   if (tool != null) {
-    pieces.add(PopPiece(
-      position: center - const Offset(44, 20),
-      velocity: const Offset(145, 25),
-      color: tool == EffectPieceShape.pickaxe
-          ? const Color(0xFF785548)
-          : const Color(0xFFB0BEC5),
-      size: big ? 29 : 22,
-      rotation: -0.7,
-      spin: 4.5,
-      life: 0.28,
-      maxLife: 0.28,
-      shape: tool,
-    ));
+    pieces.add(
+      PopPiece(
+        position: center - const Offset(44, 20),
+        velocity: const Offset(145, 25),
+        color: tool == EffectPieceShape.pickaxe
+            ? const Color(0xFF785548)
+            : const Color(0xFFB0BEC5),
+        size: big ? 29 : 22,
+        rotation: -0.7,
+        spin: 4.5,
+        life: 0.28,
+        maxLife: 0.28,
+        shape: tool,
+      ),
+    );
   }
 }
 
@@ -792,8 +793,7 @@ class AssetVisualEffect {
     required this.spin,
     required this.life,
     required this.maxLife,
-    this.removeLightBackground = false,
-    this.cropScale = 1,
+    this.cacheWidth = 320,
     this.tint,
   });
 
@@ -805,8 +805,7 @@ class AssetVisualEffect {
   final double spin;
   double life;
   final double maxLife;
-  final bool removeLightBackground;
-  final double cropScale;
+  final int cacheWidth;
   final Color? tint;
 }
 
@@ -839,6 +838,70 @@ ColorFilter gemShardTintFilter(Color color) {
   ]);
 }
 
+void addGemiShardAssetEffects({
+  required List<AssetVisualEffect> effects,
+  required Random random,
+  required String assetPath,
+  required Offset center,
+  required double sourceSize,
+  required Color color,
+  required int count,
+}) {
+  for (var index = 0; index < count; index++) {
+    final angle = pi * 2 * index / count + random.nextDouble() * 0.8;
+    final speed = 75 + random.nextDouble() * 65;
+    effects.add(
+      AssetVisualEffect(
+        assetPath: assetPath,
+        center: center,
+        velocity: Offset(cos(angle) * speed, sin(angle) * speed - 18),
+        size: sourceSize * (0.20 + random.nextDouble() * 0.08),
+        rotation: random.nextDouble() * pi * 2,
+        spin: (random.nextDouble() - 0.5) * 5,
+        life: 0.48,
+        maxLife: 0.48,
+        cacheWidth: 128,
+        tint: color,
+      ),
+    );
+  }
+}
+
+bool advanceAssetVisualEffects(List<AssetVisualEffect> effects, double dt) {
+  if (effects.isEmpty) return false;
+  for (final effect in effects) {
+    effect.life -= dt;
+    effect.center += effect.velocity * dt;
+    effect.rotation += effect.spin * dt;
+  }
+  effects.removeWhere((effect) => effect.life <= 0);
+  return true;
+}
+
+Widget buildAssetVisualEffect(AssetVisualEffect effect) {
+  final opacity = (effect.life / effect.maxLife).clamp(0.0, 1.0);
+  Widget image = Image.asset(
+    effect.assetPath,
+    fit: BoxFit.contain,
+    filterQuality: FilterQuality.low,
+    gaplessPlayback: true,
+    cacheWidth: effect.cacheWidth,
+    opacity: AlwaysStoppedAnimation<double>(opacity),
+  );
+  final tint = effect.tint;
+  if (tint != null) {
+    image = ColorFiltered(colorFilter: gemShardTintFilter(tint), child: image);
+  }
+  return Positioned(
+    left: effect.center.dx - effect.size / 2,
+    top: effect.center.dy - effect.size / 2,
+    child: Transform.rotate(
+      angle: effect.rotation,
+      child: SizedBox.square(dimension: effect.size, child: image),
+    ),
+  );
+}
+
 @immutable
 class ShushuForkMotion {
   const ShushuForkMotion({required this.offset, required this.angle});
@@ -848,11 +911,7 @@ class ShushuForkMotion {
 }
 
 ShushuForkMotion shushuForkMotion(int approach, double progress) {
-  const starts = <Offset>[
-    Offset(0, -88),
-    Offset(-72, -72),
-    Offset(72, -72),
-  ];
+  const starts = <Offset>[Offset(0, -88), Offset(-72, -72), Offset(72, -72)];
   const endAngles = <double>[-2.72, 2.78, -1.94];
   const angleLeads = <double>[0.14, -0.16, 0.16];
   final index = approach.clamp(0, 2);
@@ -1127,8 +1186,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   final List<AssetVisualEffect> _assetEffects = [];
   final List<PendingToolHit> _pendingToolHits = [];
   final ValueNotifier<int> _gameplayFrame = ValueNotifier<int>(0);
-  final ValueNotifier<double> _crystalBackgroundPulse =
-      ValueNotifier<double>(0);
+  final ValueNotifier<double> _crystalBackgroundPulse = ValueNotifier<double>(
+    0,
+  );
   int _effectsRevision = 0;
   final SinglePeriodicGameLoop _gameLoop = SinglePeriodicGameLoop();
   final CoinRewardSession _coinRewardSession = CoinRewardSession();
@@ -1208,20 +1268,30 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _precacheSkinAssets(BalloonSkinDefinition definition) {
-    final paths = <String?>{
-      definition.assetPath,
-      ...definition.variantAssetPaths,
-      definition.hitToolAssetPath,
-      definition.burstAssetPath,
-      definition.wallSplatAssetPath,
-      definition.screenSplatAssetPath,
-      definition.shardAssetPath,
-      definition.screenCrackAssetPath,
+    final paths = <String, int>{};
+    void add(String? path, int width) {
+      if (path != null) paths[path] = width;
+    }
+
+    add(definition.assetPath, 512);
+    for (final path in definition.variantAssetPaths) {
+      add(path, 512);
+    }
+    add(definition.hitToolAssetPath, 256);
+    add(definition.burstAssetPath, 320);
+    add(definition.wallSplatAssetPath, 320);
+    add(definition.screenSplatAssetPath, 320);
+    add(definition.shardAssetPath, 128);
+    add(definition.screenCrackAssetPath, 320);
+    add(
       BalloonBackgroundRegistry.definitionFor(definition.background).assetPath,
-    }..remove(null);
-    for (final path in paths.cast<String>()) {
-      final width = path.contains('background') ? 1024 : 512;
-      precacheImage(ResizeImage(AssetImage(path), width: width), context);
+      1024,
+    );
+    for (final entry in paths.entries) {
+      precacheImage(
+        ResizeImage(AssetImage(entry.key), width: entry.value),
+        context,
+      );
     }
   }
 
@@ -1317,8 +1387,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
-    final stagePage =
-        homeStagePageForProgress(ProgressStorage.nextPlayableStage());
+    final stagePage = homeStagePageForProgress(
+      ProgressStorage.nextPlayableStage(),
+    );
     setState(() {
       _score = 0;
       _stage = 1;
@@ -1770,19 +1841,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _updateEffects(double dt) {
-    var changed = advanceEffects(
-      _pieces,
-      _rings,
-      dt,
-      feedbacks: _feedbacks,
-    );
-    for (final effect in _assetEffects) {
-      effect.life -= dt;
-      effect.center += effect.velocity * dt;
-      effect.rotation += effect.spin * dt;
-      changed = true;
-    }
-    _assetEffects.removeWhere((effect) => effect.life <= 0);
+    var changed = advanceEffects(_pieces, _rings, dt, feedbacks: _feedbacks);
+    changed = advanceAssetVisualEffects(_assetEffects, dt) || changed;
     final nextCrystalPulse = max(0.0, _crystalBackgroundPulse.value - dt * 4.8);
     if (nextCrystalPulse != _crystalBackgroundPulse.value) {
       _crystalBackgroundPulse.value = nextCrystalPulse;
@@ -1811,22 +1871,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _applyBalloonHit(balloon, skin);
   }
 
-  void _applyBalloonHit(
-    Balloon balloon,
-    BalloonSkinDefinition skin,
-  ) {
+  void _applyBalloonHit(Balloon balloon, BalloonSkinDefinition skin) {
     if (_phase != GamePhase.playing || !_balloons.contains(balloon)) return;
     final center =
         balloon.position + Offset(balloon.size / 2, balloon.size / 2);
     if (balloon.hp > 1) {
       if (!playBalloonHitSound(skin)) PopSound.playLightTap();
-      _spawnGemiShards(
-        skin,
-        center,
-        balloon.size,
-        balloon.color,
-        count: 2,
-      );
+      _spawnGemiShards(skin, center, balloon.size, balloon.color, count: 2);
       _registerLegendaryBackgroundImpact(skin, finalHit: false);
       setState(() {
         balloon.hp--;
@@ -1854,10 +1905,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _publishHeader();
   }
 
-  void _startKickExit(
-    Balloon balloon,
-    BalloonSkinDefinition skin,
-  ) {
+  void _startKickExit(Balloon balloon, BalloonSkinDefinition skin) {
     if (_phase != GamePhase.playing || !_balloons.contains(balloon)) return;
     HapticService.shortImpact();
     playBalloonHitSound(skin);
@@ -1898,9 +1946,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _hitFakeBoss(BossBalloon boss) {
     if (_phase != GamePhase.playing || !_bosses.contains(boss)) return;
 
-    _applyFakeHitPenalty(
-      boss.position + Offset(boss.size / 2, boss.size / 2),
-    );
+    _applyFakeHitPenalty(boss.position + Offset(boss.size / 2, boss.size / 2));
   }
 
   void _applyFakeHitPenalty(Offset center) {
@@ -2003,26 +2049,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _applyBossHit(boss, skin);
   }
 
-  void _applyBossHit(
-    BossBalloon boss,
-    BalloonSkinDefinition skin,
-  ) {
+  void _applyBossHit(BossBalloon boss, BalloonSkinDefinition skin) {
     if (_phase != GamePhase.playing || !_bosses.contains(boss)) return;
     HapticService.shortImpact();
     final center = boss.position + Offset(boss.size / 2, boss.size / 2);
     if (!playBalloonHitSound(skin)) PopSound.play();
-    final hitColor = _bossColor(
-      boss,
-      skin,
-    );
+    final hitColor = _bossColor(boss, skin);
     final finalHit = _currentBossHp(boss) <= 1;
     if (!finalHit) {
       _spawnGemiShards(skin, center, boss.size, hitColor, count: 2);
     }
-    _registerLegendaryBackgroundImpact(
-      skin,
-      finalHit: finalHit,
-    );
+    _registerLegendaryBackgroundImpact(skin, finalHit: finalHit);
     if (skin.shardAssetPath == null) {
       _spawnPieces(center, hitColor, boss.size * 0.35, big: false);
     }
@@ -2046,10 +2083,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           );
           candidate.turnCooldown = min(
             candidate.turnCooldown,
-            max(
-              0.10,
-              0.18 + hpRatio * 0.28 + candidate.turnIntervalOffset,
-            ),
+            max(0.10, 0.18 + hpRatio * 0.28 + candidate.turnIntervalOffset),
           );
         }
         if (swapped) {
@@ -2178,13 +2212,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         big: big,
       );
     }
-    _spawnSkinAssetPopEffects(
-      skin,
-      center,
-      sourceSize,
-      color,
-      big: big,
-    );
+    _spawnSkinAssetPopEffects(skin, center, sourceSize, color, big: big);
     _effectsRevision++;
   }
 
@@ -2197,25 +2225,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }) {
     final path = skin.shardAssetPath;
     if (path == null) return;
-    for (var index = 0; index < count; index++) {
-      final angle = pi * 2 * index / count + _random.nextDouble() * 0.8;
-      final speed = 75 + _random.nextDouble() * 65;
-      _assetEffects.add(
-        AssetVisualEffect(
-          assetPath: path,
-          center: center,
-          velocity: Offset(cos(angle) * speed, sin(angle) * speed - 18),
-          size: sourceSize * (0.20 + _random.nextDouble() * 0.08),
-          rotation: _random.nextDouble() * pi * 2,
-          spin: (_random.nextDouble() - 0.5) * 5,
-          life: 0.48,
-          maxLife: 0.48,
-          removeLightBackground: true,
-          cropScale: 3.5,
-          tint: color,
-        ),
-      );
-    }
+    addGemiShardAssetEffects(
+      effects: _assetEffects,
+      random: _random,
+      assetPath: path,
+      center: center,
+      sourceSize: sourceSize,
+      color: color,
+      count: count,
+    );
     _effectsRevision++;
   }
 
@@ -2236,13 +2254,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     required bool big,
   }) {
     if (skin.shardAssetPath != null) {
-      _spawnGemiShards(
-        skin,
-        center,
-        sourceSize,
-        color,
-        count: big ? 12 : 8,
-      );
+      _spawnGemiShards(skin, center, sourceSize, color, count: big ? 12 : 8);
     }
 
     final crackPath = skin.screenCrackAssetPath;
@@ -3545,8 +3557,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _onHomeMenuTap() {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     if (_mainTab != MainTab.home) {
-      final stagePage =
-          homeStagePageForProgress(ProgressStorage.nextPlayableStage());
+      final stagePage = homeStagePageForProgress(
+        ProgressStorage.nextPlayableStage(),
+      );
       setState(() {
         _mainTab = MainTab.home;
         _storeProductFilter = StoreProductFilter.all;
@@ -3839,10 +3852,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           itemBuilder: (context, slot) {
             final productIndex = pageIndex * storeProductsPerPage + slot;
             if (productIndex >= products.length) {
-              return StoreComingSoonCard(
-                rarity: rarity,
-                slot: productIndex,
-              );
+              return StoreComingSoonCard(rarity: rarity, slot: productIndex);
             }
             final product = products[productIndex];
             return StoreProductCard(
@@ -4134,12 +4144,28 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 for (final boss in _bosses) _buildBoss(boss),
                                 for (final hit in _pendingToolHits)
                                   _buildPendingToolHit(hit),
-                                for (final effect in _assetEffects)
-                                  _buildAssetVisualEffect(effect),
+                                if (_assetEffects.isNotEmpty)
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: RepaintBoundary(
+                                        key: const ValueKey(
+                                          'asset-effects-boundary',
+                                        ),
+                                        child: Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            for (final effect in _assetEffects)
+                                              buildAssetVisualEffect(effect),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 if (_stage == 30 && _phase == GamePhase.playing)
                                   Positioned.fill(
                                     key: const ValueKey(
-                                        'stage-30-boss-hit-layer'),
+                                      'stage-30-boss-hit-layer',
+                                    ),
                                     child: GestureDetector(
                                       behavior: HitTestBehavior.translucent,
                                       onTapUp: _hitStage30BossAt,
@@ -4246,73 +4272,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
-  Widget _buildAssetVisualEffect(AssetVisualEffect effect) {
-    final opacity = (effect.life / effect.maxLife).clamp(0.0, 1.0);
-    Widget image = Image.asset(
-      effect.assetPath,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.low,
-      gaplessPlayback: true,
-      cacheWidth: effect.removeLightBackground ? 512 : 320,
-    );
-    if (effect.removeLightBackground) {
-      image = ClipRect(
-        child: ColorFiltered(
-          colorFilter: const ColorFilter.matrix(<double>[
-            1,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            -4,
-            -4,
-            -4,
-            0,
-            3000,
-          ]),
-          child: Transform.scale(scale: effect.cropScale, child: image),
-        ),
-      );
-    }
-    final tint = effect.tint;
-    if (tint != null) {
-      image = ColorFiltered(
-        colorFilter: gemShardTintFilter(tint),
-        child: image,
-      );
-    }
-    return Positioned(
-      left: effect.center.dx - effect.size / 2,
-      top: effect.center.dy - effect.size / 2,
-      child: IgnorePointer(
-        child: Opacity(
-          opacity: opacity,
-          child: Transform.rotate(
-            angle: effect.rotation,
-            child: SizedBox.square(
-              dimension: effect.size,
-              child: image,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPendingToolHit(PendingToolHit hit) {
     final isFork = hit.definition.popEffectType == BalloonPopEffectType.cream;
-    final swingProgress =
-        (hit.elapsed / PendingToolHit.impactTime).clamp(0.0, 1.0);
+    final swingProgress = (hit.elapsed / PendingToolHit.impactTime).clamp(
+      0.0,
+      1.0,
+    );
     final eased = Curves.easeInCubic.transform(swingProgress);
     final fade = hit.elapsed <= PendingToolHit.impactTime
         ? 1.0
@@ -4990,6 +4955,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
   final Random _random = Random();
   final List<PopPiece> _pieces = [];
   final List<BurstRing> _rings = [];
+  final List<AssetVisualEffect> _assetEffects = [];
   late final AnimationController _effectController;
   late final AnimationController _idleController;
   Timer? _cycleTimer;
@@ -5006,8 +4972,9 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
   void initState() {
     super.initState();
     _color = widget.definition.previewColor;
-    _visualVariant =
-        widget.definition.chooseVisualVariant(_random.nextDouble());
+    _visualVariant = widget.definition.chooseVisualVariant(
+      _random.nextDouble(),
+    );
     _specialVisual = widget.definition.chooseSpecialSpawn(_random.nextDouble());
     _toolApproach = _random.nextInt(3);
     _effectController =
@@ -5043,15 +5010,28 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     _impactApplied = true;
     setState(() {
       _balloonVisible = false;
-      addBalloonPopEffect(
-        definition: widget.definition,
-        pieces: _pieces,
-        random: _random,
-        center: _previewSize.center(Offset.zero),
-        color: _color,
-        sourceSize: _balloonSize.width,
-        big: false,
-      );
+      final shardPath = widget.definition.shardAssetPath;
+      if (shardPath != null) {
+        addGemiShardAssetEffects(
+          effects: _assetEffects,
+          random: _random,
+          assetPath: shardPath,
+          center: _previewSize.center(Offset.zero),
+          sourceSize: _balloonSize.width,
+          color: _color,
+          count: 8,
+        );
+      } else {
+        addBalloonPopEffect(
+          definition: widget.definition,
+          pieces: _pieces,
+          random: _random,
+          center: _previewSize.center(Offset.zero),
+          color: _color,
+          sourceSize: _balloonSize.width,
+          big: false,
+        );
+      }
       addBalloonBurstRing(
         rings: _rings,
         center: _previewSize.center(Offset.zero),
@@ -5076,7 +5056,10 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                 (_effectDuration.inMilliseconds / 1000)) {
       _applyPreviewImpact();
     }
-    if (advanceEffects(_pieces, _rings, calculateFrameDelta(delta))) {
+    final dt = calculateFrameDelta(delta);
+    final painterChanged = advanceEffects(_pieces, _rings, dt);
+    final assetChanged = advanceAssetVisualEffects(_assetEffects, dt);
+    if (painterChanged || assetChanged) {
       _effectsRevision++;
     }
   }
@@ -5085,13 +5068,16 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     if (status != AnimationStatus.completed || !mounted) return;
     _pieces.clear();
     _rings.clear();
+    _assetEffects.clear();
     setState(() {
       _effectsRevision++;
       _color = _nextPaletteColor();
-      _visualVariant =
-          widget.definition.chooseVisualVariant(_random.nextDouble());
-      _specialVisual =
-          widget.definition.chooseSpecialSpawn(_random.nextDouble());
+      _visualVariant = widget.definition.chooseVisualVariant(
+        _random.nextDouble(),
+      );
+      _specialVisual = widget.definition.chooseSpecialSpawn(
+        _random.nextDouble(),
+      );
       _toolApproach = _random.nextInt(3);
       _balloonVisible = true;
     });
@@ -5124,6 +5110,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     _idleController.dispose();
     _pieces.clear();
     _rings.clear();
+    _assetEffects.clear();
     super.dispose();
   }
 
@@ -5271,8 +5258,10 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                                     (_effectController.value / impactValue)
                                         .clamp(0.0, 1.0),
                                   );
-                                  final forkMotion =
-                                      shushuForkMotion(_toolApproach, progress);
+                                  final forkMotion = shushuForkMotion(
+                                    _toolApproach,
+                                    progress,
+                                  );
                                   final offset = isFork
                                       ? forkMotion.offset
                                       : Offset.lerp(
@@ -5326,8 +5315,10 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                                           top: target.dy - size * 0.05,
                                           child: Transform.rotate(
                                             angle: angle,
-                                            alignment:
-                                                const Alignment(-0.3, -0.9),
+                                            alignment: const Alignment(
+                                              -0.3,
+                                              -0.9,
+                                            ),
                                             child: SizedBox.square(
                                               dimension: size,
                                               child: tool,
@@ -5366,8 +5357,10 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                                       progress > 0.48) {
                                     return const SizedBox.shrink();
                                   }
-                                  final fade = ((0.48 - progress) / 0.38)
-                                      .clamp(0.0, 1.0);
+                                  final fade = ((0.48 - progress) / 0.38).clamp(
+                                    0.0,
+                                    1.0,
+                                  );
                                   return Center(
                                     child: Opacity(
                                       opacity: fade,
@@ -5378,12 +5371,34 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                                           child: Image.asset(
                                             widget.definition.burstAssetPath!,
                                             fit: BoxFit.contain,
+                                            filterQuality: FilterQuality.low,
+                                            cacheWidth: 320,
                                           ),
                                         ),
                                       ),
                                     ),
                                   );
                                 },
+                              ),
+                            ),
+                          ),
+                        if (_assetEffects.isNotEmpty)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: RepaintBoundary(
+                                key: const ValueKey(
+                                  'balloon-preview-asset-effects',
+                                ),
+                                child: AnimatedBuilder(
+                                  animation: _effectController,
+                                  builder: (context, _) => Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      for (final effect in _assetEffects)
+                                        buildAssetVisualEffect(effect),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -6278,26 +6293,25 @@ class _MochiDetailClipper extends CustomClipper<Path> {
   Path getClip(Size size) {
     final path = Path();
     void oval(double left, double top, double width, double height) {
-      path.addOval(Rect.fromLTWH(
-        size.width * left,
-        size.height * top,
-        size.width * width,
-        size.height * height,
-      ));
+      path.addOval(
+        Rect.fromLTWH(
+          size.width * left,
+          size.height * top,
+          size.width * width,
+          size.height * height,
+        ),
+      );
     }
 
     // Dark eyes, including their white catchlights.
     oval(0.33, 0.52, 0.08, 0.09);
     oval(0.59, 0.52, 0.08, 0.09);
     // Keep the original pink nose without restoring nearby cheek/body pixels.
-    path.addPolygon(
-      [
-        Offset(size.width * 0.47, size.height * 0.59),
-        Offset(size.width * 0.53, size.height * 0.59),
-        Offset(size.width * 0.50, size.height * 0.63),
-      ],
-      true,
-    );
+    path.addPolygon([
+      Offset(size.width * 0.47, size.height * 0.59),
+      Offset(size.width * 0.53, size.height * 0.59),
+      Offset(size.width * 0.50, size.height * 0.63),
+    ], true);
     return path;
   }
 
@@ -6430,8 +6444,11 @@ class ShapedBalloonPainter extends CustomPainter {
       BalloonShape.star => _starPath(size.width, bodyBottom),
       BalloonShape.flower => _flowerPath(size.width, bodyBottom),
       BalloonShape.rabbit => _rabbitPath(size.width, bodyBottom),
-      BalloonShape.watermelon =>
-        _watermelonPath(size.width, bodyBottom, variant),
+      BalloonShape.watermelon => _watermelonPath(
+          size.width,
+          bodyBottom,
+          variant,
+        ),
       BalloonShape.soccer => _soccerPath(size.width, bodyBottom),
       BalloonShape.ghost => _ghostPath(size.width, bodyBottom, phase),
       BalloonShape.slime => _slimePath(size.width, bodyBottom),
@@ -6579,58 +6596,125 @@ class ShapedBalloonPainter extends CustomPainter {
         return Path()
           ..moveTo(width * 0.12, height * 0.42)
           ..quadraticBezierTo(
-              width * 0.5, height * 0.90, width * 0.88, height * 0.42)
+            width * 0.5,
+            height * 0.90,
+            width * 0.88,
+            height * 0.42,
+          )
           ..quadraticBezierTo(
-              width * 0.5, height * 0.18, width * 0.12, height * 0.42)
+            width * 0.5,
+            height * 0.18,
+            width * 0.12,
+            height * 0.42,
+          )
           ..close();
       case 1:
         return Path()
           ..moveTo(width * 0.50, height * 0.10)
           ..quadraticBezierTo(
-              width * 0.54, height * 0.10, width * 0.88, height * 0.75)
+            width * 0.54,
+            height * 0.10,
+            width * 0.88,
+            height * 0.75,
+          )
           ..quadraticBezierTo(
-              width * 0.50, height * 0.91, width * 0.12, height * 0.75)
+            width * 0.50,
+            height * 0.91,
+            width * 0.12,
+            height * 0.75,
+          )
           ..quadraticBezierTo(
-              width * 0.46, height * 0.10, width * 0.50, height * 0.10)
+            width * 0.46,
+            height * 0.10,
+            width * 0.50,
+            height * 0.10,
+          )
           ..close();
       default:
         return Path()
-          ..addOval(Rect.fromLTWH(
-              width * 0.10, height * 0.08, width * 0.80, height * 0.78));
+          ..addOval(
+            Rect.fromLTWH(
+              width * 0.10,
+              height * 0.08,
+              width * 0.80,
+              height * 0.78,
+            ),
+          );
     }
   }
 
   Path _soccerPath(double width, double height) => Path()
-    ..addOval(Rect.fromLTWH(
-        width * 0.08, height * 0.05, width * 0.84, height * 0.82));
+    ..addOval(
+      Rect.fromLTWH(width * 0.08, height * 0.05, width * 0.84, height * 0.82),
+    );
 
   Path _ghostPath(double width, double height, double phase) {
     final wave = sin(phase) * width * 0.018;
     return Path()
       ..moveTo(width * 0.14, height * 0.78)
       ..lineTo(width * 0.14, height * 0.40)
-      ..cubicTo(width * 0.14, height * 0.12, width * 0.32, height * 0.02,
-          width * 0.50, height * 0.02)
-      ..cubicTo(width * 0.72, height * 0.02, width * 0.86, height * 0.19,
-          width * 0.86, height * 0.42)
+      ..cubicTo(
+        width * 0.14,
+        height * 0.12,
+        width * 0.32,
+        height * 0.02,
+        width * 0.50,
+        height * 0.02,
+      )
+      ..cubicTo(
+        width * 0.72,
+        height * 0.02,
+        width * 0.86,
+        height * 0.19,
+        width * 0.86,
+        height * 0.42,
+      )
       ..lineTo(width * 0.86, height * 0.79)
       ..quadraticBezierTo(
-          width * 0.75, height * 0.68 + wave, width * 0.65, height * 0.82)
+        width * 0.75,
+        height * 0.68 + wave,
+        width * 0.65,
+        height * 0.82,
+      )
       ..quadraticBezierTo(
-          width * 0.53, height * 0.69 - wave, width * 0.43, height * 0.82)
+        width * 0.53,
+        height * 0.69 - wave,
+        width * 0.43,
+        height * 0.82,
+      )
       ..quadraticBezierTo(
-          width * 0.31, height * 0.69 + wave, width * 0.14, height * 0.78)
+        width * 0.31,
+        height * 0.69 + wave,
+        width * 0.14,
+        height * 0.78,
+      )
       ..close();
   }
 
   Path _slimePath(double width, double height) => Path()
     ..moveTo(width * 0.11, height * 0.78)
-    ..cubicTo(width * 0.13, height * 0.48, width * 0.24, height * 0.12,
-        width * 0.50, height * 0.08)
-    ..cubicTo(width * 0.76, height * 0.12, width * 0.87, height * 0.48,
-        width * 0.89, height * 0.78)
+    ..cubicTo(
+      width * 0.13,
+      height * 0.48,
+      width * 0.24,
+      height * 0.12,
+      width * 0.50,
+      height * 0.08,
+    )
+    ..cubicTo(
+      width * 0.76,
+      height * 0.12,
+      width * 0.87,
+      height * 0.48,
+      width * 0.89,
+      height * 0.78,
+    )
     ..quadraticBezierTo(
-        width * 0.50, height * 0.91, width * 0.11, height * 0.78)
+      width * 0.50,
+      height * 0.91,
+      width * 0.11,
+      height * 0.78,
+    )
     ..close();
 
   Path _crystalPath(double width, double height) => Path()
@@ -6644,16 +6728,46 @@ class ShapedBalloonPainter extends CustomPainter {
 
   Path _creamPuffPath(double width, double height) => Path()
     ..moveTo(width * 0.12, height * 0.63)
-    ..cubicTo(width * 0.08, height * 0.43, width * 0.20, height * 0.28,
-        width * 0.34, height * 0.30)
-    ..cubicTo(width * 0.36, height * 0.12, width * 0.58, height * 0.07,
-        width * 0.65, height * 0.27)
-    ..cubicTo(width * 0.82, height * 0.22, width * 0.94, height * 0.43,
-        width * 0.87, height * 0.61)
-    ..cubicTo(width * 0.93, height * 0.79, width * 0.69, height * 0.88,
-        width * 0.51, height * 0.83)
-    ..cubicTo(width * 0.31, height * 0.90, width * 0.06, height * 0.79,
-        width * 0.12, height * 0.63)
+    ..cubicTo(
+      width * 0.08,
+      height * 0.43,
+      width * 0.20,
+      height * 0.28,
+      width * 0.34,
+      height * 0.30,
+    )
+    ..cubicTo(
+      width * 0.36,
+      height * 0.12,
+      width * 0.58,
+      height * 0.07,
+      width * 0.65,
+      height * 0.27,
+    )
+    ..cubicTo(
+      width * 0.82,
+      height * 0.22,
+      width * 0.94,
+      height * 0.43,
+      width * 0.87,
+      height * 0.61,
+    )
+    ..cubicTo(
+      width * 0.93,
+      height * 0.79,
+      width * 0.69,
+      height * 0.88,
+      width * 0.51,
+      height * 0.83,
+    )
+    ..cubicTo(
+      width * 0.31,
+      height * 0.90,
+      width * 0.06,
+      height * 0.79,
+      width * 0.12,
+      height * 0.63,
+    )
     ..close();
 
   Path _rabbitPath(double width, double height) => Path()
@@ -6741,7 +6855,8 @@ class ShapedBalloonPainter extends CustomPainter {
         ..shader = const RadialGradient(
           colors: [Color(0xFFFFF5A3), Color(0xFFFFC94D)],
         ).createShader(
-            Rect.fromCircle(center: center, radius: size.width * 0.17)),
+          Rect.fromCircle(center: center, radius: size.width * 0.17),
+        ),
     );
   }
 
@@ -6758,8 +6873,12 @@ class ShapedBalloonPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     if (variant % 3 == 0) {
       canvas.drawArc(
-        Rect.fromLTWH(size.width * 0.12, bodyBottom * 0.18, size.width * 0.76,
-            bodyBottom * 0.62),
+        Rect.fromLTWH(
+          size.width * 0.12,
+          bodyBottom * 0.18,
+          size.width * 0.76,
+          bodyBottom * 0.62,
+        ),
         0.18,
         pi - 0.36,
         false,
@@ -6773,8 +6892,12 @@ class ShapedBalloonPainter extends CustomPainter {
       );
     } else {
       canvas.drawOval(
-        Rect.fromLTWH(size.width * 0.12, bodyBottom * 0.10, size.width * 0.76,
-            bodyBottom * 0.72),
+        Rect.fromLTWH(
+          size.width * 0.12,
+          bodyBottom * 0.10,
+          size.width * 0.76,
+          bodyBottom * 0.72,
+        ),
         green,
       );
     }
@@ -6826,8 +6949,12 @@ class ShapedBalloonPainter extends CustomPainter {
     }
   }
 
-  void _paintFace(Canvas canvas, Size size, double bodyBottom,
-      {required bool mouth}) {
+  void _paintFace(
+    Canvas canvas,
+    Size size,
+    double bodyBottom, {
+    required bool mouth,
+  }) {
     final face = Paint()..color = const Color(0xFF4C4358);
     canvas.drawOval(
       Rect.fromCenter(
@@ -6883,8 +7010,10 @@ class ShapedBalloonPainter extends CustomPainter {
         canvas.drawLine(
           start,
           start +
-              Offset((i.isEven ? -1 : 1) * size.width * 0.12,
-                  bodyBottom * (0.10 + i * 0.025)),
+              Offset(
+                (i.isEven ? -1 : 1) * size.width * 0.12,
+                bodyBottom * (0.10 + i * 0.025),
+              ),
           crack,
         );
       }
@@ -6895,8 +7024,12 @@ class ShapedBalloonPainter extends CustomPainter {
     final cream = Paint()..color = const Color(0xFFFFF0A8);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.20, bodyBottom * 0.57, size.width * 0.60,
-            bodyBottom * 0.17),
+        Rect.fromLTWH(
+          size.width * 0.20,
+          bodyBottom * 0.57,
+          size.width * 0.60,
+          bodyBottom * 0.17,
+        ),
         Radius.circular(size.width * 0.08),
       ),
       cream,
@@ -6922,8 +7055,10 @@ class ShapedBalloonPainter extends CustomPainter {
       final drops = (damageProgress * 4).ceil().clamp(1, 4);
       for (var i = 0; i < drops; i++) {
         canvas.drawCircle(
-          Offset(size.width * (0.34 + i * 0.11),
-              bodyBottom * (0.72 + (i.isEven ? 0.02 : 0.06))),
+          Offset(
+            size.width * (0.34 + i * 0.11),
+            bodyBottom * (0.72 + (i.isEven ? 0.02 : 0.06)),
+          ),
           size.width * 0.025,
           Paint()..color = const Color(0xFFFFE88F),
         );
@@ -7172,27 +7307,59 @@ class EffectsPainter extends CustomPainter {
         EffectPieceShape.mist || EffectPieceShape.gel => Path()
           ..addOval(Offset.zero & pieceSize),
         EffectPieceShape.pickaxe => Path()
-          ..addRRect(RRect.fromRectAndRadius(
-            Rect.fromLTWH(pieceSize.width * 0.42, 0, pieceSize.width * 0.16,
-                pieceSize.height),
-            const Radius.circular(2),
-          ))
-          ..addRRect(RRect.fromRectAndRadius(
-            Rect.fromLTWH(0, 0, pieceSize.width, pieceSize.height * 0.20),
-            const Radius.circular(3),
-          )),
+          ..addRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromLTWH(
+                pieceSize.width * 0.42,
+                0,
+                pieceSize.width * 0.16,
+                pieceSize.height,
+              ),
+              const Radius.circular(2),
+            ),
+          )
+          ..addRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromLTWH(0, 0, pieceSize.width, pieceSize.height * 0.20),
+              const Radius.circular(3),
+            ),
+          ),
         EffectPieceShape.fork => Path()
-          ..addRRect(RRect.fromRectAndRadius(
-            Rect.fromLTWH(pieceSize.width * 0.42, pieceSize.height * 0.20,
-                pieceSize.width * 0.16, pieceSize.height * 0.80),
-            const Radius.circular(2),
-          ))
-          ..addRect(Rect.fromLTWH(
-              0, 0, pieceSize.width * 0.18, pieceSize.height * 0.42))
-          ..addRect(Rect.fromLTWH(pieceSize.width * 0.41, 0,
-              pieceSize.width * 0.18, pieceSize.height * 0.42))
-          ..addRect(Rect.fromLTWH(pieceSize.width * 0.82, 0,
-              pieceSize.width * 0.18, pieceSize.height * 0.42)),
+          ..addRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromLTWH(
+                pieceSize.width * 0.42,
+                pieceSize.height * 0.20,
+                pieceSize.width * 0.16,
+                pieceSize.height * 0.80,
+              ),
+              const Radius.circular(2),
+            ),
+          )
+          ..addRect(
+            Rect.fromLTWH(
+              0,
+              0,
+              pieceSize.width * 0.18,
+              pieceSize.height * 0.42,
+            ),
+          )
+          ..addRect(
+            Rect.fromLTWH(
+              pieceSize.width * 0.41,
+              0,
+              pieceSize.width * 0.18,
+              pieceSize.height * 0.42,
+            ),
+          )
+          ..addRect(
+            Rect.fromLTWH(
+              pieceSize.width * 0.82,
+              0,
+              pieceSize.width * 0.18,
+              pieceSize.height * 0.42,
+            ),
+          ),
         EffectPieceShape.shard => Path()
           ..moveTo(pieceSize.width * 0.50, 0)
           ..lineTo(pieceSize.width, pieceSize.height * 0.32)
