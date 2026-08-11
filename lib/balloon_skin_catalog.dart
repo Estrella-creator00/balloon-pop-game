@@ -271,7 +271,6 @@ abstract final class BalloonSkinCatalog {
       supportsBossSkin: true, shopOrder: 4, previewColor: Color(0xFFFF91B8),
       avoidImmediateColorRepeat: true,
       imageDetailMask: BalloonImageDetailMask.mochiFace,
-      popSoundAssetPath: 'assets/sounds/mochi_wing_flap.mp3.mp3',
     ),
     BalloonSkinDefinition(
       id: 'balloon-wari',

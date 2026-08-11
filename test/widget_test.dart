@@ -304,6 +304,25 @@ void main() {
     expect(() => StageConfig.forStage(31), throwsRangeError);
   });
 
+  test('shushu fork approaches are all above the impact point', () {
+    final angles = <double>[];
+    for (var approach = 0; approach < 3; approach++) {
+      final start = shushuForkMotion(approach, 0);
+      final impact = shushuForkMotion(approach, 1);
+      expect(start.offset.dy, lessThan(0));
+      expect(impact.offset, Offset.zero);
+      angles.add(impact.angle);
+    }
+    expect(angles.toSet(), hasLength(3));
+  });
+
+  test('gemi shard tint follows the current gem color', () {
+    expect(
+      gemShardTintFilter(const Color(0xFF2196F3)),
+      isNot(gemShardTintFilter(const Color(0xFFE53935))),
+    );
+  });
+
   test('stage 30 shared HP and role swap policy are deterministic by roll', () {
     final state = Stage30BossState();
     expect(stage30BossSwapChance, 0.50);
@@ -631,6 +650,13 @@ void main() {
     expect(rabbit.price, 500);
     expect(rabbit.rarity, BalloonRarity.rare);
     expect(rabbit.rendererType, BalloonRendererType.image);
+    expect(rabbit.popSoundAssetPath, isNull);
+
+    final wari = BalloonSkinCatalog.byIdOrDefault('balloon-wari');
+    expect(
+      wari.popSoundAssetPath,
+      'assets/sounds/wari_watermelon_bite.mp3.mp3',
+    );
 
     expect(
       BalloonSkinCatalog.newItemIds,
@@ -2898,6 +2924,22 @@ void main() {
     expect(hapticCount, 1);
   });
 
+  testWidgets('gameplay frames reuse the static background widget',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tapSectionStart(tester, 1);
+
+    final before = tester.widget<GameBalloonBackground>(
+      find.byType(GameBalloonBackground),
+    );
+    await tester.pump(gameLoopInterval);
+    final after = tester.widget<GameBalloonBackground>(
+      find.byType(GameBalloonBackground),
+    );
+    expect(identical(before, after), isTrue);
+  });
+
   testWidgets('effects use one batched painter instead of particle widgets',
       (tester) async {
     await tester.pumpWidget(const BalloonPopApp());
@@ -3353,6 +3395,11 @@ void main() {
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsNothing);
     expect(find.text('BOSS CLEAR!'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(const ValueKey('stage-intro-31')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.byKey(const ValueKey('stage-intro-31')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
+    await tester.pump();
     expect(find.text('게임 완료!'), findsOneWidget);
   });
 
@@ -3677,6 +3724,9 @@ void main() {
     expect(expectedFinalScore, greaterThan(scoreAtStage20Clear));
 
     await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(const ValueKey('stage-intro-31')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
+    await tester.pump();
     expect(find.text('게임 완료!'), findsOneWidget);
     expect(find.text('$expectedFinalScore점'), findsOneWidget);
     final firstReward = expectedFinalScore ~/ 10;
@@ -3713,6 +3763,9 @@ void main() {
       await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
     }
     await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(const ValueKey('stage-intro-31')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
+    await tester.pump();
     expect(homeButton, findsOneWidget);
     await tester.tap(homeButton);
     await tester.pump();
@@ -3864,6 +3917,28 @@ void main() {
       expect(find.byKey(const ValueKey<int>(0)), findsOneWidget);
       await tester.pump(gameLoopInterval);
       expect(find.byKey(const ValueKey<int>(0)), findsNothing);
+      if (id == 'balloon-lumen') {
+        final effectsPainter = tester
+            .widget<CustomPaint>(
+              find.descendant(
+                of: find.byKey(const ValueKey('effects-boundary')),
+                matching: find.byType(CustomPaint),
+              ),
+            )
+            .painter! as EffectsPainter;
+        expect(effectsPainter.pieceCount, 0);
+        final shardImages = tester.widgetList<Image>(find.byType(Image)).where(
+          (image) {
+            try {
+              return assetNameOf(image.image) ==
+                  'assets/images/gemi_shard.png.png';
+            } catch (_) {
+              return false;
+            }
+          },
+        );
+        expect(shardImages.length, greaterThanOrEqualTo(8));
+      }
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();

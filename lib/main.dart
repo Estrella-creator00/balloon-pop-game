@@ -794,6 +794,7 @@ class AssetVisualEffect {
     required this.maxLife,
     this.removeLightBackground = false,
     this.cropScale = 1,
+    this.tint,
   });
 
   final String assetPath;
@@ -806,14 +807,74 @@ class AssetVisualEffect {
   final double maxLife;
   final bool removeLightBackground;
   final double cropScale;
+  final Color? tint;
+}
+
+ColorFilter gemShardTintFilter(Color color) {
+  const brightness = 1.4;
+  final red = color.r * brightness;
+  final green = color.g * brightness;
+  final blue = color.b * brightness;
+  return ColorFilter.matrix(<double>[
+    0.2126 * red,
+    0.7152 * red,
+    0.0722 * red,
+    0,
+    0,
+    0.2126 * green,
+    0.7152 * green,
+    0.0722 * green,
+    0,
+    0,
+    0.2126 * blue,
+    0.7152 * blue,
+    0.0722 * blue,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+  ]);
+}
+
+@immutable
+class ShushuForkMotion {
+  const ShushuForkMotion({required this.offset, required this.angle});
+
+  final Offset offset;
+  final double angle;
+}
+
+ShushuForkMotion shushuForkMotion(int approach, double progress) {
+  const starts = <Offset>[
+    Offset(0, -88),
+    Offset(-72, -72),
+    Offset(72, -72),
+  ];
+  const endAngles = <double>[-2.72, 2.78, -1.94];
+  const angleLeads = <double>[0.14, -0.16, 0.16];
+  final index = approach.clamp(0, 2);
+  final eased = progress.clamp(0.0, 1.0);
+  return ShushuForkMotion(
+    offset: Offset.lerp(starts[index], Offset.zero, eased)!,
+    angle: endAngles[index] + angleLeads[index] * (1 - eased),
+  );
 }
 
 class PendingToolHit {
-  PendingToolHit.balloon({required this.balloon, required this.definition})
-      : boss = null;
+  PendingToolHit.balloon({
+    required this.balloon,
+    required this.definition,
+    this.toolApproach = 0,
+  }) : boss = null;
 
-  PendingToolHit.boss({required this.boss, required this.definition})
-      : balloon = null;
+  PendingToolHit.boss({
+    required this.boss,
+    required this.definition,
+    this.toolApproach = 0,
+  }) : balloon = null;
 
   static const impactTime = 0.14;
   static const totalTime = 0.24;
@@ -821,6 +882,7 @@ class PendingToolHit {
   final Balloon? balloon;
   final BossBalloon? boss;
   final BalloonSkinDefinition definition;
+  final int toolApproach;
   double elapsed = 0;
   bool impactApplied = false;
 
@@ -1064,6 +1126,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   final List<FloatingTextFeedback> _feedbacks = [];
   final List<AssetVisualEffect> _assetEffects = [];
   final List<PendingToolHit> _pendingToolHits = [];
+  final ValueNotifier<int> _gameplayFrame = ValueNotifier<int>(0);
+  final ValueNotifier<double> _crystalBackgroundPulse =
+      ValueNotifier<double>(0);
   int _effectsRevision = 0;
   final SinglePeriodicGameLoop _gameLoop = SinglePeriodicGameLoop();
   final CoinRewardSession _coinRewardSession = CoinRewardSession();
@@ -1098,7 +1163,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   late final Widget _gameHeader;
   int _stagePage = 0;
   bool _initialAssetsPrecached = false;
-  double _crystalBackgroundPulse = 0;
+  bool _stageAdvanceScheduled = false;
+  bool _introTargetPlayable = true;
 
   StageConfig get _stageConfig => StageConfig.forStage(_stage);
 
@@ -1352,12 +1418,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _startStage() {
     _stageTimer?.cancel();
+    _stageAdvanceScheduled = false;
     _phase = GamePhase.playing;
     _balloons.clear();
     _bosses.clear();
     _stage30BossState = null;
     _pendingToolHits.clear();
-    _crystalBackgroundPulse = 0;
+    _crystalBackgroundPulse.value = 0;
 
     if (_playArea == Size.zero) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1547,7 +1614,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _updatePendingToolHits(widget.toolHitDeltaForTest ?? dt);
     if (_phase == GamePhase.stageClear || _phase == GamePhase.bossClear) {
       _updateEffects(dt);
-      setState(() {});
+      _gameplayFrame.value++;
       return;
     }
     if (_phase != GamePhase.playing) return;
@@ -1566,7 +1633,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondsLeft = secondsLeft;
       _publishHeader();
     }
-    setState(() {});
+    _gameplayFrame.value++;
   }
 
   void _updateBalloons(double dt) {
@@ -1662,16 +1729,21 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       (hit) => identical(hit.balloon, balloon) && identical(hit.boss, boss),
     );
     if (alreadyPending) return true;
+    final toolApproach = definition.popEffectType == BalloonPopEffectType.cream
+        ? _random.nextInt(3)
+        : 0;
     setState(() {
       _pendingToolHits.add(
         balloon != null
             ? PendingToolHit.balloon(
                 balloon: balloon,
                 definition: definition,
+                toolApproach: toolApproach,
               )
             : PendingToolHit.boss(
                 boss: boss!,
                 definition: definition,
+                toolApproach: toolApproach,
               ),
       );
     });
@@ -1711,7 +1783,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       changed = true;
     }
     _assetEffects.removeWhere((effect) => effect.life <= 0);
-    _crystalBackgroundPulse = max(0, _crystalBackgroundPulse - dt * 4.8);
+    final nextCrystalPulse = max(0.0, _crystalBackgroundPulse.value - dt * 4.8);
+    if (nextCrystalPulse != _crystalBackgroundPulse.value) {
+      _crystalBackgroundPulse.value = nextCrystalPulse;
+    }
     if (changed) {
       _effectsRevision++;
     }
@@ -1745,7 +1820,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         balloon.position + Offset(balloon.size / 2, balloon.size / 2);
     if (balloon.hp > 1) {
       if (!playBalloonHitSound(skin)) PopSound.playLightTap();
-      _spawnGemiShards(skin, center, balloon.size, count: 2);
+      _spawnGemiShards(
+        skin,
+        center,
+        balloon.size,
+        balloon.color,
+        count: 2,
+      );
       _registerLegendaryBackgroundImpact(skin, finalHit: false);
       setState(() {
         balloon.hp--;
@@ -1849,6 +1930,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _showStageClear() {
+    if (_stageAdvanceScheduled) return;
+    _stageAdvanceScheduled = true;
     _stopGameLoop();
     _stopwatch.stop();
     _score += _secondsLeft;
@@ -1871,26 +1954,40 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _advanceRunAfterClear() {
     final nextStage = StageConfig.nextStageAfter(_stage);
+    final boundaryStage = _stage + 1;
+    if (stageIntroDefinitions.containsKey(boundaryStage)) {
+      _introTargetPlayable = nextStage == boundaryStage;
+      _stage = boundaryStage;
+      if (_introTargetPlayable) {
+        _secondsLeft = StageConfig.forStage(boundaryStage).duration.inSeconds;
+      }
+      _phase = GamePhase.stageIntro;
+      _pendingToolHits.clear();
+      _stageAdvanceScheduled = false;
+      _publishHeader();
+      return;
+    }
+
     if (nextStage == null) {
       _completeGame();
       return;
     }
 
     _stage = nextStage;
-    if (stageIntroDefinitions.containsKey(nextStage)) {
-      _secondsLeft = StageConfig.forStage(nextStage).duration.inSeconds;
-      _phase = GamePhase.stageIntro;
-      _pendingToolHits.clear();
-      _publishHeader();
-      return;
-    }
     _startStage();
   }
 
   void _dismissStageIntro() {
     if (_phase != GamePhase.stageIntro) return;
     PopSound.playUiClick();
-    setState(_startStage);
+    if (_introTargetPlayable) {
+      setState(_startStage);
+    } else {
+      setState(() {
+        _stage = StageConfig.lastImplementedStage;
+        _completeGame();
+      });
+    }
   }
 
   void _hitBoss(BossBalloon boss) {
@@ -1918,12 +2015,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       boss,
       skin,
     );
-    _spawnGemiShards(skin, center, boss.size, count: 2);
+    final finalHit = _currentBossHp(boss) <= 1;
+    if (!finalHit) {
+      _spawnGemiShards(skin, center, boss.size, hitColor, count: 2);
+    }
     _registerLegendaryBackgroundImpact(
       skin,
-      finalHit: _currentBossHp(boss) <= 1,
+      finalHit: finalHit,
     );
-    _spawnPieces(center, hitColor, boss.size * 0.35, big: false);
+    if (skin.shardAssetPath == null) {
+      _spawnPieces(center, hitColor, boss.size * 0.35, big: false);
+    }
 
     setState(() {
       final sharedState = _stage30BossState;
@@ -2007,6 +2109,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _finishBossStageClear() {
+    if (_stageAdvanceScheduled) return;
+    _stageAdvanceScheduled = true;
     _stopGameLoop();
     _stopwatch.stop();
     _score += _secondsLeft;
@@ -2063,23 +2167,32 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     double sourceSize, {
     required bool big,
   }) {
-    addBalloonPopEffect(
-      definition: skin,
-      pieces: _pieces,
-      random: _random,
-      center: center,
-      color: color,
-      sourceSize: sourceSize,
+    if (skin.shardAssetPath == null) {
+      addBalloonPopEffect(
+        definition: skin,
+        pieces: _pieces,
+        random: _random,
+        center: center,
+        color: color,
+        sourceSize: sourceSize,
+        big: big,
+      );
+    }
+    _spawnSkinAssetPopEffects(
+      skin,
+      center,
+      sourceSize,
+      color,
       big: big,
     );
-    _spawnSkinAssetPopEffects(skin, center, sourceSize, big: big);
     _effectsRevision++;
   }
 
   void _spawnGemiShards(
     BalloonSkinDefinition skin,
     Offset center,
-    double sourceSize, {
+    double sourceSize,
+    Color color, {
     required int count,
   }) {
     final path = skin.shardAssetPath;
@@ -2099,6 +2212,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           maxLife: 0.48,
           removeLightBackground: true,
           cropScale: 3.5,
+          tint: color,
         ),
       );
     }
@@ -2110,13 +2224,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     required bool finalHit,
   }) {
     if (skin.background != BalloonBackgroundType.crystalCave) return;
-    _crystalBackgroundPulse = finalHit ? 1 : max(_crystalBackgroundPulse, 0.55);
+    _crystalBackgroundPulse.value =
+        finalHit ? 1 : max(_crystalBackgroundPulse.value, 0.55);
   }
 
   void _spawnSkinAssetPopEffects(
     BalloonSkinDefinition skin,
     Offset center,
-    double sourceSize, {
+    double sourceSize,
+    Color color, {
     required bool big,
   }) {
     if (skin.shardAssetPath != null) {
@@ -2124,7 +2240,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         skin,
         center,
         sourceSize,
-        count: big ? 10 : 6,
+        color,
+        count: big ? 12 : 8,
       );
     }
 
@@ -2255,6 +2372,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stageTimer?.cancel();
     _stopwatch.stop();
     _headerData.dispose();
+    _gameplayFrame.dispose();
+    _crystalBackgroundPulse.dispose();
     _stagePageController.dispose();
     super.dispose();
   }
@@ -3932,10 +4051,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         children: [
           if (hasDedicatedBackground)
             Positioned.fill(
-              child: GameBalloonBackground(
-                definition: equippedSkin,
-                crystalPulse: _crystalBackgroundPulse,
-              ),
+              child:
+                  equippedSkin.background == BalloonBackgroundType.crystalCave
+                      ? ValueListenableBuilder<double>(
+                          valueListenable: _crystalBackgroundPulse,
+                          builder: (context, pulse, _) => GameBalloonBackground(
+                            definition: equippedSkin,
+                            crystalPulse: pulse,
+                          ),
+                        )
+                      : GameBalloonBackground(definition: equippedSkin),
             ),
           Positioned.fill(
             child: Container(
@@ -3976,59 +4101,64 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           } else if (_playArea != newSize) {
                             _playArea = newSize;
                           }
-                          return Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              if (!hasDedicatedBackground)
+                          return ValueListenableBuilder<int>(
+                            valueListenable: _gameplayFrame,
+                            child: !hasDedicatedBackground
+                                ? Positioned.fill(
+                                    child: GameBalloonBackground(
+                                      definition: equippedSkin,
+                                    ),
+                                  )
+                                : null,
+                            builder: (context, _, staticBackground) => Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                if (staticBackground != null) staticBackground,
                                 Positioned.fill(
-                                  child: GameBalloonBackground(
-                                    definition: equippedSkin,
-                                  ),
-                                ),
-                              Positioned.fill(
-                                child: IgnorePointer(
-                                  child: RepaintBoundary(
-                                    key: const ValueKey('effects-boundary'),
-                                    child: CustomPaint(
-                                      painter: EffectsPainter(
-                                        pieces: _pieces,
-                                        rings: _rings,
-                                        feedbacks: _feedbacks,
-                                        revision: _effectsRevision,
+                                  child: IgnorePointer(
+                                    child: RepaintBoundary(
+                                      key: const ValueKey('effects-boundary'),
+                                      child: CustomPaint(
+                                        painter: EffectsPainter(
+                                          pieces: _pieces,
+                                          rings: _rings,
+                                          feedbacks: _feedbacks,
+                                          revision: _effectsRevision,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              for (final balloon in _balloons)
-                                _buildBalloon(balloon),
-                              for (final boss in _bosses) _buildBoss(boss),
-                              for (final hit in _pendingToolHits)
-                                _buildPendingToolHit(hit),
-                              for (final effect in _assetEffects)
-                                _buildAssetVisualEffect(effect),
-                              if (_stage == 30 && _phase == GamePhase.playing)
-                                Positioned.fill(
-                                  key:
-                                      const ValueKey('stage-30-boss-hit-layer'),
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.translucent,
-                                    onTapUp: _hitStage30BossAt,
+                                for (final balloon in _balloons)
+                                  _buildBalloon(balloon),
+                                for (final boss in _bosses) _buildBoss(boss),
+                                for (final hit in _pendingToolHits)
+                                  _buildPendingToolHit(hit),
+                                for (final effect in _assetEffects)
+                                  _buildAssetVisualEffect(effect),
+                                if (_stage == 30 && _phase == GamePhase.playing)
+                                  Positioned.fill(
+                                    key: const ValueKey(
+                                        'stage-30-boss-hit-layer'),
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.translucent,
+                                      onTapUp: _hitStage30BossAt,
+                                    ),
                                   ),
-                                ),
-                              if (_phase == GamePhase.stageIntro)
-                                _buildStageIntro(),
-                              if (_phase == GamePhase.stageClear)
-                                _buildCenterMessage('Stage Clear!', null),
-                              if (_phase == GamePhase.bossClear)
-                                _buildCenterMessage('BOSS CLEAR!', null),
-                              if (_phase == GamePhase.paused)
-                                _buildPauseOverlay(),
-                              if (_phase == GamePhase.completed)
-                                _buildGameOver(completed: true),
-                              if (_phase == GamePhase.gameOver)
-                                _buildGameOver(),
-                            ],
+                                if (_phase == GamePhase.stageIntro)
+                                  _buildStageIntro(),
+                                if (_phase == GamePhase.stageClear)
+                                  _buildCenterMessage('Stage Clear!', null),
+                                if (_phase == GamePhase.bossClear)
+                                  _buildCenterMessage('BOSS CLEAR!', null),
+                                if (_phase == GamePhase.paused)
+                                  _buildPauseOverlay(),
+                                if (_phase == GamePhase.completed)
+                                  _buildGameOver(completed: true),
+                                if (_phase == GamePhase.gameOver)
+                                  _buildGameOver(),
+                              ],
+                            ),
                           );
                         },
                       ),
@@ -4154,6 +4284,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
     }
+    final tint = effect.tint;
+    if (tint != null) {
+      image = ColorFiltered(
+        colorFilter: gemShardTintFilter(tint),
+        child: image,
+      );
+    }
     return Positioned(
       left: effect.center.dx - effect.size / 2,
       top: effect.center.dy - effect.size / 2,
@@ -4183,12 +4320,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 (PendingToolHit.totalTime - PendingToolHit.impactTime))
             .clamp(0.0, 1.0);
     final size = isFork ? 100.0 : 116.0;
-    final startOffset = isFork ? const Offset(58, 96) : const Offset(-68, -30);
-    final endOffset = isFork ? const Offset(0, 52) : const Offset(0, 55);
-    final offset = Offset.lerp(startOffset, endOffset, eased)!;
-    final startAngle = isFork ? -0.48 : -1.12;
-    final endAngle = isFork ? -0.12 : -0.08;
-    final angle = startAngle + (endAngle - startAngle) * eased;
+    final forkMotion = shushuForkMotion(hit.toolApproach, eased);
+    final offset = isFork
+        ? forkMotion.offset
+        : Offset.lerp(const Offset(-68, -30), const Offset(0, 55), eased)!;
+    final angle = isFork ? forkMotion.angle : -1.12 + 1.04 * eased;
     Widget toolImage = Image.asset(
       hit.definition.hitToolAssetPath!,
       fit: BoxFit.contain,
@@ -4218,15 +4354,18 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
     }
     final center = hit.center + offset;
+    final left = isFork ? center.dx - size * 0.35 : center.dx - size / 2;
+    final top = isFork ? center.dy - size * 0.05 : center.dy - size / 2;
     return Positioned(
-      left: center.dx - size / 2,
-      top: center.dy - size / 2,
+      left: left,
+      top: top,
       child: IgnorePointer(
         child: Opacity(
           opacity: fade,
           child: Transform.rotate(
             angle: angle,
-            alignment: Alignment.bottomCenter,
+            alignment:
+                isFork ? const Alignment(-0.3, -0.9) : Alignment.bottomCenter,
             child: SizedBox.square(dimension: size, child: toolImage),
           ),
         ),
@@ -4861,6 +5000,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
   int _effectsRevision = 0;
   late int _visualVariant;
   late bool _specialVisual;
+  int _toolApproach = 0;
 
   @override
   void initState() {
@@ -4869,6 +5009,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     _visualVariant =
         widget.definition.chooseVisualVariant(_random.nextDouble());
     _specialVisual = widget.definition.chooseSpecialSpawn(_random.nextDouble());
+    _toolApproach = _random.nextInt(3);
     _effectController =
         AnimationController(vsync: this, duration: _effectDuration)
           ..addListener(_advanceEffects)
@@ -4951,6 +5092,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
           widget.definition.chooseVisualVariant(_random.nextDouble());
       _specialVisual =
           widget.definition.chooseSpecialSpawn(_random.nextDouble());
+      _toolApproach = _random.nextInt(3);
       _balloonVisible = true;
     });
     _schedulePop();
@@ -5129,17 +5271,17 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                                     (_effectController.value / impactValue)
                                         .clamp(0.0, 1.0),
                                   );
-                                  final offset = Offset.lerp(
-                                    isFork
-                                        ? const Offset(48, 70)
-                                        : const Offset(-56, -32),
-                                    isFork
-                                        ? const Offset(0, 42)
-                                        : const Offset(0, 45),
-                                    progress,
-                                  )!;
+                                  final forkMotion =
+                                      shushuForkMotion(_toolApproach, progress);
+                                  final offset = isFork
+                                      ? forkMotion.offset
+                                      : Offset.lerp(
+                                          const Offset(-56, -32),
+                                          const Offset(0, 45),
+                                          progress,
+                                        )!;
                                   final angle = isFork
-                                      ? -0.48 + 0.36 * progress
+                                      ? forkMotion.angle
                                       : -1.12 + 1.04 * progress;
                                   final size = isFork ? 96.0 : 112.0;
                                   Widget tool = Image.asset(
@@ -5170,6 +5312,28 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                                           ),
                                         ),
                                         tool,
+                                      ],
+                                    );
+                                  }
+                                  if (isFork) {
+                                    final target =
+                                        _previewSize.center(Offset.zero) +
+                                            offset;
+                                    return Stack(
+                                      children: [
+                                        Positioned(
+                                          left: target.dx - size * 0.35,
+                                          top: target.dy - size * 0.05,
+                                          child: Transform.rotate(
+                                            angle: angle,
+                                            alignment:
+                                                const Alignment(-0.3, -0.9),
+                                            child: SizedBox.square(
+                                              dimension: size,
+                                              child: tool,
+                                            ),
+                                          ),
+                                        ),
                                       ],
                                     );
                                   }
