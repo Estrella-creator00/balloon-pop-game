@@ -5891,6 +5891,9 @@ class GameBalloonBackground extends StatelessWidget {
         background: definition.background,
         fallback: const PlaySky(),
         crystalPulse: crystalPulse,
+        assetPathOverride: BalloonBackgroundRegistry.gameplayAssetPathFor(
+          definition.background,
+        ),
       );
 }
 

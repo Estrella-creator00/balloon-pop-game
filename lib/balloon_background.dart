@@ -33,6 +33,15 @@ abstract final class BalloonBackgroundRegistry {
   };
   static BalloonBackgroundSpec definitionFor(BalloonBackgroundType type) =>
       definitions[type]!;
+
+  static String? gameplayAssetPathFor(BalloonBackgroundType type) =>
+      switch (type) {
+        BalloonBackgroundType.crystalCave =>
+          'assets/images/gemi_background_mobile.png',
+        BalloonBackgroundType.creamCafe =>
+          'assets/images/shushu_background_mobile.png',
+        _ => definitionFor(type).assetPath,
+      };
 }
 
 /// Shared static renderer for preview and gameplay. Legendary themes are
@@ -44,15 +53,17 @@ class BalloonBackgroundRenderer extends StatelessWidget {
     required this.fallback,
     this.fit = BoxFit.cover,
     this.crystalPulse = 0,
+    this.assetPathOverride,
   });
   final BalloonBackgroundType background;
   final Widget fallback;
   final BoxFit fit;
   final double crystalPulse;
+  final String? assetPathOverride;
 
   @override
   Widget build(BuildContext context) {
-    final assetPath =
+    final assetPath = assetPathOverride ??
         BalloonBackgroundRegistry.definitionFor(background).assetPath;
     if (assetPath != null) {
       final image = Image.asset(

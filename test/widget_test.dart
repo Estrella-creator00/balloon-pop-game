@@ -846,8 +846,16 @@ void main() {
     );
 
     for (final entry in const [
-      ('balloon-lumen', 'assets/images/gemi_background_asset.png'),
-      ('balloon-chouchou', 'assets/images/shushu_background_asset.png'),
+      (
+        'balloon-lumen',
+        'assets/images/gemi_background_mobile.png',
+        'assets/images/gemi_background_asset.png',
+      ),
+      (
+        'balloon-chouchou',
+        'assets/images/shushu_background_mobile.png',
+        'assets/images/shushu_background_asset.png',
+      ),
     ]) {
       final definition = BalloonSkinCatalog.byIdOrDefault(entry.$1);
       await tester.pumpWidget(MaterialApp(
@@ -855,6 +863,11 @@ void main() {
       ));
       final image = tester.widget<Image>(find.byType(Image));
       expect(assetNameOf(image.image), entry.$2);
+      expect(
+        BalloonBackgroundRegistry.definitionFor(definition.background)
+            .assetPath,
+        entry.$3,
+      );
     }
   });
 

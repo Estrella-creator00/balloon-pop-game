@@ -41,6 +41,8 @@ flutter:
     - assets/images/shushu_cream_screen_asset.png
     - assets/images/gemi_background_asset.png
     - assets/images/shushu_background_asset.png
+    - assets/images/gemi_background_mobile.png
+    - assets/images/shushu_background_mobile.png
     - assets/images/muggy_break.mp3.mp3
     - assets/images/gemi_pickaxe_hit.mp3.mp3
     - assets/images/gemi_break.mp3.mp3
