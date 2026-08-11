@@ -536,6 +536,105 @@ void main() {
     }
   });
 
+  testWidgets('gemi reuses its body tint filter for the same color', (
+    tester,
+  ) async {
+    final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
+    const color = Color(0xFF1976D2);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Row(
+          children: [
+            for (var index = 0; index < 2; index++)
+              SizedBox.square(
+                key: ValueKey('cached-gemi-$index'),
+                dimension: 100,
+                child: BalloonSkinArtwork(definition: gemi, color: color),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    final filters = tester
+        .widgetList<ColorFiltered>(find.byType(ColorFiltered))
+        .map((widget) => widget.colorFilter)
+        .toList();
+    expect(filters, hasLength(2));
+    expect(identical(filters.first, filters.last), isTrue);
+  });
+
+  testWidgets('crystal pulse only changes a cached glow opacity', (
+    tester,
+  ) async {
+    final pulse = ValueNotifier<double>(0);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 640,
+          child: BalloonBackgroundRenderer(
+            background: BalloonBackgroundType.crystalCave,
+            fallback: const SizedBox.expand(),
+            assetPathOverride: 'assets/images/gemi_background_mobile.png',
+            cacheWidth: 720,
+            crystalPulseListenable: pulse,
+          ),
+        ),
+      ),
+    );
+    final backgroundImage = tester.widget<Image>(find.byType(Image));
+    final pulseOpacity = find.ancestor(
+      of: find.byKey(const ValueKey('background-crystal-pulse-glow')),
+      matching: find.byType(Opacity),
+    );
+    expect(tester.widget<Opacity>(pulseOpacity).opacity, 0);
+
+    pulse.value = 1;
+    await tester.pump();
+    expect(
+      identical(backgroundImage, tester.widget<Image>(find.byType(Image))),
+      true,
+    );
+    expect(tester.widget<Opacity>(pulseOpacity).opacity, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    pulse.dispose();
+  });
+
+  test('gemi shard and crack layers use independent local paint bounds', () {
+    AssetVisualEffect effect(Offset center, AssetEffectPaintLayer layer) =>
+        AssetVisualEffect(
+          assetPath: 'asset.png',
+          center: center,
+          velocity: Offset.zero,
+          size: 40,
+          rotation: 0,
+          spin: 0,
+          life: 1,
+          maxLife: 1,
+          paintLayer: layer,
+        );
+    final effects = <AssetVisualEffect>[
+      effect(const Offset(80, 100), AssetEffectPaintLayer.gemiShards),
+      effect(const Offset(300, 500), AssetEffectPaintLayer.gemiScreenCrack),
+    ];
+    const viewport = Size(360, 640);
+    final shardBounds = assetEffectPaintBounds(
+      effects,
+      viewport,
+      AssetEffectPaintLayer.gemiShards,
+    );
+    final crackBounds = assetEffectPaintBounds(
+      effects,
+      viewport,
+      AssetEffectPaintLayer.gemiScreenCrack,
+    );
+    expect(shardBounds.width, lessThan(70));
+    expect(shardBounds.height, lessThan(70));
+    expect(crackBounds.width, lessThan(70));
+    expect(shardBounds.overlaps(crackBounds), isFalse);
+  });
+
   test('ranking week uses the Monday 17:00 KST boundary', () {
     final beforeBoundary = RankingWeek.forInstant(
       DateTime.utc(2026, 8, 10, 7, 59, 59),
@@ -2550,17 +2649,14 @@ void main() {
       const ValueKey('balloon-preview-asset-effects'),
     );
     expect(effectLayer, findsOneWidget);
-    final canvas = tester.widget<AssetEffectsCanvas>(
-      find.descendant(
-        of: effectLayer,
-        matching: find.byType(AssetEffectsCanvas),
-      ),
-    );
+    final canvas = tester.widget<AssetEffectsCanvas>(effectLayer);
     expect(
       canvas.effectsForAsset('assets/images/gemi_shard_runtime.png'),
       8,
     );
     expect(canvas.tintedEffectCount, 8);
+    expect(canvas.preloadAssets[gemi.shardAssetPath], 128);
+    expect(canvas.preloadAssets[gemi.screenCrackAssetPath], 320);
     expect(
       find.descendant(of: effectLayer, matching: find.byType(Image)),
       findsNothing,
@@ -4056,6 +4152,16 @@ void main() {
 
       await tapGameTarget(tester, 0);
       expect(find.byKey(const ValueKey<int>(0)), findsOneWidget);
+      if (id == 'balloon-lumen') {
+        final pickaxe = find.byKey(
+          const ValueKey('gemi-pickaxe-raster-boundary'),
+        );
+        expect(pickaxe, findsOneWidget);
+        expect(
+          find.descendant(of: pickaxe, matching: find.byType(ImageFiltered)),
+          findsNothing,
+        );
+      }
       await tester.pump(gameLoopInterval);
       expect(find.byKey(const ValueKey<int>(0)), findsNothing);
       if (id == 'balloon-lumen') {
@@ -4069,10 +4175,7 @@ void main() {
             .painter! as EffectsPainter;
         expect(effectsPainter.pieceCount, 0);
         final assetCanvas = tester.widget<AssetEffectsCanvas>(
-          find.descendant(
-            of: find.byKey(const ValueKey('asset-effects-boundary')),
-            matching: find.byType(AssetEffectsCanvas),
-          ),
+          find.byKey(const ValueKey('asset-effects-boundary')),
         );
         expect(
           assetCanvas.effectsForAsset('assets/images/gemi_shard_runtime.png'),
@@ -4082,12 +4185,7 @@ void main() {
         final effectBoundary = find.byKey(
           const ValueKey('asset-effects-boundary'),
         );
-        final assetCanvas = tester.widget<AssetEffectsCanvas>(
-          find.descendant(
-            of: effectBoundary,
-            matching: find.byType(AssetEffectsCanvas),
-          ),
-        );
+        final assetCanvas = tester.widget<AssetEffectsCanvas>(effectBoundary);
         expect(assetCanvas.effectCount, inInclusiveRange(8, 11));
         expect(
           find.descendant(of: effectBoundary, matching: find.byType(Image)),

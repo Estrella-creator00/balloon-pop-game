@@ -795,6 +795,7 @@ class AssetVisualEffect {
     required this.maxLife,
     this.cacheWidth = 320,
     this.tint,
+    this.paintLayer = AssetEffectPaintLayer.shared,
   });
 
   final String assetPath;
@@ -807,7 +808,10 @@ class AssetVisualEffect {
   final double maxLife;
   final int cacheWidth;
   final Color? tint;
+  final AssetEffectPaintLayer paintLayer;
 }
+
+enum AssetEffectPaintLayer { shared, gemiShards, gemiScreenCrack }
 
 ColorFilter gemShardTintFilter(Color color) {
   const brightness = 1.4;
@@ -870,6 +874,7 @@ void addGemiShardAssetEffects({
         maxLife: 0.48,
         cacheWidth: 128,
         tint: color,
+        paintLayer: AssetEffectPaintLayer.gemiShards,
       ),
     );
   }
@@ -894,10 +899,12 @@ class AssetEffectsCanvas extends StatefulWidget {
     super.key,
     required this.effects,
     required this.revision,
+    this.preloadAssets = const <String, int>{},
   });
 
   final List<AssetVisualEffect> effects;
   final int revision;
+  final Map<String, int> preloadAssets;
 
   int get effectCount => effects.length;
   int effectsForAsset(String assetPath) =>
@@ -909,8 +916,26 @@ class AssetEffectsCanvas extends StatefulWidget {
   State<AssetEffectsCanvas> createState() => _AssetEffectsCanvasState();
 }
 
+final Map<String, Map<String, int>> _gemiEffectPreloadCache =
+    <String, Map<String, int>>{};
+
+Map<String, int> gemiEffectPreloadAssets(BalloonSkinDefinition definition) {
+  if (definition.background != BalloonBackgroundType.crystalCave) {
+    return const <String, int>{};
+  }
+  return _gemiEffectPreloadCache.putIfAbsent(definition.id, () {
+    final result = <String, int>{};
+    final shard = definition.shardAssetPath;
+    final crack = definition.screenCrackAssetPath;
+    if (shard != null) result[shard] = 128;
+    if (crack != null) result[crack] = 320;
+    return Map<String, int>.unmodifiable(result);
+  });
+}
+
 class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
-  final Map<String, ImageInfo> _images = <String, ImageInfo>{};
+  final Map<String, _ResolvedEffectImage> _images =
+      <String, _ResolvedEffectImage>{};
   final Map<String, ImageStream> _streams = <String, ImageStream>{};
   final Map<String, ImageStreamListener> _listeners =
       <String, ImageStreamListener>{};
@@ -930,13 +955,21 @@ class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
 
   void _resolveMissingImages() {
     final configuration = createLocalImageConfiguration(context);
+    for (final entry in widget.preloadAssets.entries) {
+      _resolveImage(entry.key, entry.value, configuration);
+    }
     for (final effect in widget.effects) {
-      final assetPath = effect.assetPath;
-      if (_streams.containsKey(assetPath)) continue;
-      final provider = ResizeImage(
-        AssetImage(assetPath),
-        width: effect.cacheWidth,
-      );
+      _resolveImage(effect.assetPath, effect.cacheWidth, configuration);
+    }
+  }
+
+  void _resolveImage(
+    String assetPath,
+    int cacheWidth,
+    ImageConfiguration configuration,
+  ) {
+      if (_streams.containsKey(assetPath)) return;
+      final provider = ResizeImage(AssetImage(assetPath), width: cacheWidth);
       final stream = provider.resolve(configuration);
       late final ImageStreamListener listener;
       listener = ImageStreamListener((image, _) {
@@ -945,15 +978,14 @@ class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
           return;
         }
         final previous = _images[assetPath];
-        _images[assetPath] = image;
+        _images[assetPath] = _ResolvedEffectImage(image);
         _imageRevision++;
-        previous?.dispose();
+        previous?.imageInfo.dispose();
         setState(() {});
       });
       _streams[assetPath] = stream;
       _listeners[assetPath] = listener;
       stream.addListener(listener);
-    }
   }
 
   @override
@@ -963,33 +995,113 @@ class _AssetEffectsCanvasState extends State<AssetEffectsCanvas> {
       if (listener != null) entry.value.removeListener(listener);
     }
     for (final image in _images.values) {
-      image.dispose();
+      image.imageInfo.dispose();
     }
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => CustomPaint(
-        key: const ValueKey('asset-effects-canvas'),
-        painter: _AssetEffectsPainter(
-          effects: widget.effects,
-          images: _images,
-          revision: widget.revision,
-          imageRevision: _imageRevision,
+  Widget build(BuildContext context) {
+    if (widget.effects.isEmpty) return const SizedBox.expand();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (final layer in AssetEffectPaintLayer.values)
+              _buildPaintLayer(layer, viewport),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPaintLayer(AssetEffectPaintLayer layer, Size viewport) {
+    final bounds = assetEffectPaintBounds(widget.effects, viewport, layer);
+    if (bounds.isEmpty) return const SizedBox.shrink();
+    return Positioned.fromRect(
+      rect: bounds,
+      child: RepaintBoundary(
+        key: ValueKey('asset-effects-paint-boundary-${layer.name}'),
+        child: CustomPaint(
+          key: ValueKey('asset-effects-canvas-${layer.name}'),
+          painter: _AssetEffectsPainter(
+            effects: widget.effects,
+            images: _images,
+            paintLayer: layer,
+            origin: bounds.topLeft,
+            revision: widget.revision,
+            imageRevision: _imageRevision,
+          ),
         ),
-      );
+      ),
+    );
+  }
 }
+
+class _ResolvedEffectImage {
+  _ResolvedEffectImage(this.imageInfo)
+      : sourceRect = Rect.fromLTWH(
+          0,
+          0,
+          imageInfo.image.width.toDouble(),
+          imageInfo.image.height.toDouble(),
+        ),
+        aspectRatio = imageInfo.image.width / imageInfo.image.height;
+
+  final ImageInfo imageInfo;
+  final Rect sourceRect;
+  final double aspectRatio;
+}
+
+Rect assetEffectPaintBounds(
+  List<AssetVisualEffect> effects,
+  Size viewport,
+  AssetEffectPaintLayer paintLayer,
+) {
+  var left = double.infinity;
+  var top = double.infinity;
+  var right = double.negativeInfinity;
+  var bottom = double.negativeInfinity;
+  for (final effect in effects) {
+    if (effect.paintLayer != paintLayer) continue;
+    // A rotated square reaches sqrt(2) / 2 of its side from the center.
+    final radius = effect.size * 0.71 + 2;
+    left = min(left, effect.center.dx - radius);
+    top = min(top, effect.center.dy - radius);
+    right = max(right, effect.center.dx + radius);
+    bottom = max(bottom, effect.center.dy + radius);
+  }
+  if (!left.isFinite || viewport.isEmpty) return Rect.zero;
+  return Rect.fromLTRB(
+    left.clamp(0.0, viewport.width),
+    top.clamp(0.0, viewport.height),
+    right.clamp(0.0, viewport.width),
+    bottom.clamp(0.0, viewport.height),
+  );
+}
+
+final List<Color> _effectAlphaColors = List<Color>.generate(
+  256,
+  (alpha) => Color.fromARGB(alpha, 255, 255, 255),
+  growable: false,
+);
 
 class _AssetEffectsPainter extends CustomPainter {
   const _AssetEffectsPainter({
     required this.effects,
     required this.images,
+    required this.paintLayer,
+    required this.origin,
     required this.revision,
     required this.imageRevision,
   });
 
   final List<AssetVisualEffect> effects;
-  final Map<String, ImageInfo> images;
+  final Map<String, _ResolvedEffectImage> images;
+  final AssetEffectPaintLayer paintLayer;
+  final Offset origin;
   final int revision;
   final int imageRevision;
 
@@ -999,36 +1111,37 @@ class _AssetEffectsPainter extends CustomPainter {
       ..isAntiAlias = true
       ..filterQuality = FilterQuality.low;
     for (final effect in effects) {
-      final imageInfo = images[effect.assetPath];
-      if (imageInfo == null) continue;
+      if (effect.paintLayer != paintLayer) continue;
+      final resolved = images[effect.assetPath];
+      if (resolved == null) continue;
       final opacity = (effect.life / effect.maxLife).clamp(0.0, 1.0);
+      final alpha = (opacity * 255).round().clamp(0, 255);
       paint
-        ..color = Color.fromRGBO(255, 255, 255, opacity)
+        ..color = _effectAlphaColors[alpha]
         ..colorFilter = effect.tint == null
             ? null
             : cachedGemShardTintFilter(effect.tint!);
-      final image = imageInfo.image;
-      final source = Rect.fromLTWH(
-        0,
-        0,
-        image.width.toDouble(),
-        image.height.toDouble(),
-      );
-      final fitted = applyBoxFit(
-        BoxFit.contain,
-        Size(image.width.toDouble(), image.height.toDouble()),
-        Size.square(effect.size),
-      );
+      final image = resolved.imageInfo.image;
+      final aspectRatio = resolved.aspectRatio;
+      final destinationWidth = aspectRatio >= 1
+          ? effect.size
+          : effect.size * aspectRatio;
+      final destinationHeight = aspectRatio >= 1
+          ? effect.size / aspectRatio
+          : effect.size;
       final destination = Rect.fromCenter(
         center: Offset.zero,
-        width: fitted.destination.width,
-        height: fitted.destination.height,
+        width: destinationWidth,
+        height: destinationHeight,
       );
       canvas
         ..save()
-        ..translate(effect.center.dx, effect.center.dy)
+        ..translate(
+          effect.center.dx - origin.dx,
+          effect.center.dy - origin.dy,
+        )
         ..rotate(effect.rotation)
-        ..drawImageRect(image, source, destination, paint)
+        ..drawImageRect(image, resolved.sourceRect, destination, paint)
         ..restore();
     }
   }
@@ -1057,6 +1170,38 @@ ShushuForkMotion shushuForkMotion(int approach, double progress) {
     offset: Offset.lerp(starts[index], Offset.zero, eased)!,
     angle: endAngles[index] + angleLeads[index] * (1 - eased),
   );
+}
+
+class _GemiPickaxeArtwork extends StatelessWidget {
+  const _GemiPickaxeArtwork({required this.assetPath});
+
+  final String assetPath;
+
+  Widget _image({Color? color}) => Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        gaplessPlayback: true,
+        cacheWidth: 256,
+        color: color,
+        colorBlendMode: color == null ? null : BlendMode.srcIn,
+      );
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+        key: const ValueKey('gemi-pickaxe-raster-boundary'),
+        child: Stack(
+          fit: StackFit.expand,
+          clipBehavior: Clip.none,
+          children: [
+            Transform.scale(
+              scale: 1.045,
+              child: _image(color: const Color(0x66D9F4FF)),
+            ),
+            _image(),
+          ],
+        ),
+      );
 }
 
 class PendingToolHit {
@@ -1960,7 +2105,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _updatePendingToolHits(double dt) {
     if (_pendingToolHits.isEmpty) return;
-    for (final hit in List<PendingToolHit>.of(_pendingToolHits)) {
+    for (final hit in _pendingToolHits) {
       hit.elapsed += dt;
       if (!hit.impactApplied && hit.elapsed >= PendingToolHit.impactTime) {
         hit.impactApplied = true;
@@ -2411,6 +2556,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           spin: 0,
           life: 0.72,
           maxLife: 0.72,
+          paintLayer: AssetEffectPaintLayer.gemiScreenCrack,
         ),
       );
     }
@@ -4198,16 +4344,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         children: [
           if (hasDedicatedBackground)
             Positioned.fill(
-              child:
-                  equippedSkin.background == BalloonBackgroundType.crystalCave
-                      ? ValueListenableBuilder<double>(
-                          valueListenable: _crystalBackgroundPulse,
-                          builder: (context, pulse, _) => GameBalloonBackground(
-                            definition: equippedSkin,
-                            crystalPulse: pulse,
-                          ),
-                        )
-                      : GameBalloonBackground(definition: equippedSkin),
+              child: GameBalloonBackground(
+                definition: equippedSkin,
+                crystalPulseListenable:
+                    equippedSkin.background == BalloonBackgroundType.crystalCave
+                        ? _crystalBackgroundPulse
+                        : null,
+              ),
             ),
           Positioned.fill(
             child: Container(
@@ -4283,13 +4426,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                   _buildPendingToolHit(hit),
                                 Positioned.fill(
                                   child: IgnorePointer(
-                                    child: RepaintBoundary(
+                                    child: AssetEffectsCanvas(
                                       key: const ValueKey(
                                         'asset-effects-boundary',
                                       ),
-                                      child: AssetEffectsCanvas(
-                                        effects: _assetEffects,
-                                        revision: _effectsRevision,
+                                      effects: _assetEffects,
+                                      revision: _effectsRevision,
+                                      preloadAssets: gemiEffectPreloadAssets(
+                                        equippedSkin,
                                       ),
                                     ),
                                   ),
@@ -4423,34 +4567,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ? forkMotion.offset
         : Offset.lerp(const Offset(-68, -30), const Offset(0, 55), eased)!;
     final angle = isFork ? forkMotion.angle : -1.12 + 1.04 * eased;
-    Widget toolImage = Image.asset(
-      hit.definition.hitToolAssetPath!,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.medium,
-      cacheWidth: 256,
-    );
-    if (!isFork) {
-      toolImage = Stack(
-        fit: StackFit.expand,
-        children: [
-          ImageFiltered(
-            imageFilter: ui.ImageFilter.blur(sigmaX: 2.2, sigmaY: 2.2),
-            child: ColorFiltered(
-              colorFilter: const ColorFilter.mode(
-                Color(0xB3D9F4FF),
-                BlendMode.srcIn,
-              ),
-              child: Image.asset(
-                hit.definition.hitToolAssetPath!,
-                fit: BoxFit.contain,
-                cacheWidth: 256,
-              ),
-            ),
-          ),
-          toolImage,
-        ],
-      );
-    }
+    final toolImage = isFork
+        ? Image.asset(
+            hit.definition.hitToolAssetPath!,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+            cacheWidth: 256,
+          )
+        : _GemiPickaxeArtwork(
+            assetPath: hit.definition.hitToolAssetPath!,
+          );
     final center = hit.center + offset;
     final left = isFork ? center.dx - size * 0.35 : center.dx - size / 2;
     final top = isFork ? center.dy - size * 0.05 : center.dy - size / 2;
@@ -5406,37 +5532,16 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                                       ? forkMotion.angle
                                       : -1.12 + 1.04 * progress;
                                   final size = isFork ? 96.0 : 112.0;
-                                  Widget tool = Image.asset(
-                                    widget.definition.hitToolAssetPath!,
-                                    fit: BoxFit.contain,
-                                    cacheWidth: 256,
-                                  );
-                                  if (!isFork) {
-                                    tool = Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        ImageFiltered(
-                                          imageFilter: ui.ImageFilter.blur(
-                                            sigmaX: 2.2,
-                                            sigmaY: 2.2,
-                                          ),
-                                          child: ColorFiltered(
-                                            colorFilter: const ColorFilter.mode(
-                                              Color(0xB3D9F4FF),
-                                              BlendMode.srcIn,
-                                            ),
-                                            child: Image.asset(
-                                              widget
-                                                  .definition.hitToolAssetPath!,
-                                              fit: BoxFit.contain,
-                                              cacheWidth: 256,
-                                            ),
-                                          ),
-                                        ),
-                                        tool,
-                                      ],
-                                    );
-                                  }
+                                  final tool = isFork
+                                      ? Image.asset(
+                                          widget.definition.hitToolAssetPath!,
+                                          fit: BoxFit.contain,
+                                          cacheWidth: 256,
+                                        )
+                                      : _GemiPickaxeArtwork(
+                                          assetPath: widget
+                                              .definition.hitToolAssetPath!,
+                                        );
                                   if (isFork) {
                                     final target =
                                         _previewSize.center(Offset.zero) +
@@ -5517,15 +5622,16 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                           ),
                         Positioned.fill(
                           child: IgnorePointer(
-                            child: RepaintBoundary(
-                              key: const ValueKey(
-                                'balloon-preview-asset-effects',
-                              ),
-                              child: AnimatedBuilder(
-                                animation: _effectController,
-                                builder: (context, _) => AssetEffectsCanvas(
-                                  effects: _assetEffects,
-                                  revision: _effectsRevision,
+                            child: AnimatedBuilder(
+                              animation: _effectController,
+                              builder: (context, _) => AssetEffectsCanvas(
+                                key: const ValueKey(
+                                  'balloon-preview-asset-effects',
+                                ),
+                                effects: _assetEffects,
+                                revision: _effectsRevision,
+                                preloadAssets: gemiEffectPreloadAssets(
+                                  widget.definition,
                                 ),
                               ),
                             ),
@@ -6024,10 +6130,12 @@ class GameBalloonBackground extends StatelessWidget {
     super.key,
     required this.definition,
     this.crystalPulse = 0,
+    this.crystalPulseListenable,
   });
 
   final BalloonSkinDefinition definition;
   final double crystalPulse;
+  final ValueListenable<double>? crystalPulseListenable;
 
   @override
   Widget build(BuildContext context) => BalloonBackgroundRenderer(
@@ -6035,6 +6143,7 @@ class GameBalloonBackground extends StatelessWidget {
         background: definition.background,
         fallback: const PlaySky(),
         crystalPulse: crystalPulse,
+        crystalPulseListenable: crystalPulseListenable,
         cacheWidth: 720,
         assetPathOverride: BalloonBackgroundRegistry.gameplayAssetPathFor(
           definition.background,
@@ -6239,6 +6348,28 @@ class BalloonSkinArtwork extends StatelessWidget {
   final bool isFake;
   final int visualVariant;
 
+  static final Map<String, Map<int, ColorFilter>> _gemiColorFilterCache =
+      <String, Map<int, ColorFilter>>{};
+
+  static ColorFilter _gemiColorFilter(
+    BalloonSkinDefinition definition,
+    Color color, {
+    required bool isFake,
+  }) {
+    final colorKey = color.toARGB32();
+    final key = isFake ? colorKey ^ 0x80000000 : colorKey;
+    final definitionCache = _gemiColorFilterCache.putIfAbsent(
+      definition.id,
+      () => <int, ColorFilter>{},
+    );
+    return definitionCache.putIfAbsent(
+      key,
+      () => ColorFilter.matrix(
+        visualColorMatrix(definition, color, isFake: isFake),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget assetImage() => Image.asset(
@@ -6296,6 +6427,16 @@ class BalloonSkinArtwork extends StatelessWidget {
       );
     }
     if (usesOriginalAsset(definition, color) && !isFake) return image;
+    if (definition.popEffectType == BalloonPopEffectType.crystal) {
+      return ColorFiltered(
+        colorFilter: _gemiColorFilter(
+          definition,
+          color,
+          isFake: isFake,
+        ),
+        child: image,
+      );
+    }
     return ColorFiltered(
       colorFilter: ColorFilter.matrix(
         visualColorMatrix(definition, color, isFake: isFake),

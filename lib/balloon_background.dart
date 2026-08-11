@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 enum BalloonBackgroundType {
@@ -53,6 +54,7 @@ class BalloonBackgroundRenderer extends StatelessWidget {
     required this.fallback,
     this.fit = BoxFit.cover,
     this.crystalPulse = 0,
+    this.crystalPulseListenable,
     this.assetPathOverride,
     this.cacheWidth = 1024,
   });
@@ -60,6 +62,7 @@ class BalloonBackgroundRenderer extends StatelessWidget {
   final Widget fallback;
   final BoxFit fit;
   final double crystalPulse;
+  final ValueListenable<double>? crystalPulseListenable;
   final String? assetPathOverride;
   final int cacheWidth;
 
@@ -77,7 +80,23 @@ class BalloonBackgroundRenderer extends StatelessWidget {
       if (background != BalloonBackgroundType.crystalCave) {
         return RepaintBoundary(child: image);
       }
-      final pulse = crystalPulse.clamp(0.0, 1.0);
+      const pulseGlow = RepaintBoundary(
+        child: DecoratedBox(
+          key: ValueKey('background-crystal-pulse-glow'),
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(0, -0.18),
+              radius: 0.43,
+              colors: [Color.fromRGBO(184, 225, 255, 0.239), Color(0x00000000)],
+            ),
+          ),
+        ),
+      );
+      Widget pulseLayer(double value, Widget child) => Opacity(
+            opacity: value.clamp(0.0, 1.0),
+            child: child,
+          );
+      final pulse = crystalPulseListenable;
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -86,20 +105,25 @@ class BalloonBackgroundRenderer extends StatelessWidget {
             child: image,
           ),
           RepaintBoundary(
-            child: DecoratedBox(
-              key: const ValueKey('background-crystal-glow'),
+            child: const DecoratedBox(
+              key: ValueKey('background-crystal-glow'),
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  center: const Alignment(0, -0.18),
+                  center: Alignment(0, -0.18),
                   radius: 0.43,
-                  colors: [
-                    Color.fromRGBO(184, 225, 255, 0.08 + pulse * 0.22),
-                    const Color(0x00000000),
-                  ],
+                  colors: [Color.fromRGBO(184, 225, 255, 0.08), Color(0x00000000)],
                 ),
               ),
             ),
           ),
+          if (pulse != null)
+            ValueListenableBuilder<double>(
+              valueListenable: pulse,
+              child: pulseGlow,
+              builder: (context, value, child) => pulseLayer(value, child!),
+            )
+          else
+            pulseLayer(crystalPulse, pulseGlow),
         ],
       );
     }
