@@ -2433,6 +2433,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _score += _secondsLeft;
     _saveNextPlayableStage();
     _phase = GamePhase.stageClear;
+    if (_usesPhase1Canvas) _gameplayFrame.value++;
     _publishHeader();
     _stageTimer?.cancel();
     _stageTimer = Timer(_stageClearDelay, () {

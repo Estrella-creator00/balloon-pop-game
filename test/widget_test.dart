@@ -1505,8 +1505,9 @@ void main() {
     frames.dispose();
   });
 
-  test('production renderer mode remains a one-line legacy rollback', () {
-    expect(defaultGameplayRendererMode, GameplayRendererMode.legacy);
+  test('production renderer enables phase 1 and retains legacy rollback', () {
+    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase1);
+    expect(GameplayRendererMode.values, contains(GameplayRendererMode.legacy));
   });
 
   test('phase 1 input gate blocks pause and stage-intro phases', () {
@@ -2303,7 +2304,11 @@ void main() {
   ) async {
     var hapticCount = 0;
     HapticService.setPerformerForTest(() async => hapticCount++);
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await openSettings(tester);
 
@@ -3294,7 +3299,11 @@ void main() {
   testWidgets('1 STAGE starts with two balloons and has no pop text', (
     tester,
   ) async {
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 1);
 
@@ -3335,7 +3344,11 @@ void main() {
   });
 
   testWidgets('only the tapped balloon is removed', (tester) async {
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 1);
 
@@ -3458,10 +3471,104 @@ void main() {
     expect(canvas.renderState.basicBalloons, hasLength(1));
   });
 
+  testWidgets(
+    'phase 1 last balloon exposes its pop effect before the next stage',
+    (tester) async {
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase1,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      var canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final first = canvas.renderState.basicBalloons.first;
+      await tester.tapAt(
+        tester.getTopLeft(canvasFinder) +
+            first.position +
+            Offset(first.size / 2, first.size / 2),
+      );
+      await tester.pump();
+
+      var effects = tester
+          .widget<CustomPaint>(
+            find.descendant(
+              of: find.byKey(const ValueKey('effects-boundary')),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .painter! as EffectsPainter;
+      expect(effects.pieceCount, greaterThanOrEqualTo(6));
+      expect(effects.ringCount, 1);
+      expect(find.text('Stage Clear!'), findsNothing);
+      final ordinaryPieceCount = effects.pieceCount;
+      final ordinaryRingCount = effects.ringCount;
+
+      canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final last = canvas.renderState.basicBalloons.single;
+      await tester.tapAt(
+        tester.getTopLeft(canvasFinder) +
+            last.position +
+            Offset(last.size / 2, last.size / 2),
+      );
+      await tester.pump();
+
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      expect(canvas.renderState.basicBalloons, isEmpty);
+      effects = tester
+          .widget<CustomPaint>(
+            find.descendant(
+              of: find.byKey(const ValueKey('effects-boundary')),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .painter! as EffectsPainter;
+      expect(
+        effects.pieceCount,
+        greaterThanOrEqualTo(ordinaryPieceCount + 6),
+      );
+      expect(effects.pieces.every((piece) => piece.life > 0), isTrue);
+      expect(effects.ringCount, ordinaryRingCount + 1);
+      expect(effects.rings.every((ring) => ring.life > 0), isTrue);
+      expect(find.byType(BalloonSkinRenderer), findsNothing);
+      expect(
+        find.descendant(of: canvasFinder, matching: find.byType(Positioned)),
+        findsNothing,
+      );
+
+      final effectLife = effects.pieces.first.life;
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      effects = tester
+          .widget<CustomPaint>(
+            find.descendant(
+              of: find.byKey(const ValueKey('effects-boundary')),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .painter! as EffectsPainter;
+      expect(effects.pieces.first.life, effectLife);
+
+      await tester.pump(const Duration(milliseconds: 201));
+      expect(find.text('2 STAGE'), findsOneWidget);
+      expect(find.text('Stage Clear!'), findsNothing);
+      canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      expect(canvas.renderState.basicBalloons, hasLength(3));
+    },
+  );
+
   testWidgets('effects use one batched painter instead of particle widgets', (
     tester,
   ) async {
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 1);
 
@@ -3489,7 +3596,11 @@ void main() {
   testWidgets('the next stage starts only after every balloon is popped', (
     tester,
   ) async {
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 1);
 
@@ -3509,7 +3620,11 @@ void main() {
   });
 
   testWidgets('each stage group receives its own time limit', (tester) async {
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 1);
 
@@ -3558,7 +3673,11 @@ void main() {
   testWidgets('stage ten boss unlocks section and it survives app reload', (
     tester,
   ) async {
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 1);
 
@@ -4295,7 +4414,11 @@ void main() {
   });
 
   testWidgets('pause freezes time movement and balloon input', (tester) async {
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 1);
 
