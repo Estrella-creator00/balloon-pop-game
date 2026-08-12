@@ -97,6 +97,101 @@ class BasicBalloonDrawing {
   }
 }
 
+class BossBalloonDrawing {
+  BossBalloonDrawing(
+    Size size,
+    Color color, {
+    double opacity = 1,
+    required int hp,
+    required int maxHp,
+    required bool showHealthBar,
+  })  : _size = size,
+        _color = color,
+        _opacity = opacity,
+        _hp = hp,
+        _maxHp = maxHp,
+        _showHealthBar = showHealthBar,
+        _balloonHeight = size.height - 32,
+        _body = Rect.fromLTWH(5, 0, size.width - 10, size.height - 46),
+        _bodyPaint = Paint()..color = _withOpacity(color, opacity),
+        _shinePaint = Paint()
+          ..color = Colors.white.withValues(alpha: 0.48 * opacity),
+        _barBackgroundPaint = Paint()
+          ..color = Colors.white.withValues(alpha: 0.8 * opacity),
+        _barPaint = Paint()
+          ..color = const Color(0xFFFFD54F).withValues(alpha: opacity) {
+    _knot = Path()
+      ..moveTo(size.width / 2, _balloonHeight - 14)
+      ..lineTo(size.width / 2 - 16, _balloonHeight + 10)
+      ..lineTo(size.width / 2 + 16, _balloonHeight + 10)
+      ..close();
+  }
+
+  final Size _size;
+  final Color _color;
+  final double _opacity;
+  final int _hp;
+  final int _maxHp;
+  final bool _showHealthBar;
+  final double _balloonHeight;
+  final Rect _body;
+  final Paint _bodyPaint;
+  final Paint _shinePaint;
+  final Paint _barBackgroundPaint;
+  final Paint _barPaint;
+  late final Path _knot;
+
+  bool matches(
+    Size size,
+    Color color, {
+    required double opacity,
+    required int hp,
+    required int maxHp,
+    required bool showHealthBar,
+  }) =>
+      _size == size &&
+      _color == color &&
+      _opacity == opacity &&
+      _hp == hp &&
+      _maxHp == maxHp &&
+      _showHealthBar == showHealthBar;
+
+  void draw(Canvas canvas) {
+    canvas.drawOval(_body, _bodyPaint);
+    canvas.drawOval(
+      Rect.fromLTWH(
+        _size.width * 0.22,
+        _balloonHeight * 0.12,
+        _size.width * 0.17,
+        _balloonHeight * 0.24,
+      ),
+      _shinePaint,
+    );
+    canvas.drawPath(_knot, _bodyPaint);
+    if (!_showHealthBar) return;
+
+    final barWidth = _size.width * 0.62;
+    final barLeft = _size.width * 0.19;
+    final barTop = _size.height - 16;
+    final radius = const Radius.circular(8);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(barLeft, barTop, barWidth, 11),
+        radius,
+      ),
+      _barBackgroundPaint,
+    );
+    final fraction = _maxHp <= 0 ? 0.0 : (_hp / _maxHp).clamp(0.0, 1.0);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(barLeft, barTop, barWidth * fraction, 11),
+        radius,
+      ),
+      _barPaint,
+    );
+  }
+}
+
 Color _withOpacity(Color color, double opacity) =>
     color.withValues(alpha: color.a * opacity);
 

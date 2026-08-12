@@ -23,4 +23,22 @@ abstract final class GameHitTester {
     }
     return null;
   }
+
+  static Rect bossBounds(BossBalloonRenderView boss) => Rect.fromLTWH(
+        boss.position.dx,
+        boss.position.dy,
+        boss.size,
+        boss.size + 32,
+      );
+
+  static T? topmostBossAt<T extends BossBalloonRenderView>(
+    List<T> bosses,
+    Offset point,
+  ) {
+    for (var index = bosses.length - 1; index >= 0; index--) {
+      final boss = bosses[index];
+      if (bossBounds(boss).contains(point)) return boss;
+    }
+    return null;
+  }
 }

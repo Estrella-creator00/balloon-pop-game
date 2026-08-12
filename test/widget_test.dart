@@ -49,6 +49,30 @@ class _BasicRenderBalloon implements BasicBalloonRenderView {
   final double size;
 }
 
+class _BasicRenderBoss implements BossBalloonRenderView {
+  _BasicRenderBoss({
+    required this.id,
+    required this.position,
+  });
+
+  @override
+  final int id;
+  @override
+  Offset position;
+  @override
+  double get size => 240;
+  @override
+  Color get displayColor => Colors.purple;
+  @override
+  double get opacity => 1;
+  @override
+  int get hp => 10;
+  @override
+  int get maxHp => 10;
+  @override
+  bool get showHealthBar => true;
+}
+
 Offset? exclusiveBalloonHitPoint(
   Balloon target,
   Iterable<Balloon> otherBalloons,
@@ -91,6 +115,39 @@ Future<Offset> waitForExclusiveCanvasHitPoint(
     await tester.pump(gameLoopInterval);
   }
   throw TestFailure('Could not find an exclusive hit point for $balloonId.');
+}
+
+Future<void> clearCurrentCanvasStage(WidgetTester tester) async {
+  final canvasFinder = find.byKey(
+    const ValueKey('phase-1-persistent-game-canvas'),
+  );
+  final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+  var pointer = 1000;
+  while (canvas.renderState.basicBalloons.any((balloon) => !balloon.isFake)) {
+    final target = canvas.renderState.basicBalloons.lastWhere(
+      (balloon) => !balloon.isFake,
+    );
+    canvas.onPointerDown(
+      PointerDownEvent(
+        pointer: pointer++,
+        kind: ui.PointerDeviceKind.touch,
+        position: target.position + Offset(target.size / 2, target.size / 2),
+      ),
+    );
+  }
+  while (canvas.renderState.bosses.isNotEmpty) {
+    final target = canvas.renderState.bosses.firstWhere(
+      (boss) => boss.showHealthBar,
+    );
+    canvas.onPointerDown(
+      PointerDownEvent(
+        pointer: pointer++,
+        kind: ui.PointerDeviceKind.touch,
+        position: target.position + Offset(target.size / 2, target.size / 2),
+      ),
+    );
+  }
+  await tester.pump();
 }
 
 String assetNameOf(ImageProvider<Object> provider) {
@@ -1553,8 +1610,9 @@ void main() {
     frames.dispose();
   });
 
-  test('production renderer enables phase 1 and retains legacy rollback', () {
-    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase1);
+  test('production renderer keeps the selected default and legacy rollback',
+      () {
+    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase2);
     expect(GameplayRendererMode.values, contains(GameplayRendererMode.legacy));
     expect(
       GameplayRendererMode.values,
@@ -1604,6 +1662,42 @@ void main() {
         isFalse,
       );
     }
+  });
+
+  test('phase 3 canvas covers stages 1 through 30 including bosses', () {
+    for (var stage = 1; stage <= 30; stage++) {
+      expect(
+        gameplayCanvasStageEnabled(
+          mode: GameplayRendererMode.canvasPhase3,
+          stage: stage,
+        ),
+        isTrue,
+      );
+    }
+    expect(
+      gameplayCanvasStageEnabled(
+        mode: GameplayRendererMode.canvasPhase3,
+        stage: 31,
+      ),
+      isFalse,
+    );
+  });
+
+  test('canvas boss hit bounds and z-order match the legacy rectangles', () {
+    final lower = _BasicRenderBoss(id: 1, position: Offset.zero);
+    final upper = _BasicRenderBoss(id: 2, position: const Offset(20, 20));
+
+    expect(
+      GameHitTester.bossBounds(lower),
+      const Rect.fromLTWH(0, 0, 240, 272),
+    );
+    expect(
+      GameHitTester.topmostBossAt(
+        [lower, upper],
+        const Offset(40, 40),
+      ),
+      same(upper),
+    );
   });
 
   test('phase 1 input gate blocks pause and stage-intro phases', () {
@@ -4501,6 +4595,266 @@ void main() {
     expect(find.byKey(const ValueKey('fake-balloon-2')), findsOneWidget);
   });
 
+  testWidgets(
+    'phase 3 stage 10 boss moves and accepts two pointers without rebuilding',
+    (tester) async {
+      var hapticCount = 0;
+      HapticService.setPerformerForTest(() async => hapticCount++);
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase3,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+
+      for (var stage = 1; stage <= 9; stage++) {
+        expect(find.text('$stage STAGE'), findsOneWidget);
+        await clearCurrentCanvasStage(tester);
+        expect(find.text('Stage Clear!'), findsOneWidget);
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      expect(find.text('10 STAGE'), findsOneWidget);
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final painterFinder = find.byKey(
+        const ValueKey('canvas-playfield-painter'),
+      );
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final painter = tester.widget<CustomPaint>(painterFinder).painter;
+      expect(canvas.renderState.bosses, hasLength(1));
+      expect(canvas.renderState.basicBalloons, isEmpty);
+      expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
+      expect(find.byType(BalloonSkinRenderer), findsNothing);
+      final boss = canvas.renderState.bosses.single;
+      expect(boss.hp, 10);
+      expect(boss.maxHp, 10);
+      final startPosition = boss.position;
+      await tester.pump(gameLoopInterval);
+      expect(boss.position, isNot(startPosition));
+      expect(
+        identical(
+          tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder),
+          canvas,
+        ),
+        isTrue,
+      );
+      expect(
+        identical(tester.widget<CustomPaint>(painterFinder).painter, painter),
+        isTrue,
+      );
+
+      final originalSize = boss.size;
+      final originalColor = boss.displayColor;
+      final hapticBeforeBoss = hapticCount;
+      final point = tester.getTopLeft(canvasFinder) +
+          boss.position +
+          Offset(boss.size / 2, boss.size / 2);
+      final firstTouch = await tester.createGesture(
+        pointer: 701,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      final secondTouch = await tester.createGesture(
+        pointer: 702,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      await firstTouch.down(point);
+      await secondTouch.down(point);
+
+      expect(boss.hp, 8);
+      expect(boss.size, closeTo(originalSize * 0.965 * 0.965, 0.001));
+      expect(boss.displayColor, isNot(originalColor));
+      expect(hapticCount, hapticBeforeBoss + 2);
+      await firstTouch.up();
+      await secondTouch.up();
+      await tester.pump();
+      expect(
+        identical(
+          tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder),
+          canvas,
+        ),
+        isTrue,
+      );
+      expect(
+        identical(tester.widget<CustomPaint>(painterFinder).painter, painter),
+        isTrue,
+      );
+
+      await clearCurrentCanvasStage(tester);
+      expect(find.text('BOSS CLEAR!'), findsOneWidget);
+      expect(hapticCount, hapticBeforeBoss + 10);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const ValueKey('stage-intro-11')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
+      await tester.pump();
+      expect(find.text('11 STAGE'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<PersistentGameCanvas<Balloon>>(canvasFinder)
+            .renderState
+            .basicBalloons,
+        hasLength(2),
+      );
+    },
+  );
+
+  testWidgets('phase 3 stage 20 uses two independent canvas bosses', (
+    tester,
+  ) async {
+    ProgressStorage.unlockSecondSection();
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase3,
+      ),
+    );
+    await tester.pump();
+    await tapSectionStart(tester, 2);
+
+    for (var stage = 11; stage <= 19; stage++) {
+      await clearCurrentCanvasStage(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    expect(find.text('20 STAGE'), findsOneWidget);
+    final canvasFinder = find.byKey(
+      const ValueKey('phase-1-persistent-game-canvas'),
+    );
+    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+    expect(canvas.renderState.bosses, hasLength(2));
+    expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
+    expect(find.byType(BalloonSkinRenderer), findsNothing);
+    final first = canvas.renderState.bosses.first;
+    final second = canvas.renderState.bosses.last;
+    expect(first.hp, 15);
+    expect(second.hp, 15);
+    canvas.onPointerDown(
+      PointerDownEvent(
+        pointer: 801,
+        kind: ui.PointerDeviceKind.touch,
+        position: first.position + Offset(first.size / 2, first.size / 2),
+      ),
+    );
+    expect(first.hp, 14);
+    expect(second.hp, 15);
+
+    await clearCurrentCanvasStage(tester);
+    expect(find.text('BOSS CLEAR!'), findsOneWidget);
+    expect(canvas.renderState.bosses, isEmpty);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(const ValueKey('stage-intro-21')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
+    await tester.pump();
+    expect(find.text('21 STAGE'), findsOneWidget);
+    expect(
+      tester
+          .widget<PersistentGameCanvas<Balloon>>(canvasFinder)
+          .renderState
+          .basicBalloons,
+      hasLength(4),
+    );
+  });
+
+  testWidgets(
+    'phase 3 stage 30 shares HP and ignores a second final pointer',
+    (tester) async {
+      await tester.pumpWidget(
+        BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase3,
+          stage30SwapRollForTest: () => 1,
+        ),
+      );
+      await tester.pump();
+      await tester.drag(find.byType(PageView), const Offset(-500, 0));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tapSectionStart(tester, 3);
+
+      for (var stage = 21; stage <= 29; stage++) {
+        await clearCurrentCanvasStage(tester);
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      expect(find.text('30 STAGE'), findsOneWidget);
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      expect(canvas.renderState.bosses, hasLength(2));
+      expect(
+        canvas.renderState.bosses.where((boss) => boss.showHealthBar),
+        hasLength(1),
+      );
+      final fake = canvas.renderState.bosses.firstWhere(
+        (boss) => !boss.showHealthBar,
+      );
+      final real = canvas.renderState.bosses.firstWhere(
+        (boss) => boss.showHealthBar,
+      );
+      expect(fake.opacity, fakeBalloonOpacity);
+      expect(real.hp, 12);
+      expect(fake.hp, 12);
+      final fakeSoundBeforeHit = PopSound.fakePlayCount;
+
+      canvas.onPointerDown(
+        PointerDownEvent(
+          pointer: 901,
+          kind: ui.PointerDeviceKind.touch,
+          position: fake.position + Offset(fake.size / 2, fake.size / 2),
+        ),
+      );
+      expect(real.hp, 12);
+      expect(PopSound.fakePlayCount, fakeSoundBeforeHit + 1);
+
+      for (var hit = 0; hit < 11; hit++) {
+        final currentReal = canvas.renderState.bosses.firstWhere(
+          (boss) => boss.showHealthBar,
+        );
+        final hpBeforeHit = currentReal.hp;
+        canvas.onPointerDown(
+          PointerDownEvent(
+            pointer: 910 + hit,
+            kind: ui.PointerDeviceKind.touch,
+            position: currentReal.position +
+                Offset(currentReal.size / 2, currentReal.size / 2),
+          ),
+        );
+        expect(
+          currentReal.hp,
+          hpBeforeHit - 1,
+          reason: 'Stage 30 real hit ${hit + 1} must use the latest role.',
+        );
+      }
+      expect(real.hp, 1);
+
+      final finalPoint = tester.getTopLeft(canvasFinder) +
+          real.position +
+          Offset(real.size / 2, real.size / 2);
+      final soundBeforeFinal = PopSound.basicPlayCount;
+      final firstTouch = await tester.createGesture(
+        pointer: 951,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      final secondTouch = await tester.createGesture(
+        pointer: 952,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      await firstTouch.down(finalPoint);
+      await secondTouch.down(finalPoint);
+
+      expect(canvas.renderState.bosses, isEmpty);
+      expect(PopSound.basicPlayCount, soundBeforeFinal + 1);
+      await firstTouch.up();
+      await secondTouch.up();
+      await tester.pump();
+      expect(find.text('BOSS CLEAR!'), findsOneWidget);
+    },
+  );
+
   testWidgets('effects use one batched painter instead of particle widgets', (
     tester,
   ) async {
@@ -4685,7 +5039,11 @@ void main() {
     tester,
   ) async {
     ProgressStorage.unlockSecondSection();
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 2);
 
@@ -4805,7 +5163,11 @@ void main() {
   testWidgets(
     'stage 21, 25, and 29 normal balloons are removed by one gameplay tap',
     (tester) async {
-      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.legacy,
+        ),
+      );
       await tester.pump();
       await tester.drag(find.byType(PageView), const Offset(-500, 0));
       await tester.pump(const Duration(milliseconds: 350));
@@ -4993,7 +5355,11 @@ void main() {
     var hapticCount = 0;
     HapticService.setPerformerForTest(() async => hapticCount++);
 
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tester.drag(find.byType(PageView), const Offset(-500, 0));
     await tester.pump(const Duration(milliseconds: 350));

@@ -13,9 +13,24 @@ abstract interface class BasicBalloonRenderView {
   double get size;
 }
 
+abstract interface class BossBalloonRenderView {
+  int get id;
+  Offset get position;
+  double get size;
+  Color get displayColor;
+  double get opacity;
+  int get hp;
+  int get maxHp;
+  bool get showHealthBar;
+}
+
 class GameRenderState<T extends BasicBalloonRenderView> {
-  const GameRenderState({required this.basicBalloons});
+  const GameRenderState({
+    required this.basicBalloons,
+    this.bosses = const <BossBalloonRenderView>[],
+  });
 
   /// The existing mutable gameplay list, observed but never mutated here.
   final List<T> basicBalloons;
+  final List<BossBalloonRenderView> bosses;
 }

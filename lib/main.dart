@@ -309,6 +309,41 @@ class BossBalloon {
   double impactVisual;
 }
 
+class _BossRenderView implements BossBalloonRenderView {
+  const _BossRenderView({
+    required this.boss,
+    required this.hpOf,
+    required this.maxHpOf,
+    required this.colorOf,
+  });
+
+  final BossBalloon boss;
+  final int Function(BossBalloon) hpOf;
+  final int Function(BossBalloon) maxHpOf;
+  final Color Function(BossBalloon) colorOf;
+
+  @override
+  int get id => boss.id;
+  @override
+  Offset get position => boss.position;
+  @override
+  double get size => boss.size;
+  @override
+  Color get displayColor {
+    final color = colorOf(boss);
+    return boss.isFake ? fakeBalloonColor(color) : color;
+  }
+
+  @override
+  double get opacity => boss.isFake ? fakeBalloonOpacity : 1;
+  @override
+  int get hp => hpOf(boss);
+  @override
+  int get maxHp => maxHpOf(boss);
+  @override
+  bool get showHealthBar => !boss.isFake;
+}
+
 const stage30BossSwapChance = 0.50;
 const stage30BossMaxSpeed = 220.0;
 
@@ -1650,6 +1685,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Duration _stageTimePenalty = Duration.zero;
   GamePhase _phase = GamePhase.menu;
   final List<BossBalloon> _bosses = [];
+  final List<_BossRenderView> _bossRenderViews = [];
   Stage30BossState? _stage30BossState;
   bool _secondSectionUnlocked = false;
   int _bestScore = 0;
@@ -1678,7 +1714,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   @override
   void initState() {
     super.initState();
-    _gameRenderState = GameRenderState<Balloon>(basicBalloons: _balloons);
+    _gameRenderState = GameRenderState<Balloon>(
+      basicBalloons: _balloons,
+      bosses: _bossRenderViews,
+    );
     WidgetsBinding.instance.addObserver(this);
     _secondSectionUnlocked = ProgressStorage.isSecondSectionUnlocked();
     _bestScore = ProgressStorage.bestScore();
@@ -1824,7 +1863,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _pendingToolHits.clear();
     _feedbacks.clear();
     _effectsRevision++;
-    _bosses.clear();
+    _clearBosses();
     _startStage();
     _publishHeader();
     if (mounted) {
@@ -1868,7 +1907,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _assetEffects.clear();
       _pendingToolHits.clear();
       _feedbacks.clear();
-      _bosses.clear();
+      _clearBosses();
     });
     _scheduleStagePageJump(stagePage);
     _publishHeader();
@@ -1955,7 +1994,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stageAdvanceScheduled = false;
     _phase = GamePhase.playing;
     _balloons.clear();
-    _bosses.clear();
+    _clearBosses();
     _stage30BossState = null;
     _pendingToolHits.clear();
     _crystalBackgroundPulse.value = 0;
@@ -2080,23 +2119,33 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       }
       if (_stage == 30) previousStage30Angle = angle;
       final speed = config.bossSpeed;
-      _bosses.add(
-        BossBalloon(
-          id: id,
-          position: _nonOverlappingBossPosition(size),
-          velocity: Offset(cos(angle) * speed, sin(angle) * speed),
-          size: size,
-          maxHp: config.bossHp,
-          skinId: skin.id,
-          skinColor: _nextSkinColor(skin, boss: true),
-          isFake: _stage30BossState?.isFakeBoss(id) ?? false,
-          turnIntervalOffset: _stage == 30 ? (id == 0 ? -0.055 : 0.055) : 0,
-          initialTurnCooldown: _stage == 30
-              ? 0.52 + id * 0.17 + _random.nextDouble() * 0.08
-              : 0.65,
-          visualVariant: skin.chooseVisualVariant(_random.nextDouble()),
-          specialVisual: skin.chooseSpecialSpawn(_random.nextDouble()),
-          visualPhase: _random.nextDouble() * pi * 2,
+      final boss = BossBalloon(
+        id: id,
+        position: _nonOverlappingBossPosition(size),
+        velocity: Offset(cos(angle) * speed, sin(angle) * speed),
+        size: size,
+        maxHp: config.bossHp,
+        skinId: skin.id,
+        skinColor: _nextSkinColor(skin, boss: true),
+        isFake: _stage30BossState?.isFakeBoss(id) ?? false,
+        turnIntervalOffset: _stage == 30 ? (id == 0 ? -0.055 : 0.055) : 0,
+        initialTurnCooldown: _stage == 30
+            ? 0.52 + id * 0.17 + _random.nextDouble() * 0.08
+            : 0.65,
+        visualVariant: skin.chooseVisualVariant(_random.nextDouble()),
+        specialVisual: skin.chooseSpecialSpawn(_random.nextDouble()),
+        visualPhase: _random.nextDouble() * pi * 2,
+      );
+      _bosses.add(boss);
+      _bossRenderViews.add(
+        _BossRenderView(
+          boss: boss,
+          hpOf: _currentBossHp,
+          maxHpOf: _currentBossMaxHp,
+          colorOf: (candidate) => _bossColor(
+            candidate,
+            BalloonSkinCatalog.byIdOrDefault(candidate.skinId),
+          ),
         ),
       );
     }
@@ -2106,6 +2155,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   int _currentBossMaxHp(BossBalloon boss) =>
       _stage30BossState?.maxHp ?? boss.maxHp;
+
+  void _clearBosses() {
+    _bosses.clear();
+    _bossRenderViews.clear();
+  }
 
   Offset _nonOverlappingBossPosition(double size) {
     for (var attempt = 0; attempt < 80; attempt++) {
@@ -2540,7 +2594,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _spawnPieces(center, hitColor, boss.size * 0.35, big: false);
     }
 
-    setState(() {
+    void applyHit() {
       final sharedState = _stage30BossState;
       if (sharedState != null) {
         final swapRoll =
@@ -2577,7 +2631,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       boss.velocity *= 1.075;
       final hpRatio = boss.hp / boss.maxHp;
       boss.turnCooldown = min(boss.turnCooldown, 0.18 + hpRatio * 0.28);
-    });
+    }
+
+    if (_usesCanvasPlayfield && !finalHit) {
+      applyHit();
+    } else {
+      setState(applyHit);
+    }
     _publishHeader();
   }
 
@@ -2591,7 +2651,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (_stage30BossState == null) return;
     final skin = BalloonSkinCatalog.byIdOrDefault(boss.skinId);
     final sourceSize = boss.size;
-    _bosses.clear();
+    _clearBosses();
     _stage30BossState = null;
     _score += 10;
     _playSkinPopSound(skin, boss: true);
@@ -2604,6 +2664,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _clearBoss(BossBalloon boss, Offset center, Color color) {
     final removed = _bosses.remove(boss);
     if (!removed) return;
+    _bossRenderViews.removeWhere((view) => identical(view.boss, boss));
     _score += 10;
     final skin = BalloonSkinCatalog.byIdOrDefault(boss.skinId);
     _playSkinPopSound(skin, boss: true);
@@ -2626,6 +2687,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _score += _secondsLeft;
     PopSound.playBossClear();
     _phase = GamePhase.bossClear;
+    if (_usesCanvasPlayfield) _gameplayFrame.value++;
     if (_stage == 10) {
       _secondSectionUnlocked = true;
       ProgressStorage.unlockSecondSection();
@@ -2852,7 +2914,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondsLeft = 0;
       _phase = GamePhase.gameOver;
       _balloons.clear();
-      _bosses.clear();
+      _clearBosses();
       _feedbacks.clear();
     });
     _publishHeader();
@@ -4699,9 +4761,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     }
     final skin = _equippedBalloonSkin;
     return skin.id == BalloonSkinCatalog.defaultId &&
-        !_stageConfig.isBoss &&
         _balloons.every(
           (balloon) => balloon.skinId == BalloonSkinCatalog.defaultId,
+        ) &&
+        _bosses.every(
+          (boss) => boss.skinId == BalloonSkinCatalog.defaultId,
         );
   }
 
@@ -4749,6 +4813,21 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       isPlaying: _phase == GamePhase.playing,
       canvasActive: _usesCanvasPlayfield,
     )) {
+      return;
+    }
+    if (_bosses.isNotEmpty) {
+      final boss = _stage == 30
+          ? closestStage30BossForTap(_bosses, event.localPosition)
+          : GameHitTester.topmostBossAt(
+              _bossRenderViews,
+              event.localPosition,
+            )?.boss;
+      if (boss != null) {
+        _hitBoss(boss);
+        if (_phase == GamePhase.playing) {
+          _gameplayFrame.value++;
+        }
+      }
       return;
     }
     final balloon = GameHitTester.topmostBasicBalloonAt(
