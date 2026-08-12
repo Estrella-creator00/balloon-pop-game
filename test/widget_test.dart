@@ -3459,13 +3459,19 @@ void main() {
     expect(canvas.renderState.basicBalloons, hasLength(1));
     expect(PopSound.basicPlayCount, 1);
 
-    await tester.tap(find.byKey(const ValueKey('pause-button')));
+    tester
+        .widget<FilledButton>(find.byKey(const ValueKey('pause-button')))
+        .onPressed!
+        .call();
     await tester.pump();
+    canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
     final remaining = canvas.renderState.basicBalloons.single;
-    await tester.tapAt(
-      tester.getTopLeft(canvasFinder) +
-          remaining.position +
-          Offset(remaining.size / 2, remaining.size / 2),
+    canvas.onTapUp(
+      TapUpDetails(
+        kind: ui.PointerDeviceKind.touch,
+        localPosition:
+            remaining.position + Offset(remaining.size / 2, remaining.size / 2),
+      ),
     );
     await tester.pump();
     expect(canvas.renderState.basicBalloons, hasLength(1));
@@ -3522,6 +3528,73 @@ void main() {
         find.descendant(of: canvasFinder, matching: find.byType(Positioned)),
         findsNothing,
       );
+    },
+  );
+
+  testWidgets(
+    'phase 1 non-final pop preserves the canvas painter and its cache',
+    (tester) async {
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase1,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final painterFinder = find.byKey(
+        const ValueKey('canvas-playfield-painter'),
+      );
+      final beforeCanvas =
+          tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final beforePainter = tester.widget<CustomPaint>(painterFinder).painter;
+      final beforeHeader = tester.widget<GameHeader>(find.byType(GameHeader));
+      expect(beforeHeader.data.value.remaining, 2);
+
+      var repaintRequests = 0;
+      void countRepaint() => repaintRequests++;
+      beforeCanvas.frameListenable.addListener(countRepaint);
+      final first = beforeCanvas.renderState.basicBalloons.first;
+      await tester.tapAt(
+        tester.getTopLeft(canvasFinder) +
+            first.position +
+            Offset(first.size / 2, first.size / 2),
+      );
+
+      expect(repaintRequests, 1);
+      expect(beforeCanvas.renderState.basicBalloons, hasLength(1));
+
+      await tester.pump();
+      final afterCanvas =
+          tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final afterPainter = tester.widget<CustomPaint>(painterFinder).painter;
+      final afterHeader = tester.widget<GameHeader>(find.byType(GameHeader));
+      expect(identical(afterCanvas, beforeCanvas), isTrue);
+      expect(identical(afterPainter, beforePainter), isTrue);
+      expect(afterHeader.data.value.remaining, 1);
+      expect(PopSound.basicPlayCount, 1);
+
+      final effects = tester
+          .widget<CustomPaint>(
+            find.descendant(
+              of: find.byKey(const ValueKey('effects-boundary')),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .painter! as EffectsPainter;
+      expect(effects.pieceCount, greaterThanOrEqualTo(6));
+      expect(effects.ringCount, 1);
+      expect(find.text('Stage Clear!'), findsNothing);
+      expect(find.byType(BalloonSkinRenderer), findsNothing);
+      expect(
+        find.descendant(of: canvasFinder, matching: find.byType(Positioned)),
+        findsNothing,
+      );
+
+      beforeCanvas.frameListenable.removeListener(countRepaint);
     },
   );
 

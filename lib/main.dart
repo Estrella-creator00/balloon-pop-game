@@ -2343,15 +2343,22 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _spawnSkinPopEffect(skin, center, balloon.color, balloon.size, big: false);
     _spawnRing(center, balloon.color, balloon.size * 0.72);
 
-    setState(() {
-      final removed = _balloons.remove(balloon);
-      if (!removed) return;
+    final isPhase1CanvasNonFinalPop =
+        _usesPhase1Canvas && _normalBalloonCount > 1;
+    if (isPhase1CanvasNonFinalPop) {
+      _balloons.remove(balloon);
       balloon.hp = 0;
-      if (_normalBalloonCount == 0) {
-        _balloons.removeWhere((candidate) => candidate.isFake);
-        _showStageClear();
-      }
-    });
+    } else {
+      setState(() {
+        final removed = _balloons.remove(balloon);
+        if (!removed) return;
+        balloon.hp = 0;
+        if (_normalBalloonCount == 0) {
+          _balloons.removeWhere((candidate) => candidate.isFake);
+          _showStageClear();
+        }
+      });
+    }
     _publishHeader();
   }
 
