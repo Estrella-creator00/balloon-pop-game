@@ -3472,6 +3472,60 @@ void main() {
   });
 
   testWidgets(
+    'phase 1 canvas requests one immediate repaint for each pop',
+    (tester) async {
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase1,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      var canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      var repaintRequests = 0;
+      void countRepaint() => repaintRequests++;
+      canvas.frameListenable.addListener(countRepaint);
+
+      final first = canvas.renderState.basicBalloons.first;
+      await tester.tapAt(
+        tester.getTopLeft(canvasFinder) +
+            first.position +
+            Offset(first.size / 2, first.size / 2),
+      );
+
+      expect(repaintRequests, 1);
+      expect(canvas.renderState.basicBalloons, hasLength(1));
+      expect(PopSound.basicPlayCount, 1);
+      expect(gameLoopInterval, const Duration(milliseconds: 33));
+
+      repaintRequests = 0;
+      final last = canvas.renderState.basicBalloons.single;
+      await tester.tapAt(
+        tester.getTopLeft(canvasFinder) +
+            last.position +
+            Offset(last.size / 2, last.size / 2),
+      );
+
+      expect(repaintRequests, 1);
+      expect(canvas.renderState.basicBalloons, isEmpty);
+      expect(PopSound.basicPlayCount, 2);
+
+      canvas.frameListenable.removeListener(countRepaint);
+      await tester.pump();
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      expect(find.byType(BalloonSkinRenderer), findsNothing);
+      expect(
+        find.descendant(of: canvasFinder, matching: find.byType(Positioned)),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'phase 1 last balloon exposes its pop effect before the next stage',
     (tester) async {
       await tester.pumpWidget(

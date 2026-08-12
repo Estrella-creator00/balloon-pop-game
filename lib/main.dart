@@ -4733,7 +4733,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _balloons,
       details.localPosition,
     );
-    if (balloon != null) _popBalloon(balloon);
+    if (balloon != null) {
+      _popBalloon(balloon);
+      if (_phase == GamePhase.playing) {
+        _gameplayFrame.value++;
+      }
+    }
   }
 
   Widget _buildBalloon(Balloon balloon) {
