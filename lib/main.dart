@@ -11,6 +11,10 @@ import 'balloon_background.dart';
 import 'balloon_skin_catalog.dart';
 import 'coin_purchase_page.dart';
 import 'dev/dev_coin_tool.dart';
+import 'gameplay/game_canvas.dart';
+import 'gameplay/game_draw_geometry.dart';
+import 'gameplay/game_hit_tester.dart';
+import 'gameplay/game_render_state.dart';
 import 'onboarding_page.dart';
 import 'ranking/ranking_page.dart';
 import 'services/coin_service.dart';
@@ -29,6 +33,7 @@ class BalloonPopApp extends StatefulWidget {
     super.key,
     this.stage30SwapRollForTest,
     this.toolHitDeltaForTest,
+    this.gameplayRendererMode = defaultGameplayRendererMode,
   });
 
   @visibleForTesting
@@ -36,6 +41,8 @@ class BalloonPopApp extends StatefulWidget {
 
   @visibleForTesting
   final double? toolHitDeltaForTest;
+
+  final GameplayRendererMode gameplayRendererMode;
 
   @override
   State<BalloonPopApp> createState() => _BalloonPopAppState();
@@ -70,6 +77,7 @@ class _BalloonPopAppState extends State<BalloonPopApp> {
           ? BalloonGamePage(
               stage30SwapRollForTest: widget.stage30SwapRollForTest,
               toolHitDeltaForTest: widget.toolHitDeltaForTest,
+              gameplayRendererMode: widget.gameplayRendererMode,
             )
           : NicknameOnboardingPage(onCompleted: _completeNicknameOnboarding),
     );
@@ -209,7 +217,7 @@ class StoreProduct {
       );
 }
 
-class Balloon {
+class Balloon implements BasicBalloonRenderView {
   Balloon({
     required this.id,
     required this.position,
@@ -229,10 +237,14 @@ class Balloon {
     this.exitVelocity = Offset.zero,
   });
 
+  @override
   final int id;
+  @override
   Offset position;
   Offset velocity;
+  @override
   final Color color;
+  @override
   double size;
   double floatPhase;
   final double floatPower;
@@ -1455,6 +1467,7 @@ class BalloonGamePage extends StatefulWidget {
     super.key,
     this.stage30SwapRollForTest,
     this.toolHitDeltaForTest,
+    this.gameplayRendererMode = defaultGameplayRendererMode,
   });
 
   @visibleForTesting
@@ -1462,6 +1475,8 @@ class BalloonGamePage extends StatefulWidget {
 
   @visibleForTesting
   final double? toolHitDeltaForTest;
+
+  final GameplayRendererMode gameplayRendererMode;
 
   @override
   State<BalloonGamePage> createState() => _BalloonGamePageState();
@@ -1604,6 +1619,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   final List<AssetVisualEffect> _assetEffects = [];
   final List<PendingToolHit> _pendingToolHits = [];
   final ValueNotifier<int> _gameplayFrame = ValueNotifier<int>(0);
+  late final GameRenderState<Balloon> _gameRenderState;
   final ValueNotifier<double> _crystalBackgroundPulse = ValueNotifier<double>(
     0,
   );
@@ -1649,6 +1665,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   @override
   void initState() {
     super.initState();
+    _gameRenderState = GameRenderState<Balloon>(basicBalloons: _balloons);
     WidgetsBinding.instance.addObserver(this);
     _secondSectionUnlocked = ProgressStorage.isSecondSectionUnlocked();
     _bestScore = ProgressStorage.bestScore();
@@ -4546,6 +4563,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           } else if (_playArea != newSize) {
                             _playArea = newSize;
                           }
+                          if (_usesPhase1Canvas) {
+                            return _buildPhase1CanvasPlayfield(
+                              !hasDedicatedBackground
+                                  ? Positioned.fill(
+                                      child: GameBalloonBackground(
+                                        definition: equippedSkin,
+                                      ),
+                                    )
+                                  : null,
+                            );
+                          }
                           return ValueListenableBuilder<int>(
                             valueListenable: _gameplayFrame,
                             child: !hasDedicatedBackground
@@ -4634,6 +4662,77 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ],
       ),
     );
+  }
+
+  bool get _usesPhase1Canvas {
+    if (widget.gameplayRendererMode != GameplayRendererMode.canvasPhase1) {
+      return false;
+    }
+    // Phase 1 intentionally covers only the simple one-hit, no-fake stages.
+    // This guard also avoids consulting StageConfig for a future intro stage.
+    if (_stage < 1 || _stage > 9) return false;
+    final skin = _equippedBalloonSkin;
+    return skin.id == BalloonSkinCatalog.defaultId &&
+        !_stageConfig.isBoss &&
+        !_stageConfig.hasFakeBalloons &&
+        _stageConfig.requiredHits == 1 &&
+        _balloons.every(
+          (balloon) =>
+              !balloon.isFake && balloon.skinId == BalloonSkinCatalog.defaultId,
+        );
+  }
+
+  Widget _buildPhase1CanvasPlayfield(Widget? staticBackground) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          if (staticBackground != null) staticBackground,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: RepaintBoundary(
+                key: const ValueKey('effects-boundary'),
+                child: CustomPaint(
+                  painter: EffectsPainter(
+                    pieces: _pieces,
+                    rings: _rings,
+                    feedbacks: _feedbacks,
+                    revision: _effectsRevision,
+                    repaint: _gameplayFrame,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: PersistentGameCanvas<Balloon>(
+              key: const ValueKey('phase-1-persistent-game-canvas'),
+              renderState: _gameRenderState,
+              frameListenable: _gameplayFrame,
+              onTapUp: _hitPhase1CanvasBalloonAt,
+            ),
+          ),
+          if (_phase == GamePhase.stageIntro) _buildStageIntro(),
+          if (_phase == GamePhase.stageClear)
+            _buildCenterMessage('Stage Clear!', null),
+          if (_phase == GamePhase.bossClear)
+            _buildCenterMessage('BOSS CLEAR!', null),
+          if (_phase == GamePhase.paused) _buildPauseOverlay(),
+          if (_phase == GamePhase.completed) _buildGameOver(completed: true),
+          if (_phase == GamePhase.gameOver) _buildGameOver(),
+        ],
+      );
+
+  void _hitPhase1CanvasBalloonAt(TapUpDetails details) {
+    if (!phase1CanvasInputEnabled(
+      isPlaying: _phase == GamePhase.playing,
+      canvasActive: _usesPhase1Canvas,
+    )) {
+      return;
+    }
+    final balloon = GameHitTester.topmostBasicBalloonAt(
+      _balloons,
+      details.localPosition,
+    );
+    if (balloon != null) _popBalloon(balloon);
   }
 
   Widget _buildBalloon(Balloon balloon) {
@@ -7424,72 +7523,7 @@ class BalloonPainter extends CustomPainter {
   final Color color;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final balloonHeight = size.height - 26;
-    final body = Rect.fromLTWH(3, 0, size.width - 6, balloonHeight - 9);
-    canvas.drawOval(
-      body.shift(const Offset(3, 6)),
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.18)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-    );
-    final paint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.32, -0.42),
-        radius: 0.88,
-        colors: [
-          Color.lerp(color, Colors.white, 0.40)!,
-          color,
-          Color.lerp(color, Colors.black, 0.24)!,
-        ],
-        stops: const [0, 0.60, 1],
-      ).createShader(body);
-    canvas.drawOval(body, paint);
-    canvas.drawOval(
-      body,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.34)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5,
-    );
-
-    final shine = Paint()..color = Colors.white.withValues(alpha: 0.70);
-    canvas.drawOval(
-      Rect.fromLTWH(
-        size.width * 0.22,
-        balloonHeight * 0.15,
-        size.width * 0.17,
-        balloonHeight * 0.25,
-      ),
-      shine,
-    );
-    canvas.drawCircle(
-      Offset(size.width * 0.36, balloonHeight * 0.13),
-      size.width * 0.035,
-      Paint()..color = Colors.white.withValues(alpha: 0.95),
-    );
-
-    final knot = Path()
-      ..moveTo(size.width / 2, balloonHeight - 11)
-      ..lineTo(size.width / 2 - 8, balloonHeight + 5)
-      ..lineTo(size.width / 2 + 8, balloonHeight + 5)
-      ..close();
-    canvas.drawPath(knot, Paint()..color = color);
-
-    final string = Paint()
-      ..color = const Color(0xFF666666)
-      ..strokeWidth = 1.6
-      ..style = PaintingStyle.stroke;
-    final stringPath = Path()
-      ..moveTo(size.width / 2, balloonHeight + 5)
-      ..quadraticBezierTo(
-        size.width * 0.68,
-        balloonHeight + 15,
-        size.width * 0.47,
-        size.height,
-      );
-    canvas.drawPath(stringPath, string);
-  }
+  void paint(Canvas canvas, Size size) => drawBasicBalloon(canvas, size, color);
 
   @override
   bool shouldRepaint(covariant BalloonPainter oldDelegate) =>
@@ -7569,11 +7603,12 @@ class BossBalloonPainter extends CustomPainter {
 }
 
 class EffectsPainter extends CustomPainter {
-  const EffectsPainter({
+  EffectsPainter({
     required this.pieces,
     required this.rings,
     required this.revision,
     this.feedbacks = const <FloatingTextFeedback>[],
+    super.repaint,
   });
 
   final List<PopPiece> pieces;

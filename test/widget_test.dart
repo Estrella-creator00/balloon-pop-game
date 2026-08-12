@@ -2,6 +2,10 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/dev/dev_coin_tool.dart';
+import 'package:balloon_pop_game/gameplay/game_canvas.dart';
+import 'package:balloon_pop_game/gameplay/game_hit_tester.dart';
+import 'package:balloon_pop_game/gameplay/game_render_state.dart';
+import 'package:balloon_pop_game/gameplay/game_scene_painter.dart';
 import 'package:balloon_pop_game/audio/pop_sound.dart';
 import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
@@ -23,6 +27,23 @@ import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class _BasicRenderBalloon implements BasicBalloonRenderView {
+  _BasicRenderBalloon({
+    required this.id,
+    required this.position,
+    this.size = 80,
+  }) : color = Colors.red;
+
+  @override
+  final int id;
+  @override
+  Offset position;
+  @override
+  final Color color;
+  @override
+  final double size;
+}
 
 String assetNameOf(ImageProvider<Object> provider) {
   var current = provider;
@@ -1425,6 +1446,82 @@ void main() {
     expect(loop.isRunning, true);
     loop.stop();
     expect(timers.where((timer) => timer.isActive), isEmpty);
+  });
+
+  test('phase 1 basic balloon hit bounds match the legacy rectangle', () {
+    final balloon = _BasicRenderBalloon(
+      id: 7,
+      position: const Offset(20, 30),
+      size: 80,
+    );
+
+    expect(
+      GameHitTester.basicBalloonBounds(balloon),
+      const Rect.fromLTWH(20, 30, 80, 106),
+    );
+    expect(
+      GameHitTester.topmostBasicBalloonAt([balloon], const Offset(20, 30)),
+      same(balloon),
+    );
+    expect(
+      GameHitTester.topmostBasicBalloonAt([balloon], const Offset(99.9, 135.9)),
+      same(balloon),
+    );
+    expect(
+      GameHitTester.topmostBasicBalloonAt([balloon], const Offset(100, 136)),
+      isNull,
+    );
+  });
+
+  test('phase 1 overlap hit follows the legacy Stack z-order', () {
+    final lower = _BasicRenderBalloon(id: 1, position: Offset.zero);
+    final upper = _BasicRenderBalloon(id: 2, position: const Offset(10, 10));
+
+    expect(
+      GameHitTester.topmostBasicBalloonAt(
+        [lower, upper],
+        const Offset(30, 30),
+      ),
+      same(upper),
+    );
+  });
+
+  test('phase 1 painter listens directly to the gameplay frame notifier', () {
+    final frames = ValueNotifier<int>(0);
+    final painter = GameScenePainter<_BasicRenderBalloon>(
+      renderState: GameRenderState(
+        basicBalloons: [
+          _BasicRenderBalloon(id: 1, position: Offset.zero),
+        ],
+      ),
+      repaint: frames,
+    );
+    var repaintRequests = 0;
+    painter.addListener(() => repaintRequests++);
+
+    frames.value++;
+
+    expect(repaintRequests, 1);
+    frames.dispose();
+  });
+
+  test('production renderer mode remains a one-line legacy rollback', () {
+    expect(defaultGameplayRendererMode, GameplayRendererMode.legacy);
+  });
+
+  test('phase 1 input gate blocks pause and stage-intro phases', () {
+    expect(
+      phase1CanvasInputEnabled(isPlaying: false, canvasActive: true),
+      isFalse,
+    );
+    expect(
+      phase1CanvasInputEnabled(isPlaying: true, canvasActive: false),
+      isFalse,
+    );
+    expect(
+      phase1CanvasInputEnabled(isPlaying: true, canvasActive: true),
+      isTrue,
+    );
   });
 
   test('pieces and rings are removed after their lifetime', () {
@@ -3271,6 +3368,94 @@ void main() {
       find.byType(GameBalloonBackground),
     );
     expect(identical(before, after), isTrue);
+  });
+
+  testWidgets(
+    'phase 1 canvas keeps one playfield widget while frames repaint',
+    (tester) async {
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase1,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      expect(canvasFinder, findsOneWidget);
+      expect(find.byKey(const ValueKey<int>(0)), findsNothing);
+      expect(find.byKey(const ValueKey('balloon-raster-0')), findsNothing);
+      expect(find.byType(BalloonSkinRenderer), findsNothing);
+      expect(
+        find.descendant(of: canvasFinder, matching: find.byType(Positioned)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: canvasFinder,
+          matching: find.byType(GestureDetector),
+        ),
+        findsOneWidget,
+      );
+
+      final beforeWidget = tester.widget<PersistentGameCanvas<Balloon>>(
+        canvasFinder,
+      );
+      final beforePosition =
+          beforeWidget.renderState.basicBalloons.first.position;
+      await tester.pump(gameLoopInterval * 2);
+      final afterWidget = tester.widget<PersistentGameCanvas<Balloon>>(
+        canvasFinder,
+      );
+
+      expect(identical(beforeWidget, afterWidget), isTrue);
+      expect(
+        afterWidget.renderState.basicBalloons.first.position,
+        isNot(beforePosition),
+      );
+    },
+  );
+
+  testWidgets('phase 1 canvas hit reuses pop logic and pause blocks input', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase1,
+      ),
+    );
+    await tester.pump();
+    await tapSectionStart(tester, 1);
+
+    final canvasFinder = find.byKey(
+      const ValueKey('phase-1-persistent-game-canvas'),
+    );
+    var canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+    expect(canvas.renderState.basicBalloons, hasLength(2));
+    final first = canvas.renderState.basicBalloons.first;
+    await tester.tapAt(
+      tester.getTopLeft(canvasFinder) +
+          first.position +
+          Offset(first.size / 2, first.size / 2),
+    );
+    await tester.pump();
+
+    canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+    expect(canvas.renderState.basicBalloons, hasLength(1));
+    expect(PopSound.basicPlayCount, 1);
+
+    await tester.tap(find.byKey(const ValueKey('pause-button')));
+    await tester.pump();
+    final remaining = canvas.renderState.basicBalloons.single;
+    await tester.tapAt(
+      tester.getTopLeft(canvasFinder) +
+          remaining.position +
+          Offset(remaining.size / 2, remaining.size / 2),
+    );
+    await tester.pump();
+    expect(canvas.renderState.basicBalloons, hasLength(1));
   });
 
   testWidgets('effects use one batched painter instead of particle widgets', (
