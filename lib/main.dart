@@ -4715,7 +4715,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               key: const ValueKey('phase-1-persistent-game-canvas'),
               renderState: _gameRenderState,
               frameListenable: _gameplayFrame,
-              onTapUp: _hitPhase1CanvasBalloonAt,
+              onPointerDown: _hitPhase1CanvasBalloonAt,
             ),
           ),
           if (_phase == GamePhase.stageIntro) _buildStageIntro(),
@@ -4729,7 +4729,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ],
       );
 
-  void _hitPhase1CanvasBalloonAt(TapUpDetails details) {
+  void _hitPhase1CanvasBalloonAt(PointerDownEvent event) {
     if (!phase1CanvasInputEnabled(
       isPlaying: _phase == GamePhase.playing,
       canvasActive: _usesPhase1Canvas,
@@ -4738,7 +4738,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     }
     final balloon = GameHitTester.topmostBasicBalloonAt(
       _balloons,
-      details.localPosition,
+      event.localPosition,
     );
     if (balloon != null) {
       _popBalloon(balloon);

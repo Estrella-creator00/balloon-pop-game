@@ -15,30 +15,50 @@ bool phase1CanvasInputEnabled({
     isPlaying && canvasActive;
 
 class PersistentGameCanvas<T extends BasicBalloonRenderView>
-    extends StatelessWidget {
+    extends StatefulWidget {
   const PersistentGameCanvas({
     super.key,
     required this.renderState,
     required this.frameListenable,
-    required this.onTapUp,
+    required this.onPointerDown,
   });
 
   final GameRenderState<T> renderState;
   final Listenable frameListenable;
-  final GestureTapUpCallback onTapUp;
+  final PointerDownEventListener onPointerDown;
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  State<PersistentGameCanvas<T>> createState() =>
+      _PersistentGameCanvasState<T>();
+}
+
+class _PersistentGameCanvasState<T extends BasicBalloonRenderView>
+    extends State<PersistentGameCanvas<T>> {
+  final Set<int> _activePointers = <int>{};
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!_activePointers.add(event.pointer)) return;
+    widget.onPointerDown(event);
+  }
+
+  void _handlePointerEnd(PointerEvent event) {
+    _activePointers.remove(event.pointer);
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
         key: const ValueKey('canvas-playfield-hit-surface'),
         behavior: HitTestBehavior.translucent,
-        onTapUp: onTapUp,
+        onPointerDown: _handlePointerDown,
+        onPointerUp: _handlePointerEnd,
+        onPointerCancel: _handlePointerEnd,
         child: RepaintBoundary(
           key: const ValueKey('canvas-playfield-boundary'),
           child: CustomPaint(
             key: const ValueKey('canvas-playfield-painter'),
             painter: GameScenePainter<T>(
-              renderState: renderState,
-              repaint: frameListenable,
+              renderState: widget.renderState,
+              repaint: widget.frameListenable,
             ),
             child: const SizedBox.expand(),
           ),

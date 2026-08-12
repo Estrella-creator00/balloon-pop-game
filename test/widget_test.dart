@@ -45,6 +45,28 @@ class _BasicRenderBalloon implements BasicBalloonRenderView {
   final double size;
 }
 
+Offset? exclusiveBalloonHitPoint(
+  Balloon target,
+  Iterable<Balloon> otherBalloons,
+) {
+  final bounds = GameHitTester.basicBalloonBounds(target);
+  const fractions = <double>[0.5, 0.2, 0.8, 0.35, 0.65];
+  for (final yFraction in fractions) {
+    for (final xFraction in fractions) {
+      final point = Offset(
+        bounds.left + bounds.width * xFraction,
+        bounds.top + bounds.height * yFraction,
+      );
+      if (otherBalloons.every(
+        (balloon) => !GameHitTester.basicBalloonBounds(balloon).contains(point),
+      )) {
+        return point;
+      }
+    }
+  }
+  return null;
+}
+
 String assetNameOf(ImageProvider<Object> provider) {
   var current = provider;
   while (current is ResizeImage) {
@@ -3410,6 +3432,10 @@ void main() {
           of: canvasFinder,
           matching: find.byType(GestureDetector),
         ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: canvasFinder, matching: find.byType(Listener)),
         findsOneWidget,
       );
 
@@ -3466,10 +3492,11 @@ void main() {
     await tester.pump();
     canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
     final remaining = canvas.renderState.basicBalloons.single;
-    canvas.onTapUp(
-      TapUpDetails(
+    canvas.onPointerDown(
+      PointerDownEvent(
+        pointer: 1,
         kind: ui.PointerDeviceKind.touch,
-        localPosition:
+        position:
             remaining.position + Offset(remaining.size / 2, remaining.size / 2),
       ),
     );
@@ -3595,6 +3622,143 @@ void main() {
       );
 
       beforeCanvas.frameListenable.removeListener(countRepaint);
+    },
+  );
+
+  testWidgets(
+    'phase 1 pointer down pops once and move or a second pointer cannot repeat it',
+    (tester) async {
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase1,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final balloons = canvas.renderState.basicBalloons;
+      final first = balloons.first;
+      final second = balloons.last;
+      final firstPoint = exclusiveBalloonHitPoint(first, [second]);
+      final secondPoint = exclusiveBalloonHitPoint(second, [first]);
+      expect(firstPoint, isNotNull);
+      expect(secondPoint, isNotNull);
+      final playfieldOrigin = tester.getTopLeft(canvasFinder);
+
+      final firstFinger = await tester.createGesture(
+        pointer: 1,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      await firstFinger.down(playfieldOrigin + firstPoint!);
+      expect(balloons, hasLength(1));
+      expect(PopSound.basicPlayCount, 1);
+
+      await firstFinger.moveTo(playfieldOrigin + secondPoint!);
+      expect(balloons, hasLength(1));
+      expect(PopSound.basicPlayCount, 1);
+
+      final secondFinger = await tester.createGesture(
+        pointer: 2,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      await secondFinger.down(playfieldOrigin + firstPoint);
+      expect(balloons, hasLength(1));
+      expect(PopSound.basicPlayCount, 1);
+
+      await firstFinger.up();
+      await secondFinger.up();
+      expect(find.text('Stage Clear!'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'phase 1 two active pointers pop two balloons and clear exactly once',
+    (tester) async {
+      var hapticCount = 0;
+      HapticService.setPerformerForTest(() async => hapticCount++);
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase1,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final balloons = canvas.renderState.basicBalloons;
+      final first = balloons.first;
+      final second = balloons.last;
+      final firstPoint = exclusiveBalloonHitPoint(first, [second]);
+      final secondPoint = exclusiveBalloonHitPoint(second, [first]);
+      expect(firstPoint, isNotNull);
+      expect(secondPoint, isNotNull);
+      final playfieldOrigin = tester.getTopLeft(canvasFinder);
+      var repaintRequests = 0;
+      void countRepaint() => repaintRequests++;
+      canvas.frameListenable.addListener(countRepaint);
+
+      final firstFinger = await tester.createGesture(
+        pointer: 11,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      final secondFinger = await tester.createGesture(
+        pointer: 12,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      await firstFinger.down(playfieldOrigin + firstPoint!);
+      expect(balloons, hasLength(1));
+      await secondFinger.down(playfieldOrigin + secondPoint!);
+
+      expect(balloons, isEmpty);
+      expect(PopSound.basicPlayCount, 2);
+      expect(hapticCount, 2);
+      expect(repaintRequests, 2);
+      final effects = tester
+          .widget<CustomPaint>(
+            find.descendant(
+              of: find.byKey(const ValueKey('effects-boundary')),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .painter! as EffectsPainter;
+      expect(effects.pieceCount, greaterThanOrEqualTo(12));
+      expect(effects.ringCount, 2);
+
+      final ignoredFinger = await tester.createGesture(
+        pointer: 13,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      await ignoredFinger.down(playfieldOrigin + firstPoint);
+      expect(PopSound.basicPlayCount, 2);
+      expect(hapticCount, 2);
+      expect(repaintRequests, 2);
+      await ignoredFinger.up();
+      await firstFinger.up();
+      await secondFinger.up();
+      canvas.frameListenable.removeListener(countRepaint);
+
+      await tester.pump();
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      final header = tester.widget<GameHeader>(find.byType(GameHeader));
+      expect(header.data.value.score, 10);
+      expect(find.byType(BalloonSkinRenderer), findsNothing);
+      expect(
+        find.descendant(of: canvasFinder, matching: find.byType(Positioned)),
+        findsNothing,
+      );
+
+      await tester.pump(const Duration(milliseconds: 399));
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(find.text('2 STAGE'), findsOneWidget);
+      expect(find.text('Stage Clear!'), findsNothing);
     },
   );
 
