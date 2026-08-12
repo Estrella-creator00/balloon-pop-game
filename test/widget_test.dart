@@ -42,6 +42,10 @@ class _BasicRenderBalloon implements BasicBalloonRenderView {
   @override
   final Color color;
   @override
+  Color get displayColor => color;
+  @override
+  double get opacity => 1;
+  @override
   final double size;
 }
 
@@ -65,6 +69,28 @@ Offset? exclusiveBalloonHitPoint(
     }
   }
   return null;
+}
+
+Future<Offset> waitForExclusiveCanvasHitPoint(
+  WidgetTester tester,
+  Finder canvasFinder,
+  int balloonId,
+) async {
+  for (var attempt = 0; attempt < 60; attempt++) {
+    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+    final target = canvas.renderState.basicBalloons.singleWhere(
+      (balloon) => balloon.id == balloonId,
+    );
+    final point = exclusiveBalloonHitPoint(
+      target,
+      canvas.renderState.basicBalloons.where(
+        (balloon) => balloon.id != balloonId,
+      ),
+    );
+    if (point != null) return point;
+    await tester.pump(gameLoopInterval);
+  }
+  throw TestFailure('Could not find an exclusive hit point for $balloonId.');
 }
 
 String assetNameOf(ImageProvider<Object> provider) {
@@ -1530,6 +1556,54 @@ void main() {
   test('production renderer enables phase 1 and retains legacy rollback', () {
     expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase1);
     expect(GameplayRendererMode.values, contains(GameplayRendererMode.legacy));
+    expect(
+      GameplayRendererMode.values,
+      contains(GameplayRendererMode.canvasPhase2),
+    );
+  });
+
+  test('phase 2 canvas stages exclude every boss stage', () {
+    for (final stage in const [1, 9]) {
+      expect(
+        gameplayCanvasStageEnabled(
+          mode: GameplayRendererMode.canvasPhase1,
+          stage: stage,
+        ),
+        isTrue,
+      );
+      expect(
+        gameplayCanvasStageEnabled(
+          mode: GameplayRendererMode.canvasPhase2,
+          stage: stage,
+        ),
+        isTrue,
+      );
+    }
+    for (final stage in const [11, 19, 21, 29]) {
+      expect(
+        gameplayCanvasStageEnabled(
+          mode: GameplayRendererMode.canvasPhase1,
+          stage: stage,
+        ),
+        isFalse,
+      );
+      expect(
+        gameplayCanvasStageEnabled(
+          mode: GameplayRendererMode.canvasPhase2,
+          stage: stage,
+        ),
+        isTrue,
+      );
+    }
+    for (final stage in const [10, 20, 30]) {
+      expect(
+        gameplayCanvasStageEnabled(
+          mode: GameplayRendererMode.canvasPhase2,
+          stage: stage,
+        ),
+        isFalse,
+      );
+    }
   });
 
   test('phase 1 input gate blocks pause and stage-intro phases', () {
@@ -3851,6 +3925,581 @@ void main() {
       expect(canvas.renderState.basicBalloons, hasLength(3));
     },
   );
+
+  testWidgets(
+    'phase 2 two-hit balloon repaints immediately without replacing the canvas',
+    (tester) async {
+      ProgressStorage.unlockSecondSection();
+      var hapticCount = 0;
+      HapticService.setPerformerForTest(() async => hapticCount++);
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase2,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 2);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final painterFinder = find.byKey(
+        const ValueKey('canvas-playfield-painter'),
+      );
+      final beforeCanvas =
+          tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final beforePainter = tester.widget<CustomPaint>(painterFinder).painter;
+      final target = beforeCanvas.renderState.basicBalloons.first;
+      final originalSize = target.size;
+      final originalColor = target.displayColor;
+      final firstPoint = await waitForExclusiveCanvasHitPoint(
+        tester,
+        canvasFinder,
+        target.id,
+      );
+      var repaintRequests = 0;
+      void countRepaint() => repaintRequests++;
+      beforeCanvas.frameListenable.addListener(countRepaint);
+
+      final firstTouch = await tester.createGesture(
+        pointer: 201,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      await firstTouch.down(tester.getTopLeft(canvasFinder) + firstPoint);
+
+      expect(target.hp, 1);
+      expect(target.size, closeTo(originalSize * 0.88, 0.001));
+      expect(target.displayColor, isNot(originalColor));
+      expect(beforeCanvas.renderState.basicBalloons, hasLength(2));
+      expect(repaintRequests, 1);
+      expect(hapticCount, 0);
+      await firstTouch.up();
+      await tester.pump();
+
+      final afterFirstCanvas =
+          tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final afterFirstPainter =
+          tester.widget<CustomPaint>(painterFinder).painter;
+      expect(identical(afterFirstCanvas, beforeCanvas), isTrue);
+      expect(identical(afterFirstPainter, beforePainter), isTrue);
+      expect(
+        tester.widget<GameHeader>(find.byType(GameHeader)).data.value.remaining,
+        2,
+      );
+
+      final secondTouch = await tester.createGesture(
+        pointer: 202,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      await secondTouch.down(
+        tester.getTopLeft(canvasFinder) +
+            target.position +
+            Offset(target.size / 2, target.size / 2),
+      );
+
+      expect(target.hp, 0);
+      expect(beforeCanvas.renderState.basicBalloons, hasLength(1));
+      expect(repaintRequests, 2);
+      expect(hapticCount, 1);
+      expect(PopSound.basicPlayCount, 1);
+      await secondTouch.up();
+      await tester.pump();
+
+      expect(
+        identical(
+          tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder),
+          beforeCanvas,
+        ),
+        isTrue,
+      );
+      expect(
+        identical(
+            tester.widget<CustomPaint>(painterFinder).painter, beforePainter),
+        isTrue,
+      );
+      expect(
+        tester.widget<GameHeader>(find.byType(GameHeader)).data.value.remaining,
+        1,
+      );
+      expect(find.text('Stage Clear!'), findsNothing);
+      expect(find.byType(BalloonSkinRenderer), findsNothing);
+      beforeCanvas.frameListenable.removeListener(countRepaint);
+    },
+  );
+
+  testWidgets(
+    'phase 2 two active pointers atomically finish one two-hit balloon',
+    (tester) async {
+      ProgressStorage.unlockSecondSection();
+      var hapticCount = 0;
+      HapticService.setPerformerForTest(() async => hapticCount++);
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase2,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 2);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final target = canvas.renderState.basicBalloons.first;
+      final point = await waitForExclusiveCanvasHitPoint(
+        tester,
+        canvasFinder,
+        target.id,
+      );
+      final origin = tester.getTopLeft(canvasFinder);
+      final firstTouch = await tester.createGesture(
+        pointer: 211,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      final secondTouch = await tester.createGesture(
+        pointer: 212,
+        kind: ui.PointerDeviceKind.touch,
+      );
+
+      await firstTouch.down(origin + point);
+      expect(target.hp, 1);
+      await secondTouch.down(origin + point);
+
+      expect(target.hp, 0);
+      expect(canvas.renderState.basicBalloons, hasLength(1));
+      expect(PopSound.basicPlayCount, 1);
+      expect(hapticCount, 1);
+      expect(find.text('Stage Clear!'), findsNothing);
+      await firstTouch.up();
+      await secondTouch.up();
+    },
+  );
+
+  testWidgets(
+    'phase 2 fake hit uses cached canvas visuals and the existing penalty',
+    (tester) async {
+      var hapticCount = 0;
+      HapticService.setPerformerForTest(() async => hapticCount++);
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase2,
+        ),
+      );
+      await tester.pump();
+      await tester.drag(find.byType(PageView), const Offset(-500, 0));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tapSectionStart(tester, 3);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final painterFinder = find.byKey(
+        const ValueKey('canvas-playfield-painter'),
+      );
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final painter = tester.widget<CustomPaint>(painterFinder).painter;
+      final fake = canvas.renderState.basicBalloons.firstWhere(
+        (balloon) => balloon.isFake,
+      );
+      expect(fake.opacity, fakeBalloonOpacity);
+      expect(fake.displayColor, fakeBalloonColor(fake.color));
+      expect(
+        canvas.renderState.basicBalloons.where((balloon) => balloon.isFake),
+        hasLength(2),
+      );
+      expect(find.byType(BalloonSkinRenderer), findsNothing);
+
+      final point = await waitForExclusiveCanvasHitPoint(
+        tester,
+        canvasFinder,
+        fake.id,
+      );
+      var repaintRequests = 0;
+      void countRepaint() => repaintRequests++;
+      canvas.frameListenable.addListener(countRepaint);
+      final touch = await tester.createGesture(
+        pointer: 221,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      await touch.down(tester.getTopLeft(canvasFinder) + point);
+
+      expect(canvas.renderState.basicBalloons.contains(fake), isFalse);
+      expect(repaintRequests, 1);
+      expect(PopSound.fakePlayCount, 1);
+      expect(hapticCount, 1);
+      expect(
+        tester
+            .widget<GameHeader>(find.byType(GameHeader))
+            .data
+            .value
+            .secondsLeft,
+        12,
+      );
+      await touch.up();
+      await tester.pump();
+
+      expect(
+        identical(
+          tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder),
+          canvas,
+        ),
+        isTrue,
+      );
+      expect(
+        identical(tester.widget<CustomPaint>(painterFinder).painter, painter),
+        isTrue,
+      );
+      final effects = tester
+          .widget<CustomPaint>(
+            find.descendant(
+              of: find.byKey(const ValueKey('effects-boundary')),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .painter! as EffectsPainter;
+      expect(effects.feedbackCount, 1);
+      expect(effects.pieceCount, 0);
+      expect(effects.ringCount, 0);
+      canvas.frameListenable.removeListener(countRepaint);
+    },
+  );
+
+  testWidgets(
+    'phase 2 multitouch clears the last normal balloons and removes fakes once',
+    (tester) async {
+      var hapticCount = 0;
+      HapticService.setPerformerForTest(() async => hapticCount++);
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase2,
+        ),
+      );
+      await tester.pump();
+      await tester.drag(find.byType(PageView), const Offset(-500, 0));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tapSectionStart(tester, 3);
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      final normals = canvas.renderState.basicBalloons
+          .where((balloon) => !balloon.isFake)
+          .toList(growable: false);
+      expect(normals, hasLength(2));
+      final firstPoint = await waitForExclusiveCanvasHitPoint(
+        tester,
+        canvasFinder,
+        normals.first.id,
+      );
+      final secondPoint = await waitForExclusiveCanvasHitPoint(
+        tester,
+        canvasFinder,
+        normals.last.id,
+      );
+      final origin = tester.getTopLeft(canvasFinder);
+      var repaintRequests = 0;
+      void countRepaint() => repaintRequests++;
+      canvas.frameListenable.addListener(countRepaint);
+      final firstTouch = await tester.createGesture(
+        pointer: 231,
+        kind: ui.PointerDeviceKind.touch,
+      );
+      final secondTouch = await tester.createGesture(
+        pointer: 232,
+        kind: ui.PointerDeviceKind.touch,
+      );
+
+      await firstTouch.down(origin + firstPoint);
+      expect(
+        canvas.renderState.basicBalloons.where((balloon) => !balloon.isFake),
+        hasLength(1),
+      );
+      await secondTouch.down(origin + secondPoint);
+
+      expect(canvas.renderState.basicBalloons, isEmpty);
+      expect(repaintRequests, 2);
+      expect(PopSound.basicPlayCount, 2);
+      expect(PopSound.fakePlayCount, 0);
+      expect(hapticCount, 2);
+      await firstTouch.up();
+      await secondTouch.up();
+      canvas.frameListenable.removeListener(countRepaint);
+      await tester.pump();
+
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 399));
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(find.text('22 STAGE'), findsOneWidget);
+      expect(find.text('Stage Clear!'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('phase 2 normal and fake balloons accept simultaneous pointers', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase2,
+      ),
+    );
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tapSectionStart(tester, 3);
+
+    final canvasFinder = find.byKey(
+      const ValueKey('phase-1-persistent-game-canvas'),
+    );
+    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+    final normal = canvas.renderState.basicBalloons.firstWhere(
+      (balloon) => !balloon.isFake,
+    );
+    final fake = canvas.renderState.basicBalloons.firstWhere(
+      (balloon) => balloon.isFake,
+    );
+    final normalPoint = await waitForExclusiveCanvasHitPoint(
+      tester,
+      canvasFinder,
+      normal.id,
+    );
+    final fakePoint = await waitForExclusiveCanvasHitPoint(
+      tester,
+      canvasFinder,
+      fake.id,
+    );
+    final origin = tester.getTopLeft(canvasFinder);
+    final normalTouch = await tester.createGesture(
+      pointer: 241,
+      kind: ui.PointerDeviceKind.touch,
+    );
+    final fakeTouch = await tester.createGesture(
+      pointer: 242,
+      kind: ui.PointerDeviceKind.touch,
+    );
+
+    await normalTouch.down(origin + normalPoint);
+    await fakeTouch.down(origin + fakePoint);
+
+    expect(canvas.renderState.basicBalloons.contains(normal), isFalse);
+    expect(canvas.renderState.basicBalloons.contains(fake), isFalse);
+    expect(
+      canvas.renderState.basicBalloons.where((balloon) => !balloon.isFake),
+      hasLength(1),
+    );
+    expect(
+      canvas.renderState.basicBalloons.where((balloon) => balloon.isFake),
+      hasLength(1),
+    );
+    expect(PopSound.basicPlayCount, 1);
+    expect(PopSound.fakePlayCount, 1);
+    expect(find.text('Stage Clear!'), findsNothing);
+    await normalTouch.up();
+    await fakeTouch.up();
+  });
+
+  testWidgets('phase 2 two fake balloons accept simultaneous pointers', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase2,
+      ),
+    );
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tapSectionStart(tester, 3);
+
+    final canvasFinder = find.byKey(
+      const ValueKey('phase-1-persistent-game-canvas'),
+    );
+    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+    final fakes = canvas.renderState.basicBalloons
+        .where((balloon) => balloon.isFake)
+        .toList(growable: false);
+    final firstPoint = await waitForExclusiveCanvasHitPoint(
+      tester,
+      canvasFinder,
+      fakes.first.id,
+    );
+    final secondPoint = await waitForExclusiveCanvasHitPoint(
+      tester,
+      canvasFinder,
+      fakes.last.id,
+    );
+    final origin = tester.getTopLeft(canvasFinder);
+    final firstTouch = await tester.createGesture(
+      pointer: 251,
+      kind: ui.PointerDeviceKind.touch,
+    );
+    final secondTouch = await tester.createGesture(
+      pointer: 252,
+      kind: ui.PointerDeviceKind.touch,
+    );
+
+    await firstTouch.down(origin + firstPoint);
+    await secondTouch.down(origin + secondPoint);
+
+    expect(
+      canvas.renderState.basicBalloons.where((balloon) => balloon.isFake),
+      isEmpty,
+    );
+    expect(
+      canvas.renderState.basicBalloons.where((balloon) => !balloon.isFake),
+      hasLength(2),
+    );
+    expect(PopSound.fakePlayCount, 2);
+    expect(
+      tester.widget<GameHeader>(find.byType(GameHeader)).data.value.secondsLeft,
+      10,
+    );
+    expect(find.text('Stage Clear!'), findsNothing);
+    await firstTouch.up();
+    await secondTouch.up();
+  });
+
+  testWidgets('phase 2 stage 19 transitions to the legacy stage 20 boss', (
+    tester,
+  ) async {
+    ProgressStorage.unlockSecondSection();
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase2,
+      ),
+    );
+    await tester.pump();
+    await tapSectionStart(tester, 2);
+
+    for (var stage = 11; stage <= 19; stage++) {
+      expect(find.text('$stage STAGE'), findsOneWidget);
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      while (canvas.renderState.basicBalloons.isNotEmpty) {
+        final target = canvas.renderState.basicBalloons.last;
+        final position =
+            target.position + Offset(target.size / 2, target.size / 2);
+        canvas.onPointerDown(
+          PointerDownEvent(
+            pointer: 300 + target.id * 2,
+            kind: ui.PointerDeviceKind.touch,
+            position: position,
+          ),
+        );
+        if (canvas.renderState.basicBalloons.contains(target)) {
+          canvas.onPointerDown(
+            PointerDownEvent(
+              pointer: 301 + target.id * 2,
+              kind: ui.PointerDeviceKind.touch,
+              position:
+                  target.position + Offset(target.size / 2, target.size / 2),
+            ),
+          );
+        }
+      }
+      await tester.pump();
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    expect(find.text('20 STAGE'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
+  });
+
+  testWidgets('phase 2 stage 29 transitions to the legacy stage 30 bosses', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase2,
+      ),
+    );
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tapSectionStart(tester, 3);
+
+    for (var stage = 21; stage <= 29; stage++) {
+      expect(find.text('$stage STAGE'), findsOneWidget);
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      while (canvas.renderState.basicBalloons.isNotEmpty) {
+        final target = canvas.renderState.basicBalloons.last;
+        canvas.onPointerDown(
+          PointerDownEvent(
+            pointer: 600 + target.id,
+            kind: ui.PointerDeviceKind.touch,
+            position:
+                target.position + Offset(target.size / 2, target.size / 2),
+          ),
+        );
+      }
+      await tester.pump();
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    expect(find.text('30 STAGE'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
+  });
+
+  testWidgets('phase 2 keeps an equipped image skin on the legacy renderer', (
+    tester,
+  ) async {
+    ProgressStorage.addCoins(100);
+    expect(
+      PurchaseService.purchase(
+        productId: 'balloon-heart',
+        price: 100,
+        initiallyOwned: false,
+      ),
+      PurchaseResult.success,
+    );
+    expect(
+      PurchaseService.equip(
+        category: StoreCategory.balloon.name,
+        productId: 'balloon-heart',
+        initiallyOwned: false,
+      ),
+      EquipResult.success,
+    );
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase2,
+      ),
+    );
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tapSectionStart(tester, 3);
+
+    expect(
+      find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+      findsNothing,
+    );
+    expect(find.byType(BalloonSkinRenderer), findsNWidgets(4));
+    expect(find.byKey(const ValueKey<int>(0)), findsOneWidget);
+    expect(find.byKey(const ValueKey('fake-balloon-2')), findsOneWidget);
+  });
 
   testWidgets('effects use one batched painter instead of particle widgets', (
     tester,

@@ -8,6 +8,8 @@ abstract interface class BasicBalloonRenderView {
   int get id;
   Offset get position;
   Color get color;
+  Color get displayColor;
+  double get opacity;
   double get size;
 }
 

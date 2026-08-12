@@ -1,34 +1,37 @@
 import 'package:flutter/material.dart';
 
 class BasicBalloonDrawing {
-  BasicBalloonDrawing._(Size size, Color color)
+  BasicBalloonDrawing._(Size size, Color color, double opacity)
       : _size = size,
         _color = color,
+        _opacity = opacity,
         _balloonHeight = size.height - 26,
         _body = Rect.fromLTWH(3, 0, size.width - 6, size.height - 35) {
     _shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.18)
+      ..color = Colors.black.withValues(alpha: 0.18 * opacity)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     _bodyPaint = Paint()
       ..shader = RadialGradient(
         center: const Alignment(-0.32, -0.42),
         radius: 0.88,
         colors: [
-          Color.lerp(color, Colors.white, 0.40)!,
-          color,
-          Color.lerp(color, Colors.black, 0.24)!,
+          _withOpacity(Color.lerp(color, Colors.white, 0.40)!, opacity),
+          _withOpacity(color, opacity),
+          _withOpacity(Color.lerp(color, Colors.black, 0.24)!, opacity),
         ],
         stops: const [0, 0.60, 1],
       ).createShader(_body);
     _outlinePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.34)
+      ..color = Colors.white.withValues(alpha: 0.34 * opacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5;
-    _shinePaint = Paint()..color = Colors.white.withValues(alpha: 0.70);
-    _shineDotPaint = Paint()..color = Colors.white.withValues(alpha: 0.95);
-    _knotPaint = Paint()..color = color;
+    _shinePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.70 * opacity);
+    _shineDotPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.95 * opacity);
+    _knotPaint = Paint()..color = _withOpacity(color, opacity);
     _stringPaint = Paint()
-      ..color = const Color(0xFF666666)
+      ..color = const Color(0xFF666666).withValues(alpha: opacity)
       ..strokeWidth = 1.6
       ..style = PaintingStyle.stroke;
     _knot = Path()
@@ -46,11 +49,16 @@ class BasicBalloonDrawing {
       );
   }
 
-  factory BasicBalloonDrawing.forBalloon(Size size, Color color) =>
-      BasicBalloonDrawing._(size, color);
+  factory BasicBalloonDrawing.forBalloon(
+    Size size,
+    Color color, {
+    double opacity = 1,
+  }) =>
+      BasicBalloonDrawing._(size, color, opacity);
 
   final Size _size;
   final Color _color;
+  final double _opacity;
   final double _balloonHeight;
   final Rect _body;
   late final Paint _shadowPaint;
@@ -63,7 +71,8 @@ class BasicBalloonDrawing {
   late final Path _knot;
   late final Path _string;
 
-  bool matches(Size size, Color color) => _size == size && _color == color;
+  bool matches(Size size, Color color, {double opacity = 1}) =>
+      _size == size && _color == color && _opacity == opacity;
 
   void draw(Canvas canvas) {
     canvas.drawOval(_body.shift(const Offset(3, 6)), _shadowPaint);
@@ -87,6 +96,9 @@ class BasicBalloonDrawing {
     canvas.drawPath(_string, _stringPaint);
   }
 }
+
+Color _withOpacity(Color color, double opacity) =>
+    color.withValues(alpha: color.a * opacity);
 
 void drawBasicBalloon(
   Canvas canvas,

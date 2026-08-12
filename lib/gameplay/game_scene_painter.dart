@@ -16,9 +16,20 @@ class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     for (final balloon in renderState.basicBalloons) {
       final visualSize = Size(balloon.size, balloon.size + 26);
+      final displayColor = balloon.displayColor;
+      final opacity = balloon.opacity;
       var drawing = _drawings[balloon.id];
-      if (drawing == null || !drawing.matches(visualSize, balloon.color)) {
-        drawing = BasicBalloonDrawing.forBalloon(visualSize, balloon.color);
+      if (drawing == null ||
+          !drawing.matches(
+            visualSize,
+            displayColor,
+            opacity: opacity,
+          )) {
+        drawing = BasicBalloonDrawing.forBalloon(
+          visualSize,
+          displayColor,
+          opacity: opacity,
+        );
         _drawings[balloon.id] = drawing;
       }
       canvas

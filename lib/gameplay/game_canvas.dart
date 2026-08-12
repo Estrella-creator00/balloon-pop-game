@@ -3,10 +3,20 @@ import 'package:flutter/material.dart';
 import 'game_render_state.dart';
 import 'game_scene_painter.dart';
 
-enum GameplayRendererMode { legacy, canvasPhase1 }
+enum GameplayRendererMode { legacy, canvasPhase1, canvasPhase2 }
 
 /// One-line rollback switch for production. Tests may inject either mode.
-const defaultGameplayRendererMode = GameplayRendererMode.canvasPhase1;
+const defaultGameplayRendererMode = GameplayRendererMode.canvasPhase2;
+
+bool gameplayCanvasStageEnabled({
+  required GameplayRendererMode mode,
+  required int stage,
+}) {
+  if (mode == GameplayRendererMode.legacy) return false;
+  if (stage >= 1 && stage <= 9) return true;
+  if (mode != GameplayRendererMode.canvasPhase2) return false;
+  return (stage >= 11 && stage <= 19) || (stage >= 21 && stage <= 29);
+}
 
 bool phase1CanvasInputEnabled({
   required bool isPlaying,

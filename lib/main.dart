@@ -258,6 +258,19 @@ class Balloon implements BasicBalloonRenderView {
   double exitProgress;
   Offset exitVelocity;
 
+  @override
+  Color get displayColor {
+    final damageColor = BalloonSkinCatalog.defaultSkin.colorAtDamage(
+      color,
+      maxHp == 0 ? 0 : (maxHp - hp) / maxHp,
+      isBoss: false,
+    );
+    return isFake ? fakeBalloonColor(damageColor) : damageColor;
+  }
+
+  @override
+  double get opacity => isFake ? fakeBalloonOpacity : 1;
+
   bool get isExiting => exitProgress > 0;
 }
 
@@ -2329,10 +2342,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       if (!playBalloonHitSound(skin)) PopSound.playLightTap();
       _spawnGemiShards(skin, center, balloon.size, balloon.color, count: 2);
       _registerLegendaryBackgroundImpact(skin, finalHit: false);
-      setState(() {
+      void applyHit() {
         balloon.hp--;
         balloon.size *= 0.88;
-      });
+      }
+
+      if (_usesCanvasPlayfield) {
+        applyHit();
+      } else {
+        setState(applyHit);
+      }
       return;
     }
 
@@ -2343,9 +2362,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _spawnSkinPopEffect(skin, center, balloon.color, balloon.size, big: false);
     _spawnRing(center, balloon.color, balloon.size * 0.72);
 
-    final isPhase1CanvasNonFinalPop =
-        _usesPhase1Canvas && _normalBalloonCount > 1;
-    if (isPhase1CanvasNonFinalPop) {
+    final isCanvasNonFinalPop = _usesCanvasPlayfield && _normalBalloonCount > 1;
+    if (isCanvasNonFinalPop) {
       _balloons.remove(balloon);
       balloon.hp = 0;
     } else {
@@ -2428,7 +2446,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     }
 
     _secondsLeft = (remaining.inMilliseconds + 999) ~/ 1000;
-    setState(() {});
+    if (!_usesCanvasPlayfield) setState(() {});
     _publishHeader();
   }
 
@@ -2440,7 +2458,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _score += _secondsLeft;
     _saveNextPlayableStage();
     _phase = GamePhase.stageClear;
-    if (_usesPhase1Canvas) _gameplayFrame.value++;
+    if (_usesCanvasPlayfield) _gameplayFrame.value++;
     _publishHeader();
     _stageTimer?.cancel();
     _stageTimer = Timer(_stageClearDelay, () {
@@ -4571,8 +4589,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           } else if (_playArea != newSize) {
                             _playArea = newSize;
                           }
-                          if (_usesPhase1Canvas) {
-                            return _buildPhase1CanvasPlayfield(
+                          if (_usesCanvasPlayfield) {
+                            return _buildCanvasPlayfield(
                               !hasDedicatedBackground
                                   ? Positioned.fill(
                                       child: GameBalloonBackground(
@@ -4672,25 +4690,22 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
-  bool get _usesPhase1Canvas {
-    if (widget.gameplayRendererMode != GameplayRendererMode.canvasPhase1) {
+  bool get _usesCanvasPlayfield {
+    if (!gameplayCanvasStageEnabled(
+      mode: widget.gameplayRendererMode,
+      stage: _stage,
+    )) {
       return false;
     }
-    // Phase 1 intentionally covers only the simple one-hit, no-fake stages.
-    // This guard also avoids consulting StageConfig for a future intro stage.
-    if (_stage < 1 || _stage > 9) return false;
     final skin = _equippedBalloonSkin;
     return skin.id == BalloonSkinCatalog.defaultId &&
         !_stageConfig.isBoss &&
-        !_stageConfig.hasFakeBalloons &&
-        _stageConfig.requiredHits == 1 &&
         _balloons.every(
-          (balloon) =>
-              !balloon.isFake && balloon.skinId == BalloonSkinCatalog.defaultId,
+          (balloon) => balloon.skinId == BalloonSkinCatalog.defaultId,
         );
   }
 
-  Widget _buildPhase1CanvasPlayfield(Widget? staticBackground) => Stack(
+  Widget _buildCanvasPlayfield(Widget? staticBackground) => Stack(
         clipBehavior: Clip.none,
         children: [
           if (staticBackground != null) staticBackground,
@@ -4715,7 +4730,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               key: const ValueKey('phase-1-persistent-game-canvas'),
               renderState: _gameRenderState,
               frameListenable: _gameplayFrame,
-              onPointerDown: _hitPhase1CanvasBalloonAt,
+              onPointerDown: _hitCanvasBalloonAt,
             ),
           ),
           if (_phase == GamePhase.stageIntro) _buildStageIntro(),
@@ -4729,10 +4744,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ],
       );
 
-  void _hitPhase1CanvasBalloonAt(PointerDownEvent event) {
+  void _hitCanvasBalloonAt(PointerDownEvent event) {
     if (!phase1CanvasInputEnabled(
       isPlaying: _phase == GamePhase.playing,
-      canvasActive: _usesPhase1Canvas,
+      canvasActive: _usesCanvasPlayfield,
     )) {
       return;
     }
