@@ -6,6 +6,7 @@ import 'package:balloon_pop_game/gameplay/game_canvas.dart';
 import 'package:balloon_pop_game/gameplay/game_hit_tester.dart';
 import 'package:balloon_pop_game/gameplay/game_render_state.dart';
 import 'package:balloon_pop_game/gameplay/game_scene_painter.dart';
+import 'package:balloon_pop_game/gameplay/game_sprite_cache.dart';
 import 'package:balloon_pop_game/audio/pop_sound.dart';
 import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
@@ -47,6 +48,22 @@ class _BasicRenderBalloon implements BasicBalloonRenderView {
   double get opacity => 1;
   @override
   final double size;
+  @override
+  String? get spriteAssetPath => null;
+  @override
+  List<double>? get spriteColorMatrix => null;
+  @override
+  List<double>? get spriteDetailColorMatrix => null;
+  @override
+  bool get preserveMochiDetails => false;
+  @override
+  Offset get visualOffset => Offset.zero;
+  @override
+  double get visualRotation => 0;
+  @override
+  double get visualScale => 1;
+  @override
+  double get spriteOpacity => 1;
 }
 
 class _BasicRenderBoss implements BossBalloonRenderView {
@@ -71,6 +88,22 @@ class _BasicRenderBoss implements BossBalloonRenderView {
   int get maxHp => 10;
   @override
   bool get showHealthBar => true;
+  @override
+  String? get spriteAssetPath => null;
+  @override
+  List<double>? get spriteColorMatrix => null;
+  @override
+  List<double>? get spriteDetailColorMatrix => null;
+  @override
+  bool get preserveMochiDetails => false;
+  @override
+  Offset get visualOffset => Offset.zero;
+  @override
+  double get visualRotation => 0;
+  @override
+  double get visualScale => 1;
+  @override
+  double get spriteOpacity => 1;
 }
 
 Offset? exclusiveBalloonHitPoint(
@@ -148,6 +181,27 @@ Future<void> clearCurrentCanvasStage(WidgetTester tester) async {
     );
   }
   await tester.pump();
+}
+
+void equipBalloonSkinForTest(String skinId) {
+  final definition = BalloonSkinCatalog.byIdOrDefault(skinId);
+  ProgressStorage.addCoins(definition.price);
+  expect(
+    PurchaseService.purchase(
+      productId: skinId,
+      price: definition.price,
+      initiallyOwned: definition.initiallyOwned,
+    ),
+    PurchaseResult.success,
+  );
+  expect(
+    PurchaseService.equip(
+      category: StoreCategory.balloon.name,
+      productId: skinId,
+      initiallyOwned: definition.initiallyOwned,
+    ),
+    EquipResult.success,
+  );
 }
 
 String assetNameOf(ImageProvider<Object> provider) {
@@ -1593,12 +1647,14 @@ void main() {
 
   test('phase 1 painter listens directly to the gameplay frame notifier', () {
     final frames = ValueNotifier<int>(0);
+    final sprites = GameSpriteCache();
     final painter = GameScenePainter<_BasicRenderBalloon>(
       renderState: GameRenderState(
         basicBalloons: [
           _BasicRenderBalloon(id: 1, position: Offset.zero),
         ],
       ),
+      spriteCache: sprites,
       repaint: frames,
     );
     var repaintRequests = 0;
@@ -1607,12 +1663,13 @@ void main() {
     frames.value++;
 
     expect(repaintRequests, 1);
+    sprites.dispose();
     frames.dispose();
   });
 
   test('production renderer keeps the selected default and legacy rollback',
       () {
-    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase2);
+    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase3);
     expect(GameplayRendererMode.values, contains(GameplayRendererMode.legacy));
     expect(
       GameplayRendererMode.values,
@@ -5892,6 +5949,279 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
+    }
+  });
+
+  test('phase 4A catalog scope contains every non-legendary image skin', () {
+    expect(
+      phase4ACanvasSkinIds,
+      const <String>{
+        'balloon-default',
+        'balloon-heart',
+        'balloon-star',
+        'balloon-flower',
+        'balloon-rabbit',
+        'balloon-wari',
+        'balloon-kicks',
+        'balloon-boo',
+        'balloon-jello',
+      },
+    );
+    expect(phase4ACanvasSkinIds, isNot(contains('balloon-lumen')));
+    expect(phase4ACanvasSkinIds, isNot(contains('balloon-chouchou')));
+    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase3);
+  });
+
+  test('phase 4A image render views select variants and cached transforms', () {
+    final wari = Balloon(
+      id: 1,
+      position: Offset.zero,
+      velocity: Offset.zero,
+      color: const Color(0xFFFF5E67),
+      size: 80,
+      floatPhase: 0,
+      floatPower: 0,
+      hp: 1,
+      maxHp: 1,
+      skinId: 'balloon-wari',
+      visualVariant: 2,
+    );
+    final boo = Balloon(
+      id: 2,
+      position: Offset.zero,
+      velocity: Offset.zero,
+      color: const Color(0xFFC9B7FF),
+      size: 80,
+      floatPhase: 1.5707963267948966,
+      floatPower: 0,
+      hp: 1,
+      maxHp: 1,
+      skinId: 'balloon-boo',
+    );
+    final kicks = Balloon(
+      id: 3,
+      position: Offset.zero,
+      velocity: Offset.zero,
+      color: const Color(0xFFFF5C8A),
+      size: 80,
+      floatPhase: 0,
+      floatPower: 0,
+      hp: 1,
+      maxHp: 1,
+      skinId: 'balloon-kicks',
+      exitProgress: 0.5,
+    );
+
+    expect(
+      wari.spriteAssetPath,
+      'assets/images/balloon_wari_round_asset.png',
+    );
+    expect(wari.spriteColorMatrix, isNull);
+    expect(boo.spriteAssetPath, 'assets/images/balloon_boo_asset.png');
+    expect(boo.visualOffset.dx, closeTo(1.4, 0.001));
+    expect(boo.spriteOpacity, closeTo(0.86, 0.001));
+    expect(kicks.visualRotation, 0);
+    expect(kicks.visualScale, closeTo(0.79, 0.001));
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-star').assetPath,
+      'assets/images/balloon_star_asset.png',
+    );
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-flower').assetPath,
+      'assets/images/balloon_flower_asset.png',
+    );
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-jello').assetPath,
+      'assets/images/balloon_muggy_asset.png',
+    );
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-wari').popSoundAssetPath,
+      'assets/sounds/wari_watermelon_bite.mp3.mp3',
+    );
+  });
+
+  testWidgets(
+    'phase 4A renders an equipped image skin without per-balloon widgets',
+    (tester) async {
+      equipBalloonSkinForTest('balloon-heart');
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase4A,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final canvasFinder = find.byKey(
+        const ValueKey('phase-1-persistent-game-canvas'),
+      );
+      var canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      for (var attempt = 0;
+          attempt < 30 &&
+              !canvas.spriteCache.contains('assets/images/heart_balloon.png');
+          attempt++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+      }
+      expect(canvas.renderState.basicBalloons, isNotEmpty);
+      expect(
+        canvas.renderState.basicBalloons.first.spriteAssetPath,
+        'assets/images/heart_balloon.png',
+      );
+      expect(
+        canvas.spriteCache.resolvedCount + canvas.spriteCache.pendingCount,
+        1,
+      );
+      expect(find.byType(BalloonSkinRenderer), findsNothing);
+      expect(
+        find.descendant(of: canvasFinder, matching: find.byType(Positioned)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: canvasFinder,
+          matching: find.byType(GestureDetector),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('phase 4A image skin keeps 2-hit repaint and painter identity', (
+    tester,
+  ) async {
+    ProgressStorage.unlockSecondSection();
+    equipBalloonSkinForTest('balloon-rabbit');
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase4A,
+      ),
+    );
+    await tester.pump();
+    await tapSectionStart(tester, 2);
+    await tester.pump(const Duration(milliseconds: 100));
+    final canvasFinder = find.byKey(
+      const ValueKey('phase-1-persistent-game-canvas'),
+    );
+    final painterFinder = find.byKey(
+      const ValueKey('canvas-playfield-painter'),
+    );
+    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+    final painter = tester.widget<CustomPaint>(painterFinder).painter;
+    final balloon = canvas.renderState.basicBalloons.first;
+    expect(balloon.hp, 2);
+    final hitPoint = await waitForExclusiveCanvasHitPoint(
+      tester,
+      canvasFinder,
+      balloon.id,
+    );
+    canvas.onPointerDown(
+      PointerDownEvent(
+        pointer: 4101,
+        kind: ui.PointerDeviceKind.touch,
+        position: hitPoint,
+      ),
+    );
+    expect(balloon.hp, 1);
+    await tester.pump();
+    expect(
+      identical(
+          tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder), canvas),
+      true,
+    );
+    expect(
+        identical(tester.widget<CustomPaint>(painterFinder).painter, painter),
+        true);
+  });
+
+  testWidgets('phase 4A image skin supports fake Canvas state and penalty', (
+    tester,
+  ) async {
+    equipBalloonSkinForTest('balloon-wari');
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase4A,
+      ),
+    );
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tapSectionStart(tester, 3);
+    await tester.pump(const Duration(milliseconds: 100));
+    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(
+      find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+    );
+    final fake = canvas.renderState.basicBalloons.firstWhere(
+      (balloon) => balloon.isFake,
+    );
+    expect(fake.spriteOpacity, fakeBalloonOpacity);
+    final before = tester
+        .widget<GameHeader>(find.byType(GameHeader))
+        .data
+        .value
+        .secondsLeft;
+    canvas.onPointerDown(
+      PointerDownEvent(
+        pointer: 4201,
+        kind: ui.PointerDeviceKind.touch,
+        position: fake.position + Offset(fake.size / 2, fake.size / 2),
+      ),
+    );
+    expect(canvas.renderState.basicBalloons.contains(fake), false);
+    expect(
+      tester.widget<GameHeader>(find.byType(GameHeader)).data.value.secondsLeft,
+      before - 2,
+    );
+  });
+
+  testWidgets('phase 4A uses the equipped image sprite for a Canvas boss', (
+    tester,
+  ) async {
+    equipBalloonSkinForTest('balloon-heart');
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase4A,
+      ),
+    );
+    await tester.pump();
+    await tapSectionStart(tester, 1);
+    for (var stage = 1; stage <= 9; stage++) {
+      await clearCurrentCanvasStage(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+    final canvasFinder = find.byKey(
+      const ValueKey('phase-1-persistent-game-canvas'),
+    );
+    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+    expect(find.text('10 STAGE'), findsOneWidget);
+    expect(canvas.renderState.bosses, hasLength(1));
+    expect(
+      canvas.renderState.bosses.single.spriteAssetPath,
+      'assets/images/heart_balloon.png',
+    );
+    expect(find.byKey(const ValueKey('boss-balloon-0')), findsNothing);
+    expect(find.byType(BalloonSkinRenderer), findsNothing);
+  });
+
+  testWidgets('phase 4A keeps GEMI and SHUSHU on legacy fallback', (
+    tester,
+  ) async {
+    for (final skinId in const <String>['balloon-lumen', 'balloon-chouchou']) {
+      equipBalloonSkinForTest(skinId);
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase4A,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+      expect(
+        find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+        findsNothing,
+      );
+      expect(find.byType(BalloonSkinRenderer), findsWidgets);
+      await tester.pumpWidget(const SizedBox.shrink());
     }
   });
 

@@ -1,5 +1,136 @@
 import 'package:flutter/material.dart';
 
+import 'game_sprite_cache.dart';
+
+class SpriteBalloonDrawing {
+  SpriteBalloonDrawing({
+    required this.path,
+    required this.sprite,
+    required this.size,
+    required List<double>? colorMatrix,
+    required List<double>? detailColorMatrix,
+    required this.preserveMochiDetails,
+    required this.opacity,
+  })  : _colorMatrix =
+            colorMatrix == null ? null : List<double>.of(colorMatrix),
+        _detailColorMatrix = detailColorMatrix == null
+            ? null
+            : List<double>.of(detailColorMatrix),
+        _destination = _containRect(sprite.sourceRect.size, size),
+        _bodyPaint = Paint()
+          ..filterQuality = FilterQuality.medium
+          ..color = Colors.white.withValues(alpha: opacity)
+          ..colorFilter =
+              colorMatrix == null ? null : ColorFilter.matrix(colorMatrix),
+        _detailPaint = Paint()
+          ..filterQuality = FilterQuality.medium
+          ..color = Colors.white.withValues(alpha: opacity)
+          ..colorFilter = detailColorMatrix == null
+              ? null
+              : ColorFilter.matrix(detailColorMatrix) {
+    _detailClip = _mochiDetailPath(_destination);
+  }
+
+  final String path;
+  final CachedGameSprite sprite;
+  final Size size;
+  final List<double>? _colorMatrix;
+  final List<double>? _detailColorMatrix;
+  final bool preserveMochiDetails;
+  final double opacity;
+  final Rect _destination;
+  final Paint _bodyPaint;
+  final Paint _detailPaint;
+  late final Path _detailClip;
+
+  bool matches(
+    String path,
+    CachedGameSprite sprite,
+    Size size,
+    List<double>? colorMatrix,
+    List<double>? detailColorMatrix,
+    bool preserveMochiDetails,
+    double opacity,
+  ) =>
+      this.path == path &&
+      identical(this.sprite, sprite) &&
+      this.size == size &&
+      _matrixEquals(_colorMatrix, colorMatrix) &&
+      _matrixEquals(_detailColorMatrix, detailColorMatrix) &&
+      this.preserveMochiDetails == preserveMochiDetails &&
+      this.opacity == opacity;
+
+  void draw(
+    Canvas canvas, {
+    Offset offset = Offset.zero,
+    double rotation = 0,
+    double scale = 1,
+  }) {
+    final center = size.center(offset);
+    canvas
+      ..save()
+      ..translate(center.dx, center.dy)
+      ..rotate(rotation)
+      ..scale(scale)
+      ..translate(-center.dx, -center.dy)
+      ..drawImageRect(
+          sprite.image, sprite.sourceRect, _destination, _bodyPaint);
+    if (preserveMochiDetails) {
+      canvas
+        ..save()
+        ..clipPath(_detailClip)
+        ..drawImageRect(
+          sprite.image,
+          sprite.sourceRect,
+          _destination,
+          _detailPaint,
+        )
+        ..restore();
+    }
+    canvas.restore();
+  }
+}
+
+Rect _containRect(Size source, Size target) {
+  final scale = (target.width / source.width).clamp(
+    0.0,
+    target.height / source.height,
+  );
+  final fitted = Size(source.width * scale, source.height * scale);
+  return Offset(
+        (target.width - fitted.width) / 2,
+        (target.height - fitted.height) / 2,
+      ) &
+      fitted;
+}
+
+Path _mochiDetailPath(Rect rect) {
+  Rect relative(double left, double top, double width, double height) =>
+      Rect.fromLTWH(
+        rect.left + rect.width * left,
+        rect.top + rect.height * top,
+        rect.width * width,
+        rect.height * height,
+      );
+  return Path()
+    ..addOval(relative(0.33, 0.52, 0.08, 0.09))
+    ..addOval(relative(0.59, 0.52, 0.08, 0.09))
+    ..addPolygon(<Offset>[
+      Offset(rect.left + rect.width * 0.47, rect.top + rect.height * 0.59),
+      Offset(rect.left + rect.width * 0.53, rect.top + rect.height * 0.59),
+      Offset(rect.left + rect.width * 0.50, rect.top + rect.height * 0.63),
+    ], true);
+}
+
+bool _matrixEquals(List<double>? a, List<double>? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null || a.length != b.length) return false;
+  for (var index = 0; index < a.length; index++) {
+    if (a[index] != b[index]) return false;
+  }
+  return true;
+}
+
 class BasicBalloonDrawing {
   BasicBalloonDrawing._(Size size, Color color, double opacity)
       : _size = size,
@@ -168,6 +299,10 @@ class BossBalloonDrawing {
       _shinePaint,
     );
     canvas.drawPath(_knot, _bodyPaint);
+    drawHealthBar(canvas);
+  }
+
+  void drawHealthBar(Canvas canvas) {
     if (!_showHealthBar) return;
 
     final barWidth = _size.width * 0.62;

@@ -2,22 +2,53 @@ import 'package:flutter/material.dart';
 
 import 'game_draw_geometry.dart';
 import 'game_render_state.dart';
+import 'game_sprite_cache.dart';
 
 class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
   GameScenePainter({
     required this.renderState,
+    required this.spriteCache,
     required Listenable repaint,
-  }) : super(repaint: repaint);
+  }) : super(repaint: Listenable.merge(<Listenable>[repaint, spriteCache]));
 
   final GameRenderState<T> renderState;
+  final GameSpriteCache spriteCache;
   final Map<int, BasicBalloonDrawing> _drawings = <int, BasicBalloonDrawing>{};
   final Map<int, BossBalloonDrawing> _bossDrawings =
       <int, BossBalloonDrawing>{};
+  final Map<int, SpriteBalloonDrawing> _spriteDrawings =
+      <int, SpriteBalloonDrawing>{};
 
   @override
   void paint(Canvas canvas, Size size) {
     for (final balloon in renderState.basicBalloons) {
       final visualSize = Size(balloon.size, balloon.size + 26);
+      final spritePath = balloon.spriteAssetPath;
+      if (spritePath != null) {
+        final sprite = spriteCache[spritePath];
+        if (sprite == null) continue;
+        final drawing = _spriteDrawingFor(
+          balloon.id,
+          spritePath,
+          sprite,
+          visualSize,
+          balloon.spriteColorMatrix,
+          balloon.spriteDetailColorMatrix,
+          balloon.preserveMochiDetails,
+          balloon.spriteOpacity,
+        );
+        canvas
+          ..save()
+          ..translate(balloon.position.dx, balloon.position.dy);
+        drawing.draw(
+          canvas,
+          offset: balloon.visualOffset,
+          rotation: balloon.visualRotation,
+          scale: balloon.visualScale,
+        );
+        canvas.restore();
+        continue;
+      }
       final displayColor = balloon.displayColor;
       final opacity = balloon.opacity;
       var drawing = _drawings[balloon.id];
@@ -42,6 +73,53 @@ class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
     }
     for (final boss in renderState.bosses) {
       final visualSize = Size(boss.size, boss.size + 32);
+      final spritePath = boss.spriteAssetPath;
+      if (spritePath != null) {
+        final sprite = spriteCache[spritePath];
+        if (sprite == null) continue;
+        final drawing = _spriteDrawingFor(
+          -boss.id - 1,
+          spritePath,
+          sprite,
+          Size(boss.size, boss.size),
+          boss.spriteColorMatrix,
+          boss.spriteDetailColorMatrix,
+          boss.preserveMochiDetails,
+          boss.spriteOpacity,
+        );
+        canvas
+          ..save()
+          ..translate(boss.position.dx, boss.position.dy);
+        drawing.draw(
+          canvas,
+          offset: boss.visualOffset,
+          rotation: boss.visualRotation,
+          scale: boss.visualScale,
+        );
+        var bossDrawing = _bossDrawings[boss.id];
+        if (bossDrawing == null ||
+            !bossDrawing.matches(
+              visualSize,
+              Colors.transparent,
+              opacity: boss.opacity,
+              hp: boss.hp,
+              maxHp: boss.maxHp,
+              showHealthBar: boss.showHealthBar,
+            )) {
+          bossDrawing = BossBalloonDrawing(
+            visualSize,
+            Colors.transparent,
+            opacity: boss.opacity,
+            hp: boss.hp,
+            maxHp: boss.maxHp,
+            showHealthBar: boss.showHealthBar,
+          );
+          _bossDrawings[boss.id] = bossDrawing;
+        }
+        bossDrawing.drawHealthBar(canvas);
+        canvas.restore();
+        continue;
+      }
       final displayColor = boss.displayColor;
       final opacity = boss.opacity;
       var drawing = _bossDrawings[boss.id];
@@ -70,6 +148,41 @@ class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
       drawing.draw(canvas);
       canvas.restore();
     }
+  }
+
+  SpriteBalloonDrawing _spriteDrawingFor(
+    int id,
+    String path,
+    CachedGameSprite sprite,
+    Size size,
+    List<double>? colorMatrix,
+    List<double>? detailColorMatrix,
+    bool preserveMochiDetails,
+    double opacity,
+  ) {
+    var drawing = _spriteDrawings[id];
+    if (drawing == null ||
+        !drawing.matches(
+          path,
+          sprite,
+          size,
+          colorMatrix,
+          detailColorMatrix,
+          preserveMochiDetails,
+          opacity,
+        )) {
+      drawing = SpriteBalloonDrawing(
+        path: path,
+        sprite: sprite,
+        size: size,
+        colorMatrix: colorMatrix,
+        detailColorMatrix: detailColorMatrix,
+        preserveMochiDetails: preserveMochiDetails,
+        opacity: opacity,
+      );
+      _spriteDrawings[id] = drawing;
+    }
+    return drawing;
   }
 
   @override

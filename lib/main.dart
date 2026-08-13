@@ -15,6 +15,7 @@ import 'gameplay/game_canvas.dart';
 import 'gameplay/game_draw_geometry.dart';
 import 'gameplay/game_hit_tester.dart';
 import 'gameplay/game_render_state.dart';
+import 'gameplay/game_sprite_cache.dart';
 import 'onboarding_page.dart';
 import 'ranking/ranking_page.dart';
 import 'services/coin_service.dart';
@@ -271,6 +272,43 @@ class Balloon implements BasicBalloonRenderView {
   @override
   double get opacity => isFake ? fakeBalloonOpacity : 1;
 
+  late final BalloonSkinDefinition _skin =
+      BalloonSkinCatalog.byIdOrDefault(skinId);
+  late final List<double>? _cachedSpriteColorMatrix =
+      _imageSpriteColorMatrix(_skin, color, isFake: isFake);
+  late final List<double>? _cachedSpriteDetailColorMatrix =
+      _imageSpriteDetailColorMatrix(_skin, isFake: isFake);
+  late final bool _cachedPreserveMochiDetails =
+      _shouldPreserveMochiDetails(_skin, color, isFake: isFake);
+
+  @override
+  String? get spriteAssetPath => _skin.rendererType == BalloonRendererType.image
+      ? _skin.assetForVariant(visualVariant)
+      : null;
+  @override
+  List<double>? get spriteColorMatrix => _cachedSpriteColorMatrix;
+  @override
+  List<double>? get spriteDetailColorMatrix => _cachedSpriteDetailColorMatrix;
+  @override
+  bool get preserveMochiDetails => _cachedPreserveMochiDetails;
+  @override
+  Offset get visualOffset =>
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail
+          ? Offset(sin(floatPhase) * 1.4, cos(floatPhase) * 2.2)
+          : Offset.zero;
+  @override
+  double get visualRotation =>
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail
+          ? sin(floatPhase * 0.7) * 0.018
+          : 0;
+  @override
+  double get visualScale =>
+      isExiting ? (1 - exitProgress * 0.42).clamp(0.58, 1.0) : 1;
+  @override
+  double get spriteOpacity =>
+      opacity *
+      (_skin.idleAnimation == BalloonIdleAnimationType.ghostTail ? 0.86 : 1);
+
   bool get isExiting => exitProgress > 0;
 }
 
@@ -310,7 +348,7 @@ class BossBalloon {
 }
 
 class _BossRenderView implements BossBalloonRenderView {
-  const _BossRenderView({
+  _BossRenderView({
     required this.boss,
     required this.hpOf,
     required this.maxHpOf,
@@ -342,7 +380,92 @@ class _BossRenderView implements BossBalloonRenderView {
   int get maxHp => maxHpOf(boss);
   @override
   bool get showHealthBar => !boss.isFake;
+
+  late final BalloonSkinDefinition _skin =
+      BalloonSkinCatalog.byIdOrDefault(boss.skinId);
+  late final Color _skinColor = colorOf(boss);
+  late final List<double>? _normalSpriteColorMatrix =
+      _imageSpriteColorMatrix(_skin, _skinColor, isFake: false);
+  late final List<double>? _fakeSpriteColorMatrix =
+      _imageSpriteColorMatrix(_skin, _skinColor, isFake: true);
+  late final List<double>? _normalSpriteDetailColorMatrix =
+      _imageSpriteDetailColorMatrix(_skin, isFake: false);
+  late final List<double>? _fakeSpriteDetailColorMatrix =
+      _imageSpriteDetailColorMatrix(_skin, isFake: true);
+  late final bool _normalPreserveMochiDetails =
+      _shouldPreserveMochiDetails(_skin, _skinColor, isFake: false);
+  late final bool _fakePreserveMochiDetails =
+      _shouldPreserveMochiDetails(_skin, _skinColor, isFake: true);
+
+  @override
+  String? get spriteAssetPath => _skin.rendererType == BalloonRendererType.image
+      ? _skin.assetForVariant(boss.visualVariant)
+      : null;
+  @override
+  List<double>? get spriteColorMatrix =>
+      boss.isFake ? _fakeSpriteColorMatrix : _normalSpriteColorMatrix;
+  @override
+  List<double>? get spriteDetailColorMatrix => boss.isFake
+      ? _fakeSpriteDetailColorMatrix
+      : _normalSpriteDetailColorMatrix;
+  @override
+  bool get preserveMochiDetails =>
+      boss.isFake ? _fakePreserveMochiDetails : _normalPreserveMochiDetails;
+  @override
+  Offset get visualOffset =>
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail
+          ? Offset(
+              sin(boss.visualPhase) * 1.4,
+              cos(boss.visualPhase) * 2.2,
+            )
+          : Offset.zero;
+  @override
+  double get visualRotation =>
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail
+          ? sin(boss.visualPhase * 0.7) * 0.018
+          : 0;
+  @override
+  double get visualScale => 1;
+  @override
+  double get spriteOpacity =>
+      opacity *
+      (_skin.idleAnimation == BalloonIdleAnimationType.ghostTail ? 0.86 : 1);
 }
+
+List<double>? _imageSpriteColorMatrix(
+  BalloonSkinDefinition definition,
+  Color color, {
+  required bool isFake,
+}) {
+  if (definition.rendererType != BalloonRendererType.image) return null;
+  if (definition.imageColorMode == BalloonImageColorMode.original) {
+    return isFake ? BalloonSkinArtwork.fakeToneMatrix : null;
+  }
+  if (BalloonSkinArtwork.usesOriginalAsset(definition, color) && !isFake) {
+    return null;
+  }
+  return BalloonSkinArtwork.visualColorMatrix(
+    definition,
+    color,
+    isFake: isFake,
+  );
+}
+
+List<double>? _imageSpriteDetailColorMatrix(
+  BalloonSkinDefinition definition, {
+  required bool isFake,
+}) =>
+    definition.imageDetailMask == BalloonImageDetailMask.mochiFace && isFake
+        ? BalloonSkinArtwork.fakeToneMatrix
+        : null;
+
+bool _shouldPreserveMochiDetails(
+  BalloonSkinDefinition definition,
+  Color color, {
+  required bool isFake,
+}) =>
+    definition.imageDetailMask == BalloonImageDetailMask.mochiFace &&
+    (isFake || !BalloonSkinArtwork.usesOriginalAsset(definition, color));
 
 const stage30BossSwapChance = 0.50;
 const stage30BossMaxSpeed = 220.0;
@@ -1667,6 +1790,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   final List<AssetVisualEffect> _assetEffects = [];
   final List<PendingToolHit> _pendingToolHits = [];
   final ValueNotifier<int> _gameplayFrame = ValueNotifier<int>(0);
+  final GameSpriteCache _gameSpriteCache = GameSpriteCache();
   late final GameRenderState<Balloon> _gameRenderState;
   final ValueNotifier<double> _crystalBackgroundPulse = ValueNotifier<double>(
     0,
@@ -1793,6 +1917,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       precacheImage(
         ResizeImage(AssetImage(entry.key), width: entry.value),
         context,
+      );
+    }
+    if (phase4ACanvasSkinIds.contains(definition.id)) {
+      _gameSpriteCache.prepare(
+        <String>{
+          if (definition.assetPath != null) definition.assetPath!,
+          ...definition.variantAssetPaths,
+        },
+        createLocalImageConfiguration(context),
       );
     }
   }
@@ -2448,10 +2581,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       direction /= direction.distance;
     }
     final exitDistance = _playArea.longestSide + balloon.size * 2;
-    setState(() {
+    void beginExit() {
       balloon.exitProgress = 0.0001;
       balloon.exitVelocity = direction * (exitDistance / 0.24);
-    });
+    }
+
+    if (_usesCanvasPlayfield) {
+      beginExit();
+    } else {
+      setState(beginExit);
+    }
   }
 
   void _completeKickExit(Balloon balloon) {
@@ -2928,6 +3067,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopwatch.stop();
     _headerData.dispose();
     _gameplayFrame.dispose();
+    _gameSpriteCache.dispose();
     _crystalBackgroundPulse.dispose();
     _stagePageController.dispose();
     super.dispose();
@@ -4760,13 +4900,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       return false;
     }
     final skin = _equippedBalloonSkin;
-    return skin.id == BalloonSkinCatalog.defaultId &&
-        _balloons.every(
-          (balloon) => balloon.skinId == BalloonSkinCatalog.defaultId,
-        ) &&
-        _bosses.every(
-          (boss) => boss.skinId == BalloonSkinCatalog.defaultId,
-        );
+    final supportedSkinIds =
+        widget.gameplayRendererMode == GameplayRendererMode.canvasPhase4A
+            ? phase4ACanvasSkinIds
+            : const <String>{BalloonSkinCatalog.defaultId};
+    return supportedSkinIds.contains(skin.id) &&
+        _balloons
+            .every((balloon) => supportedSkinIds.contains(balloon.skinId)) &&
+        _bosses.every((boss) => supportedSkinIds.contains(boss.skinId));
   }
 
   Widget _buildCanvasPlayfield(Widget? staticBackground) => Stack(
@@ -4794,6 +4935,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               key: const ValueKey('phase-1-persistent-game-canvas'),
               renderState: _gameRenderState,
               frameListenable: _gameplayFrame,
+              spriteCache: _gameSpriteCache,
               onPointerDown: _hitCanvasBalloonAt,
             ),
           ),
@@ -6698,6 +6840,8 @@ class BalloonSkinArtwork extends StatelessWidget {
     saturation: fakeBalloonSaturationFactor,
     brightness: fakeBalloonBrightnessFactor,
   );
+
+  static List<double> get fakeToneMatrix => _fakeToneMatrix;
 
   static List<double> _composeColorMatrices(
     List<double> after,
