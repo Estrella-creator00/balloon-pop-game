@@ -6510,7 +6510,7 @@ void main() {
     expect(booIdleTest, isTrue);
   });
 
-  test('BOO zero-movement diagnostic keeps animated raw-atlas path', () {
+  test('BOO drawImageRect diagnostic keeps the raw-atlas fallback', () {
     final boo = Balloon(
       id: 82,
       position: Offset.zero,
@@ -6546,12 +6546,31 @@ void main() {
     expect(boo.visualOffset, Offset.zero);
     expect(laterPhase.visualOffset, Offset.zero);
     expect(laterPhase.floatPhase, isNot(boo.floatPhase));
-    expect(boo.useBooAnimatedSpritePath, isTrue);
+    expect(booDrawImageRectTest, isTrue);
+    expect(usesBooDrawImageRectTest('balloon-boo'), isTrue);
+    expect(usesBooDrawImageRectTest('balloon-wari'), isFalse);
+    expect(boo.useBooAnimatedSpritePath, isFalse);
     expect(
       usesBooAnimatedSpriteFastPath(
         offset: boo.visualOffset,
         scale: boo.visualScale,
         forceAnimatedPath: boo.useBooAnimatedSpritePath,
+      ),
+      isFalse,
+    );
+    expect(
+      usesStaticSpriteFastPath(
+        offset: boo.visualOffset,
+        rotation: boo.visualRotation,
+        scale: boo.visualScale,
+      ),
+      isTrue,
+    );
+    expect(
+      usesBooAnimatedSpriteFastPath(
+        offset: boo.visualOffset,
+        scale: boo.visualScale,
+        forceAnimatedPath: true,
       ),
       isTrue,
     );

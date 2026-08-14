@@ -310,7 +310,8 @@ class Balloon implements BasicBalloonRenderView {
   @override
   bool get useBooAnimatedSpritePath =>
       _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
-      isBooIdleTestEnabled(_skin.id);
+      isBooIdleTestEnabled(_skin.id) &&
+      !usesBooDrawImageRectTest(_skin.id);
   @override
   Offset get visualOffset {
     if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||
@@ -461,7 +462,8 @@ class _BossRenderView implements BossBalloonRenderView {
   @override
   bool get useBooAnimatedSpritePath =>
       _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
-      isBooIdleTestEnabled(_skin.id);
+      isBooIdleTestEnabled(_skin.id) &&
+      !usesBooDrawImageRectTest(_skin.id);
   @override
   Offset get visualOffset {
     if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||

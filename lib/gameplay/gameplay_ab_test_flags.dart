@@ -8,6 +8,7 @@ const bool booIdleTest = true;
 const bool booReferenceColorTest = true;
 const bool booZeroRotationTest = true;
 const bool booZeroMovementTest = true;
+const bool booDrawImageRectTest = true;
 
 bool isGameplaySkinSoundEnabled(
   String skinId, {
@@ -49,3 +50,10 @@ bool usesBooZeroMovementTest(
 }) =>
     skinId == 'balloon-boo' &&
     (booZeroMovementTestOverride ?? booZeroMovementTest);
+
+bool usesBooDrawImageRectTest(
+  String skinId, {
+  bool? booDrawImageRectTestOverride,
+}) =>
+    skinId == 'balloon-boo' &&
+    (booDrawImageRectTestOverride ?? booDrawImageRectTest);
