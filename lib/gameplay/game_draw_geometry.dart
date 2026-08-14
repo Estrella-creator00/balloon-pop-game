@@ -14,8 +14,9 @@ bool usesStaticSpriteFastPath({
 bool usesBooAnimatedSpriteFastPath({
   required Offset offset,
   required double scale,
+  bool forceAnimatedPath = false,
 }) =>
-    offset != Offset.zero && scale == 1;
+    (forceAnimatedPath || offset != Offset.zero) && scale == 1;
 
 class SpriteBalloonDrawing {
   SpriteBalloonDrawing({

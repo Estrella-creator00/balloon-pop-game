@@ -61,6 +61,8 @@ class _BasicRenderBalloon implements BasicBalloonRenderView {
   @override
   bool get preserveMochiDetails => false;
   @override
+  bool get useBooAnimatedSpritePath => false;
+  @override
   Offset get visualOffset => Offset.zero;
   @override
   double get visualRotation => 0;
@@ -100,6 +102,8 @@ class _BasicRenderBoss implements BossBalloonRenderView {
   List<double>? get spriteDetailColorMatrix => null;
   @override
   bool get preserveMochiDetails => false;
+  @override
+  bool get useBooAnimatedSpritePath => false;
   @override
   Offset get visualOffset => Offset.zero;
   @override
@@ -6058,7 +6062,7 @@ void main() {
     );
     expect(wari.spriteColorMatrix, isNull);
     expect(boo.spriteAssetPath, 'assets/images/balloon_boo_asset.png');
-    expect(boo.visualOffset.dx, closeTo(1.4, 0.001));
+    expect(boo.visualOffset, Offset.zero);
     expect(boo.spriteOpacity, closeTo(0.86, 0.001));
     expect(kicks.visualRotation, 0);
     expect(kicks.visualScale, closeTo(0.79, 0.001));
@@ -6499,14 +6503,14 @@ void main() {
     expect(tinted.spriteColorMatrix, isNull);
     expect(fake.spriteColorMatrix, isNull);
     expect(fake.spriteOpacity, lessThan(tinted.spriteOpacity));
-    expect(tinted.visualOffset, isNot(Offset.zero));
+    expect(tinted.visualOffset, Offset.zero);
     expect(tinted.visualRotation, 0);
     expect(tinted.spriteOpacity, closeTo(0.86, 0.001));
     expect(booSoundTest, isTrue);
     expect(booIdleTest, isTrue);
   });
 
-  test('BOO zero-rotation diagnostic keeps animated raw-atlas path', () {
+  test('BOO zero-movement diagnostic keeps animated raw-atlas path', () {
     final boo = Balloon(
       id: 82,
       position: Offset.zero,
@@ -6536,12 +6540,18 @@ void main() {
     expect(usesBooZeroRotationTest('balloon-boo'), isTrue);
     expect(usesBooZeroRotationTest('balloon-wari'), isFalse);
     expect(boo.visualRotation, 0);
-    expect(boo.visualOffset, isNot(Offset.zero));
-    expect(laterPhase.visualOffset, isNot(boo.visualOffset));
+    expect(booZeroMovementTest, isTrue);
+    expect(usesBooZeroMovementTest('balloon-boo'), isTrue);
+    expect(usesBooZeroMovementTest('balloon-wari'), isFalse);
+    expect(boo.visualOffset, Offset.zero);
+    expect(laterPhase.visualOffset, Offset.zero);
+    expect(laterPhase.floatPhase, isNot(boo.floatPhase));
+    expect(boo.useBooAnimatedSpritePath, isTrue);
     expect(
       usesBooAnimatedSpriteFastPath(
         offset: boo.visualOffset,
         scale: boo.visualScale,
+        forceAnimatedPath: boo.useBooAnimatedSpritePath,
       ),
       isTrue,
     );

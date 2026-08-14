@@ -15,6 +15,7 @@ abstract interface class BasicBalloonRenderView {
   List<double>? get spriteColorMatrix;
   List<double>? get spriteDetailColorMatrix;
   bool get preserveMochiDetails;
+  bool get useBooAnimatedSpritePath;
   Offset get visualOffset;
   double get visualRotation;
   double get visualScale;
@@ -34,6 +35,7 @@ abstract interface class BossBalloonRenderView {
   List<double>? get spriteColorMatrix;
   List<double>? get spriteDetailColorMatrix;
   bool get preserveMochiDetails;
+  bool get useBooAnimatedSpritePath;
   Offset get visualOffset;
   double get visualRotation;
   double get visualScale;

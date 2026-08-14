@@ -43,6 +43,7 @@ class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
         if (usesBooAnimatedSpriteFastPath(
           offset: visualOffset,
           scale: visualScale,
+          forceAnimatedPath: balloon.useBooAnimatedSpritePath,
         )) {
           drawing.drawBooIdleAt(
             canvas,
@@ -111,6 +112,7 @@ class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
         if (usesBooAnimatedSpriteFastPath(
           offset: visualOffset,
           scale: visualScale,
+          forceAnimatedPath: boss.useBooAnimatedSpritePath,
         )) {
           drawing.drawBooIdleAt(
             canvas,

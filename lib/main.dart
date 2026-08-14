@@ -308,9 +308,14 @@ class Balloon implements BasicBalloonRenderView {
   @override
   bool get preserveMochiDetails => _cachedPreserveMochiDetails;
   @override
+  bool get useBooAnimatedSpritePath =>
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
+      isBooIdleTestEnabled(_skin.id);
+  @override
   Offset get visualOffset {
     if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||
-        !isBooIdleTestEnabled(_skin.id)) {
+        !isBooIdleTestEnabled(_skin.id) ||
+        usesBooZeroMovementTest(_skin.id)) {
       return Offset.zero;
     }
     _refreshBooIdleTransform();
@@ -454,9 +459,14 @@ class _BossRenderView implements BossBalloonRenderView {
   bool get preserveMochiDetails =>
       boss.isFake ? _fakePreserveMochiDetails : _normalPreserveMochiDetails;
   @override
+  bool get useBooAnimatedSpritePath =>
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
+      isBooIdleTestEnabled(_skin.id);
+  @override
   Offset get visualOffset {
     if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||
-        !isBooIdleTestEnabled(_skin.id)) {
+        !isBooIdleTestEnabled(_skin.id) ||
+        usesBooZeroMovementTest(_skin.id)) {
       return Offset.zero;
     }
     _refreshBooIdleTransform();
