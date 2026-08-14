@@ -435,6 +435,9 @@ abstract final class BalloonSkinCatalog {
       burstAssetPath: 'assets/images/shushu_cream_burst_asset.png',
       wallSplatAssetPath: 'assets/images/shushu_cream_wall_asset.png',
       screenSplatAssetPath: 'assets/images/shushu_cream_screen_asset.png',
+      runtimeColorAssetPaths: <int, String>{
+        0xFFD99542: 'assets/images/balloon_shushu_canvas_runtime.png',
+      },
     ),
   ];
 
