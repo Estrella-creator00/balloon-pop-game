@@ -6500,8 +6500,53 @@ void main() {
     expect(fake.spriteColorMatrix, isNull);
     expect(fake.spriteOpacity, lessThan(tinted.spriteOpacity));
     expect(tinted.visualOffset, isNot(Offset.zero));
-    expect(tinted.visualRotation, isNot(0));
+    expect(tinted.visualRotation, 0);
     expect(tinted.spriteOpacity, closeTo(0.86, 0.001));
+    expect(booSoundTest, isTrue);
+    expect(booIdleTest, isTrue);
+  });
+
+  test('BOO zero-rotation diagnostic keeps animated raw-atlas path', () {
+    final boo = Balloon(
+      id: 82,
+      position: Offset.zero,
+      velocity: Offset.zero,
+      color: const Color(0xFFC9B7FF),
+      size: 80,
+      floatPhase: 1,
+      floatPower: 0,
+      hp: 1,
+      maxHp: 1,
+      skinId: 'balloon-boo',
+    );
+    final laterPhase = Balloon(
+      id: 83,
+      position: Offset.zero,
+      velocity: Offset.zero,
+      color: const Color(0xFFC9B7FF),
+      size: 80,
+      floatPhase: 2,
+      floatPower: 0,
+      hp: 1,
+      maxHp: 1,
+      skinId: 'balloon-boo',
+    );
+
+    expect(booZeroRotationTest, isTrue);
+    expect(usesBooZeroRotationTest('balloon-boo'), isTrue);
+    expect(usesBooZeroRotationTest('balloon-wari'), isFalse);
+    expect(boo.visualRotation, 0);
+    expect(boo.visualOffset, isNot(Offset.zero));
+    expect(laterPhase.visualOffset, isNot(boo.visualOffset));
+    expect(
+      usesBooAnimatedSpriteFastPath(
+        offset: boo.visualOffset,
+        scale: boo.visualScale,
+      ),
+      isTrue,
+    );
+    expect(boo.spriteOpacity, closeTo(0.86, 0.001));
+    expect(boo.spriteColorMatrix, isNull);
     expect(booSoundTest, isTrue);
     expect(booIdleTest, isTrue);
   });

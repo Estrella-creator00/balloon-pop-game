@@ -320,7 +320,8 @@ class Balloon implements BasicBalloonRenderView {
   @override
   double get visualRotation {
     if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||
-        !isBooIdleTestEnabled(_skin.id)) {
+        !isBooIdleTestEnabled(_skin.id) ||
+        usesBooZeroRotationTest(_skin.id)) {
       return 0;
     }
     _refreshBooIdleTransform();
@@ -465,7 +466,8 @@ class _BossRenderView implements BossBalloonRenderView {
   @override
   double get visualRotation {
     if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||
-        !isBooIdleTestEnabled(_skin.id)) {
+        !isBooIdleTestEnabled(_skin.id) ||
+        usesBooZeroRotationTest(_skin.id)) {
       return 0;
     }
     _refreshBooIdleTransform();

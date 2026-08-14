@@ -6,6 +6,7 @@ const bool mugiSoundTest = true;
 const bool booSoundTest = true;
 const bool booIdleTest = true;
 const bool booReferenceColorTest = true;
+const bool booZeroRotationTest = true;
 
 bool isGameplaySkinSoundEnabled(
   String skinId, {
@@ -33,3 +34,10 @@ bool usesBooReferenceColorTest(
 }) =>
     skinId == 'balloon-boo' &&
     (booReferenceColorTestOverride ?? booReferenceColorTest);
+
+bool usesBooZeroRotationTest(
+  String skinId, {
+  bool? booZeroRotationTestOverride,
+}) =>
+    skinId == 'balloon-boo' &&
+    (booZeroRotationTestOverride ?? booZeroRotationTest);
