@@ -4,7 +4,7 @@
 /// color switch is enabled only for the current BOO GPU diagnostic build.
 const bool mugiSoundTest = true;
 const bool booSoundTest = true;
-const bool booIdleTest = true;
+const bool booIdleTest = false;
 const bool booReferenceColorTest = true;
 const bool booZeroRotationTest = true;
 const bool booZeroMovementTest = true;
