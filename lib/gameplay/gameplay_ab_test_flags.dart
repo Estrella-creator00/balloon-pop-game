@@ -4,7 +4,7 @@
 /// producing a diagnostic build.
 const bool mugiSoundTest = true;
 const bool booSoundTest = false;
-const bool booIdleTest = true;
+const bool booIdleTest = false;
 
 bool isGameplaySkinSoundEnabled(
   String skinId, {
