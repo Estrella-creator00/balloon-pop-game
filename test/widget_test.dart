@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/dev/dev_coin_tool.dart';
 import 'package:balloon_pop_game/gameplay/game_canvas.dart';
+import 'package:balloon_pop_game/gameplay/game_draw_geometry.dart';
 import 'package:balloon_pop_game/gameplay/game_hit_tester.dart';
 import 'package:balloon_pop_game/gameplay/game_render_state.dart';
 import 'package:balloon_pop_game/gameplay/game_scene_painter.dart';
@@ -1669,7 +1670,7 @@ void main() {
 
   test('production renderer keeps the selected default and legacy rollback',
       () {
-    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase3);
+    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4A);
     expect(GameplayRendererMode.values, contains(GameplayRendererMode.legacy));
     expect(
       GameplayRendererMode.values,
@@ -3117,7 +3118,11 @@ void main() {
     tester,
   ) async {
     ProgressStorage.addCoins(600);
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pumpAndSettle();
@@ -3174,7 +3179,11 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
     await tester.pumpAndSettle();
@@ -3190,7 +3199,11 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 1);
     final gameplayRenderers = tester.widgetList<BalloonSkinRenderer>(
@@ -3235,7 +3248,11 @@ void main() {
     'heart balloon can be bought, equipped, rendered, and popped with hearts',
     (tester) async {
       ProgressStorage.addCoins(100);
-      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.legacy,
+        ),
+      );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
       await tester.pumpAndSettle();
@@ -3331,7 +3348,11 @@ void main() {
       // Existing persisted IDs remain valid after the catalog migration.
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
-      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.legacy,
+        ),
+      );
       await tester.pump();
       expect(PurchaseService.ownedProductIds, contains('balloon-heart'));
       expect(
@@ -5157,7 +5178,11 @@ void main() {
       var hapticCount = 0;
       HapticService.setPerformerForTest(() async => hapticCount++);
 
-      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.legacy,
+        ),
+      );
       await tester.pump();
       await tester.drag(find.byType(PageView), const Offset(-500, 0));
       await tester.pump(const Duration(milliseconds: 350));
@@ -5290,7 +5315,12 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(BalloonPopApp(stage30SwapRollForTest: () => 0));
+      await tester.pumpWidget(
+        BalloonPopApp(
+          stage30SwapRollForTest: () => 0,
+          gameplayRendererMode: GameplayRendererMode.legacy,
+        ),
+      );
       await tester.pump();
       await tester.drag(find.byType(PageView), const Offset(-500, 0));
       await tester.pump(const Duration(milliseconds: 350));
@@ -5452,7 +5482,11 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.legacy,
+      ),
+    );
     await tester.pump();
     await tapSectionStart(tester, 1);
 
@@ -5969,7 +6003,7 @@ void main() {
     );
     expect(phase4ACanvasSkinIds, isNot(contains('balloon-lumen')));
     expect(phase4ACanvasSkinIds, isNot(contains('balloon-chouchou')));
-    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase3);
+    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4A);
   });
 
   test('phase 4A image render views select variants and cached transforms', () {
@@ -6224,6 +6258,103 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     }
   });
+
+  test('effect lifecycle emits a final changed frame then becomes idle', () {
+    final pieces = <PopPiece>[
+      PopPiece(
+        position: Offset.zero,
+        velocity: Offset.zero,
+        color: Colors.red,
+        size: 8,
+        life: 0.01,
+        maxLife: 0.01,
+        rotation: 0,
+        spin: 0,
+      ),
+    ];
+    final rings = <BurstRing>[];
+
+    expect(advanceEffects(pieces, rings, 0.02), isTrue);
+    expect(pieces, isEmpty);
+    expect(advanceEffects(pieces, rings, 0.02), isFalse);
+  });
+
+  test('phase 4A sprite fast path only accepts identity transforms', () {
+    expect(usesStaticSpriteFastPath(), isTrue);
+    expect(
+      usesStaticSpriteFastPath(offset: const Offset(0.01, 0)),
+      isFalse,
+    );
+    expect(usesStaticSpriteFastPath(rotation: 0.01), isFalse);
+    expect(usesStaticSpriteFastPath(scale: 0.99), isFalse);
+  });
+
+  test('phase 4A separates normal and boss sprite resolution keys', () {
+    expect(GameSpriteResolution.normal.cacheWidth, 320);
+    expect(GameSpriteResolution.boss.cacheWidth, 512);
+    expect(
+      const GameSpriteCacheKey(
+        'assets/images/star_balloon.png',
+        GameSpriteResolution.normal,
+      ),
+      isNot(
+        const GameSpriteCacheKey(
+          'assets/images/star_balloon.png',
+          GameSpriteResolution.boss,
+        ),
+      ),
+    );
+  });
+
+  testWidgets(
+    'phase 4A effects stay idle before pop and repaint immediately while active',
+    (tester) async {
+      equipBalloonSkinForTest('balloon-heart');
+      await tester.pumpWidget(
+        const BalloonPopApp(
+          gameplayRendererMode: GameplayRendererMode.canvasPhase4A,
+        ),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final effectsPainter = tester
+          .widget<CustomPaint>(
+            find.descendant(
+              of: find.byKey(const ValueKey('effects-boundary')),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .painter! as EffectsPainter;
+      var repaintRequests = 0;
+      void countRepaint() => repaintRequests++;
+      effectsPainter.addListener(countRepaint);
+
+      await tester.pump(const Duration(milliseconds: 66));
+      expect(repaintRequests, 0);
+
+      final canvas = tester.widget<PersistentGameCanvas<Balloon>>(
+        find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+      );
+      final balloon = canvas.renderState.basicBalloons.first;
+      canvas.onPointerDown(
+        PointerDownEvent(
+          pointer: 4401,
+          kind: ui.PointerDeviceKind.touch,
+          position:
+              balloon.position + Offset(balloon.size / 2, balloon.size / 2),
+        ),
+      );
+      expect(repaintRequests, greaterThan(0));
+
+      final afterImmediate = repaintRequests;
+      await tester.pump(const Duration(milliseconds: 33));
+      expect(repaintRequests, greaterThan(afterImmediate));
+
+      effectsPainter.removeListener(countRepaint);
+    },
+  );
 
   testWidgets('locked store product uses a compact disabled placeholder', (
     tester,

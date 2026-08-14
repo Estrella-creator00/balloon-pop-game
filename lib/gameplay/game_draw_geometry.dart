@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 
 import 'game_sprite_cache.dart';
 
+bool usesStaticSpriteFastPath({
+  Offset offset = Offset.zero,
+  double rotation = 0,
+  double scale = 1,
+}) =>
+    offset == Offset.zero && rotation == 0 && scale == 1;
+
 class SpriteBalloonDrawing {
   SpriteBalloonDrawing({
     required this.path,
@@ -66,6 +73,31 @@ class SpriteBalloonDrawing {
     double rotation = 0,
     double scale = 1,
   }) {
+    if (usesStaticSpriteFastPath(
+      offset: offset,
+      rotation: rotation,
+      scale: scale,
+    )) {
+      canvas.drawImageRect(
+        sprite.image,
+        sprite.sourceRect,
+        _destination,
+        _bodyPaint,
+      );
+      if (preserveMochiDetails) {
+        canvas
+          ..save()
+          ..clipPath(_detailClip)
+          ..drawImageRect(
+            sprite.image,
+            sprite.sourceRect,
+            _destination,
+            _detailPaint,
+          )
+          ..restore();
+      }
+      return;
+    }
     final center = size.center(offset);
     canvas
       ..save()

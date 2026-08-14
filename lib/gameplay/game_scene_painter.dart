@@ -25,7 +25,7 @@ class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
       final visualSize = Size(balloon.size, balloon.size + 26);
       final spritePath = balloon.spriteAssetPath;
       if (spritePath != null) {
-        final sprite = spriteCache[spritePath];
+        final sprite = spriteCache.spriteFor(spritePath);
         if (sprite == null) continue;
         final drawing = _spriteDrawingFor(
           balloon.id,
@@ -75,7 +75,10 @@ class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
       final visualSize = Size(boss.size, boss.size + 32);
       final spritePath = boss.spriteAssetPath;
       if (spritePath != null) {
-        final sprite = spriteCache[spritePath];
+        final sprite = spriteCache.spriteFor(
+          spritePath,
+          resolution: GameSpriteResolution.boss,
+        );
         if (sprite == null) continue;
         final drawing = _spriteDrawingFor(
           -boss.id - 1,

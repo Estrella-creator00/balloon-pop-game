@@ -1790,6 +1790,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   final List<AssetVisualEffect> _assetEffects = [];
   final List<PendingToolHit> _pendingToolHits = [];
   final ValueNotifier<int> _gameplayFrame = ValueNotifier<int>(0);
+  final ValueNotifier<int> _effectsFrame = ValueNotifier<int>(0);
   final GameSpriteCache _gameSpriteCache = GameSpriteCache();
   late final GameRenderState<Balloon> _gameRenderState;
   final ValueNotifier<double> _crystalBackgroundPulse = ValueNotifier<double>(
@@ -1880,22 +1881,25 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _precacheSkinAssets(BalloonSkinDefinition definition) {
     final paths = <String, int>{};
+    final spriteWidth = phase4ACanvasSkinIds.contains(definition.id)
+        ? GameSpriteResolution.normal.cacheWidth
+        : 512;
     void add(String? path, int width) {
       if (path != null) paths[path] = width;
     }
 
     if (definition.runtimeColorAssetPaths.isEmpty) {
-      add(definition.assetPath, 512);
+      add(definition.assetPath, spriteWidth);
     } else {
       for (final path in definition.runtimeColorAssetPaths.values) {
-        add(path, 512);
+        add(path, spriteWidth);
       }
       for (final path in definition.runtimeFakeColorAssetPaths.values) {
-        add(path, 512);
+        add(path, spriteWidth);
       }
     }
     for (final path in definition.variantAssetPaths) {
-      add(path, 512);
+      add(path, spriteWidth);
     }
     add(definition.hitToolAssetPath, 256);
     add(definition.burstAssetPath, 320);
@@ -1919,15 +1923,44 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         context,
       );
     }
-    if (phase4ACanvasSkinIds.contains(definition.id)) {
-      _gameSpriteCache.prepare(
-        <String>{
-          if (definition.assetPath != null) definition.assetPath!,
-          ...definition.variantAssetPaths,
-        },
-        createLocalImageConfiguration(context),
-      );
+    _prepareCanvasSkinSprites(
+      definition,
+      GameSpriteResolution.normal,
+      precache: false,
+    );
+  }
+
+  Set<String> _canvasSpritePaths(BalloonSkinDefinition definition) => <String>{
+        if (definition.assetPath != null) definition.assetPath!,
+        ...definition.variantAssetPaths,
+      };
+
+  void _prepareCanvasSkinSprites(
+    BalloonSkinDefinition definition,
+    GameSpriteResolution resolution, {
+    bool precache = true,
+  }) {
+    if (!phase4ACanvasSkinIds.contains(definition.id)) return;
+    final paths = _canvasSpritePaths(definition);
+    if (paths.isEmpty) return;
+    final configuration = createLocalImageConfiguration(context);
+    if (precache) {
+      for (final path in paths) {
+        precacheImage(
+          ResizeImage(
+            AssetImage(path),
+            width: resolution.cacheWidth,
+            allowUpscaling: false,
+          ),
+          context,
+        );
+      }
     }
+    _gameSpriteCache.prepare(
+      paths,
+      configuration,
+      resolution: resolution,
+    );
   }
 
   Map<StoreCategory, String> _loadEquippedProductIds() {
@@ -1995,7 +2028,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _assetEffects.clear();
     _pendingToolHits.clear();
     _feedbacks.clear();
-    _effectsRevision++;
+    _notifyEffectsChanged();
     _clearBosses();
     _startStage();
     _publishHeader();
@@ -2144,6 +2177,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
     _feedbacks.clear();
     _stageTimePenalty = Duration.zero;
+
+    final bossSkin = _bossSkinFor(_equippedBalloonSkin);
+    if (_stageConfig.isBoss || _stage % 10 == 9) {
+      _prepareCanvasSkinSprites(bossSkin, GameSpriteResolution.boss);
+    }
 
     if (_stageConfig.isBoss) {
       _spawnBoss();
@@ -2490,6 +2528,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
+  void _notifyEffectsChanged() {
+    _effectsRevision++;
+    _effectsFrame.value++;
+  }
+
   void _updateEffects(double dt) {
     var changed = advanceEffects(_pieces, _rings, dt, feedbacks: _feedbacks);
     changed = advanceAssetVisualEffects(_assetEffects, dt) || changed;
@@ -2498,7 +2541,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _crystalBackgroundPulse.value = nextCrystalPulse;
     }
     if (changed) {
-      _effectsRevision++;
+      _notifyEffectsChanged();
     }
   }
 
@@ -2630,7 +2673,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         maxLife: 0.72,
       ),
     );
-    _effectsRevision++;
+    _notifyEffectsChanged();
 
     final remaining = _remainingStageDuration;
     if (remaining <= Duration.zero) {
@@ -2851,7 +2894,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _assetEffects.clear();
     _pendingToolHits.clear();
     _feedbacks.clear();
-    _effectsRevision++;
+    _notifyEffectsChanged();
     _publishHeader();
   }
 
@@ -2868,7 +2911,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       color: color,
       big: big,
     );
-    _effectsRevision++;
+    _notifyEffectsChanged();
   }
 
   void _spawnSkinPopEffect(
@@ -2890,7 +2933,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
     }
     _spawnSkinAssetPopEffects(skin, center, sourceSize, color, big: big);
-    _effectsRevision++;
+    _notifyEffectsChanged();
   }
 
   void _spawnGemiShards(
@@ -2910,7 +2953,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       sourceSize: sourceSize,
       count: count,
     );
-    _effectsRevision++;
+    _notifyEffectsChanged();
   }
 
   void _registerLegendaryBackgroundImpact(
@@ -3040,7 +3083,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       color: color,
       radius: radius,
     );
-    _effectsRevision++;
+    _notifyEffectsChanged();
   }
 
   void _finishGame() {
@@ -3067,6 +3110,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopwatch.stop();
     _headerData.dispose();
     _gameplayFrame.dispose();
+    _effectsFrame.dispose();
     _gameSpriteCache.dispose();
     _crystalBackgroundPulse.dispose();
     _stagePageController.dispose();
@@ -4924,7 +4968,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     rings: _rings,
                     feedbacks: _feedbacks,
                     revision: _effectsRevision,
-                    repaint: _gameplayFrame,
+                    repaint: _effectsFrame,
                   ),
                 ),
               ),
@@ -7866,6 +7910,11 @@ class EffectsPainter extends CustomPainter {
   final List<BurstRing> rings;
   final List<FloatingTextFeedback> feedbacks;
   final int revision;
+  final Paint _ringPaint = Paint()..style = PaintingStyle.stroke;
+  final Paint _fillPaint = Paint();
+  final Paint _highlightPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
 
   int get pieceCount => pieces.length;
   int get heartPieceCount =>
@@ -7875,20 +7924,15 @@ class EffectsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final ringPaint = Paint()..style = PaintingStyle.stroke;
     for (final ring in rings) {
       final progress = 1 - (ring.life / ring.maxLife).clamp(0.0, 1.0);
       final opacity = (1 - progress).clamp(0.0, 1.0);
-      ringPaint
+      _ringPaint
         ..color = ring.color.withValues(alpha: opacity * 0.75)
         ..strokeWidth = 5 * opacity;
-      canvas.drawCircle(ring.center, ring.radius * progress, ringPaint);
+      canvas.drawCircle(ring.center, ring.radius * progress, _ringPaint);
     }
 
-    final fillPaint = Paint();
-    final highlightPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
     for (final piece in pieces) {
       final opacity = (piece.life / piece.maxLife).clamp(0.0, 1.0);
       final pieceSize = Size(piece.size, piece.size * 1.3);
@@ -7964,10 +8008,10 @@ class EffectsPainter extends CustomPainter {
       canvas.translate(center.dx, center.dy);
       canvas.rotate(piece.rotation);
       canvas.translate(-pieceSize.width / 2, -pieceSize.height / 2);
-      fillPaint.color = piece.color.withValues(alpha: opacity * piece.color.a);
-      highlightPaint.color = Colors.white.withValues(alpha: opacity * 0.28);
-      canvas.drawPath(path, fillPaint);
-      canvas.drawPath(path, highlightPaint);
+      _fillPaint.color = piece.color.withValues(alpha: opacity * piece.color.a);
+      _highlightPaint.color = Colors.white.withValues(alpha: opacity * 0.28);
+      canvas.drawPath(path, _fillPaint);
+      canvas.drawPath(path, _highlightPaint);
       canvas.restore();
     }
 

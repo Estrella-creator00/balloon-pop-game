@@ -3,27 +3,65 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 
 class CachedGameSprite {
-  const CachedGameSprite(this.image);
+  CachedGameSprite(this.image)
+      : sourceRect = Rect.fromLTWH(
+          0,
+          0,
+          image.width.toDouble(),
+          image.height.toDouble(),
+        );
 
   final ui.Image image;
+  final Rect sourceRect;
+}
 
-  Rect get sourceRect => Rect.fromLTWH(
-        0,
-        0,
-        image.width.toDouble(),
-        image.height.toDouble(),
-      );
+enum GameSpriteResolution {
+  normal(320),
+  boss(512);
+
+  const GameSpriteResolution(this.cacheWidth);
+
+  final int cacheWidth;
+}
+
+@immutable
+class GameSpriteCacheKey {
+  const GameSpriteCacheKey(this.path, this.resolution);
+
+  final String path;
+  final GameSpriteResolution resolution;
+
+  @override
+  bool operator ==(Object other) =>
+      other is GameSpriteCacheKey &&
+      other.path == path &&
+      other.resolution == resolution;
+
+  @override
+  int get hashCode => Object.hash(path, resolution);
 }
 
 class GameSpriteCache extends ChangeNotifier {
-  final Map<String, CachedGameSprite> _images = <String, CachedGameSprite>{};
-  final Map<String, ImageStream> _streams = <String, ImageStream>{};
-  final Map<String, ImageStreamListener> _listeners =
-      <String, ImageStreamListener>{};
+  final Map<GameSpriteCacheKey, CachedGameSprite> _images =
+      <GameSpriteCacheKey, CachedGameSprite>{};
+  final Map<GameSpriteCacheKey, ImageStream> _streams =
+      <GameSpriteCacheKey, ImageStream>{};
+  final Map<GameSpriteCacheKey, ImageStreamListener> _listeners =
+      <GameSpriteCacheKey, ImageStreamListener>{};
 
-  CachedGameSprite? operator [](String path) => _images[path];
+  CachedGameSprite? operator [](String path) => spriteFor(path);
 
-  bool contains(String path) => _images.containsKey(path);
+  CachedGameSprite? spriteFor(
+    String path, {
+    GameSpriteResolution resolution = GameSpriteResolution.normal,
+  }) =>
+      _images[GameSpriteCacheKey(path, resolution)];
+
+  bool contains(
+    String path, {
+    GameSpriteResolution resolution = GameSpriteResolution.normal,
+  }) =>
+      _images.containsKey(GameSpriteCacheKey(path, resolution));
 
   int get resolvedCount => _images.length;
   int get pendingCount => _streams.length;
@@ -31,29 +69,34 @@ class GameSpriteCache extends ChangeNotifier {
   void prepare(
     Iterable<String> paths,
     ImageConfiguration configuration, {
-    int cacheWidth = 512,
+    GameSpriteResolution resolution = GameSpriteResolution.normal,
   }) {
     for (final path in paths) {
-      if (_images.containsKey(path) || _streams.containsKey(path)) continue;
-      final provider = ResizeImage(AssetImage(path), width: cacheWidth);
+      final key = GameSpriteCacheKey(path, resolution);
+      if (_images.containsKey(key) || _streams.containsKey(key)) continue;
+      final provider = ResizeImage(
+        AssetImage(path),
+        width: resolution.cacheWidth,
+        allowUpscaling: false,
+      );
       final stream = provider.resolve(configuration);
       late final ImageStreamListener listener;
       listener = ImageStreamListener(
         (info, _) {
-          _images[path] = CachedGameSprite(info.image);
-          _streams.remove(path);
-          _listeners.remove(path);
+          _images[key] = CachedGameSprite(info.image);
+          _streams.remove(key);
+          _listeners.remove(key);
           stream.removeListener(listener);
           notifyListeners();
         },
         onError: (_, __) {
-          _streams.remove(path);
-          _listeners.remove(path);
+          _streams.remove(key);
+          _listeners.remove(key);
           stream.removeListener(listener);
         },
       );
-      _streams[path] = stream;
-      _listeners[path] = listener;
+      _streams[key] = stream;
+      _listeners[key] = listener;
       stream.addListener(listener);
     }
   }
