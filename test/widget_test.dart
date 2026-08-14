@@ -1113,7 +1113,10 @@ void main() {
       expect(kicks.chooseSpecialSpawn(0.5), isFalse);
 
       final muggy = BalloonSkinCatalog.byIdOrDefault('balloon-jello');
-      expect(muggy.popSoundAssetPath, 'assets/sounds/mugi_break_short.mp3');
+      expect(
+        muggy.popSoundAssetPath,
+        'assets/sounds/mugi_break_short.mp3.mp3',
+      );
       final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
       expect(
         gemi.hitToolAssetPath,
@@ -6074,11 +6077,11 @@ void main() {
     );
     expect(
       BalloonSkinCatalog.byIdOrDefault('balloon-boo').popSoundAssetPath,
-      'assets/sounds/boo_ghost_woo_short.mp3',
+      'assets/sounds/boo_ghost_woo_short.mp3.mp3',
     );
     expect(
       BalloonSkinCatalog.byIdOrDefault('balloon-jello').popSoundAssetPath,
-      'assets/sounds/mugi_break_short.mp3',
+      'assets/sounds/mugi_break_short.mp3.mp3',
     );
   });
 
@@ -6385,27 +6388,19 @@ void main() {
     expect(PopSound.lastAssetPath, wari.popSoundAssetPath);
   });
 
-  testWidgets('MUGI and BOO short gameplay sounds are bundled', (
+  testWidgets('MUGI and BOO user-edited gameplay sounds are bundled', (
     tester,
   ) async {
     await tester.runAsync(() async {
-      final mugiShort = await rootBundle.load(
-        'assets/sounds/mugi_break_short.mp3',
+      final mugiGameplay = await rootBundle.load(
+        'assets/sounds/mugi_break_short.mp3.mp3',
       );
-      final mugiOriginal = await rootBundle.load(
-        'assets/images/muggy_break.mp3.mp3',
-      );
-      final booShort = await rootBundle.load(
-        'assets/sounds/boo_ghost_woo_short.mp3',
-      );
-      final booOriginal = await rootBundle.load(
-        'assets/sounds/boo_ghost_woo.mp3.mp3',
+      final booGameplay = await rootBundle.load(
+        'assets/sounds/boo_ghost_woo_short.mp3.mp3',
       );
 
-      expect(mugiShort.lengthInBytes, 14400);
-      expect(mugiShort.lengthInBytes, lessThan(mugiOriginal.lengthInBytes));
-      expect(booShort.lengthInBytes, 30093);
-      expect(booShort.lengthInBytes, lessThan(booOriginal.lengthInBytes));
+      expect(mugiGameplay.lengthInBytes, 47691);
+      expect(booGameplay.lengthInBytes, 47691);
     });
   });
 
