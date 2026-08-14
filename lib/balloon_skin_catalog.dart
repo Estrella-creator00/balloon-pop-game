@@ -347,7 +347,7 @@ abstract final class BalloonSkinCatalog {
       previewColor: Color(0xFFC9B7FF),
       avoidImmediateColorRepeat: true,
       idleAnimation: BalloonIdleAnimationType.ghostTail,
-      popSoundAssetPath: 'assets/sounds/boo_ghost_woo.mp3.mp3',
+      popSoundAssetPath: 'assets/sounds/boo_ghost_woo_short.mp3',
     ),
     BalloonSkinDefinition(
       id: 'balloon-jello',
@@ -360,7 +360,7 @@ abstract final class BalloonSkinCatalog {
       colorPalette: _slimePalette,
       popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic,
-      popSoundAssetPath: 'assets/images/muggy_break.mp3.mp3',
+      popSoundAssetPath: 'assets/sounds/mugi_break_short.mp3',
       isDefault: false,
       supportsBossSkin: true,
       shopOrder: 8,

@@ -1113,7 +1113,7 @@ void main() {
       expect(kicks.chooseSpecialSpawn(0.5), isFalse);
 
       final muggy = BalloonSkinCatalog.byIdOrDefault('balloon-jello');
-      expect(muggy.popSoundAssetPath, 'assets/images/muggy_break.mp3.mp3');
+      expect(muggy.popSoundAssetPath, 'assets/sounds/mugi_break_short.mp3');
       final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
       expect(
         gemi.hitToolAssetPath,
@@ -6072,6 +6072,14 @@ void main() {
       BalloonSkinCatalog.byIdOrDefault('balloon-wari').popSoundAssetPath,
       'assets/sounds/wari_watermelon_bite.mp3.mp3',
     );
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-boo').popSoundAssetPath,
+      'assets/sounds/boo_ghost_woo_short.mp3',
+    );
+    expect(
+      BalloonSkinCatalog.byIdOrDefault('balloon-jello').popSoundAssetPath,
+      'assets/sounds/mugi_break_short.mp3',
+    );
   });
 
   testWidgets(
@@ -6375,6 +6383,30 @@ void main() {
     expect(PopSound.assetPlayCount, 5);
     expect(PopSound.polyphonicAssetPlayCount, 0);
     expect(PopSound.lastAssetPath, wari.popSoundAssetPath);
+  });
+
+  testWidgets('MUGI and BOO short gameplay sounds are bundled', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final mugiShort = await rootBundle.load(
+        'assets/sounds/mugi_break_short.mp3',
+      );
+      final mugiOriginal = await rootBundle.load(
+        'assets/images/muggy_break.mp3.mp3',
+      );
+      final booShort = await rootBundle.load(
+        'assets/sounds/boo_ghost_woo_short.mp3',
+      );
+      final booOriginal = await rootBundle.load(
+        'assets/sounds/boo_ghost_woo.mp3.mp3',
+      );
+
+      expect(mugiShort.lengthInBytes, 14400);
+      expect(mugiShort.lengthInBytes, lessThan(mugiOriginal.lengthInBytes));
+      expect(booShort.lengthInBytes, 30093);
+      expect(booShort.lengthInBytes, lessThan(booOriginal.lengthInBytes));
+    });
   });
 
   testWidgets('MUGI two-pointer Canvas pop triggers both break sounds', (

@@ -69,6 +69,8 @@ flutter:
     - assets/sounds/wari_watermelon_bite.mp3.mp3
     - assets/sounds/kicks_soccer_kick.mp3.mp3
     - assets/sounds/boo_ghost_woo.mp3.mp3
+    - assets/sounds/boo_ghost_woo_short.mp3
+    - assets/sounds/mugi_break_short.mp3
     - assets/sounds/ui_click.mp3.mp3
     - assets/sounds/boss_appear.mp3.mp3
     - assets/sounds/boss_clear.mp3.mp3
