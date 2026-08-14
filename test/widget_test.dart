@@ -6066,7 +6066,7 @@ void main() {
     );
     expect(
       BalloonSkinCatalog.byIdOrDefault('balloon-jello').assetPath,
-      'assets/images/balloon_muggy_asset.png',
+      'assets/images/balloon_muggy_handle_alpha_asset.png',
     );
     expect(
       BalloonSkinCatalog.byIdOrDefault('balloon-wari').popSoundAssetPath,
@@ -6355,6 +6355,149 @@ void main() {
       effectsPainter.removeListener(countRepaint);
     },
   );
+
+  test('MUGI pop uses overlapping voices while WARI keeps its sound path', () {
+    final muggy = BalloonSkinCatalog.byIdOrDefault('balloon-jello');
+    final wari = BalloonSkinCatalog.byIdOrDefault('balloon-wari');
+
+    PopSound.resetDebug();
+    for (var i = 0; i < 5; i++) {
+      playBalloonPopSound(muggy, boss: false);
+    }
+    expect(PopSound.polyphonicAssetPlayCount, 5);
+    expect(PopSound.assetPlayCount, 0);
+    expect(PopSound.lastAssetPath, muggy.popSoundAssetPath);
+
+    PopSound.resetDebug();
+    for (var i = 0; i < 5; i++) {
+      playBalloonPopSound(wari, boss: false);
+    }
+    expect(PopSound.assetPlayCount, 5);
+    expect(PopSound.polyphonicAssetPlayCount, 0);
+    expect(PopSound.lastAssetPath, wari.popSoundAssetPath);
+  });
+
+  testWidgets('MUGI two-pointer Canvas pop triggers both break sounds', (
+    tester,
+  ) async {
+    equipBalloonSkinForTest('balloon-jello');
+    PopSound.resetDebug();
+    await tester.pumpWidget(
+      const BalloonPopApp(
+        gameplayRendererMode: GameplayRendererMode.canvasPhase4A,
+      ),
+    );
+    await tester.pump();
+    await tapSectionStart(tester, 1);
+    PopSound.resetDebug();
+
+    final canvasFinder = find.byKey(
+      const ValueKey('phase-1-persistent-game-canvas'),
+    );
+    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
+    final balloons = canvas.renderState.basicBalloons.toList(growable: false);
+    final firstPoint = await waitForExclusiveCanvasHitPoint(
+      tester,
+      canvasFinder,
+      balloons.first.id,
+    );
+    final secondPoint = await waitForExclusiveCanvasHitPoint(
+      tester,
+      canvasFinder,
+      balloons.last.id,
+    );
+    final origin = tester.getTopLeft(canvasFinder);
+    final firstTouch = await tester.createGesture(
+      pointer: 4501,
+      kind: ui.PointerDeviceKind.touch,
+    );
+    final secondTouch = await tester.createGesture(
+      pointer: 4502,
+      kind: ui.PointerDeviceKind.touch,
+    );
+
+    await firstTouch.down(origin + firstPoint);
+    await secondTouch.down(origin + secondPoint);
+
+    expect(canvas.renderState.basicBalloons, isEmpty);
+    expect(PopSound.polyphonicAssetPlayCount, 2);
+    expect(PopSound.assetPlayCount, 0);
+    await tester.pump();
+    expect(find.text('Stage Clear!'), findsOneWidget);
+    await firstTouch.up();
+    await secondTouch.up();
+  });
+
+  testWidgets('MUGI handle hole preserves real alpha through color tint', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final definition = BalloonSkinCatalog.byIdOrDefault('balloon-jello');
+      final data = await rootBundle.load(definition.assetPath!);
+      final codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      );
+      final frame = await codec.getNextFrame();
+      final source = frame.image;
+      final sourceBytes = await source.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
+      expect(source.width, 478);
+      expect(source.height, 512);
+      expect(sourceBytes, isNotNull);
+
+      int sourceAlphaAt(int x, int y) =>
+          sourceBytes!.getUint8(((y * source.width) + x) * 4 + 3);
+      for (final point in const <Offset>[
+        Offset(380, 180),
+        Offset(390, 210),
+        Offset(380, 240),
+      ]) {
+        expect(sourceAlphaAt(point.dx.toInt(), point.dy.toInt()), 0);
+      }
+
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      const background = Color(0xFFFF00FF);
+      canvas.drawRect(
+        const Rect.fromLTWH(0, 0, 478, 512),
+        Paint()..color = background,
+      );
+      canvas.drawImageRect(
+        source,
+        const Rect.fromLTWH(0, 0, 478, 512),
+        const Rect.fromLTWH(0, 0, 478, 512),
+        Paint()
+          ..colorFilter = ColorFilter.matrix(
+            BalloonSkinArtwork.visualColorMatrix(
+              definition,
+              definition.colorPalette.first,
+              isFake: false,
+            ),
+          ),
+      );
+      final composited = await recorder.endRecording().toImage(478, 512);
+      final compositedBytes = await composited.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
+      expect(compositedBytes, isNotNull);
+      final offset = ((210 * composited.width) + 390) * 4;
+      expect(compositedBytes!.getUint8(offset), (background.r * 255).round());
+      expect(
+        compositedBytes.getUint8(offset + 1),
+        (background.g * 255).round(),
+      );
+      expect(
+        compositedBytes.getUint8(offset + 2),
+        (background.b * 255).round(),
+      );
+      expect(compositedBytes.getUint8(offset + 3), 255);
+
+      composited.dispose();
+      source.dispose();
+      codec.dispose();
+    });
+  });
 
   testWidgets('locked store product uses a compact disabled placeholder', (
     tester,

@@ -12,6 +12,7 @@ abstract final class PopSound {
   static int fakePlayCount = 0;
   static int themedPlayCount = 0;
   static int assetPlayCount = 0;
+  static int polyphonicAssetPlayCount = 0;
   static String? lastAssetPath;
 
   static void setEnabled(bool value) => enabled = value;
@@ -60,9 +61,20 @@ abstract final class PopSound {
 
   static void preloadAsset(String assetPath) {}
 
+  static void preloadPolyphonicAsset(
+    String assetPath, {
+    int voiceCount = 12,
+  }) {}
+
   static void playAsset(String assetPath) {
     if (!enabled) return;
     assetPlayCount++;
+    lastAssetPath = assetPath;
+  }
+
+  static void playAssetPolyphonic(String assetPath) {
+    if (!enabled) return;
+    polyphonicAssetPlayCount++;
     lastAssetPath = assetPath;
   }
 
@@ -73,6 +85,7 @@ abstract final class PopSound {
     fakePlayCount = 0;
     themedPlayCount = 0;
     assetPlayCount = 0;
+    polyphonicAssetPlayCount = 0;
     lastAssetPath = null;
   }
 }

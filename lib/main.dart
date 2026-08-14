@@ -941,7 +941,11 @@ void playBalloonPopSound(
 }) {
   final assetPath = definition.popSoundAssetPath;
   if (assetPath != null) {
-    PopSound.playAsset(assetPath);
+    if (definition.id == 'balloon-jello') {
+      PopSound.playAssetPolyphonic(assetPath);
+    } else {
+      PopSound.playAsset(assetPath);
+    }
     if (boss) PopSound.playBossExplosion();
     return;
   }
@@ -1858,7 +1862,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         definition.popSoundAssetPath,
       ];
       for (final sound in sounds) {
-        if (sound != null) PopSound.preloadAsset(sound);
+        if (sound == null) continue;
+        if (definition.id == 'balloon-jello' &&
+            sound == definition.popSoundAssetPath) {
+          PopSound.preloadPolyphonicAsset(sound);
+        } else {
+          PopSound.preloadAsset(sound);
+        }
       }
     }
     _stagePage = homeStagePageForProgress(ProgressStorage.nextPlayableStage());

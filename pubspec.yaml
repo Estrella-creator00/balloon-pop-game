@@ -32,6 +32,7 @@ flutter:
     - assets/images/balloon_kicks_asset.png
     - assets/images/balloon_boo_asset.png
     - assets/images/balloon_muggy_asset.png
+    - assets/images/balloon_muggy_handle_alpha_asset.png
     - assets/images/balloon_gemi_asset.png
     - assets/images/balloon_shushu_asset.png
     - assets/images/gemi_pickaxe_asset.png

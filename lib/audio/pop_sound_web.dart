@@ -50,6 +50,8 @@ abstract final class PopSound {
 
   static _AudioContext? _context;
   static final Map<String, _AudioElement> _assetPlayers = {};
+  static final Map<String, List<_AudioElement>> _polyphonicAssetPlayers = {};
+  static final Map<String, int> _polyphonicVoiceIndexes = {};
   static bool enabled = true;
 
   static void setEnabled(bool value) => enabled = value;
@@ -256,6 +258,24 @@ abstract final class PopSound {
     }
   }
 
+  static void preloadPolyphonicAsset(
+    String assetPath, {
+    int voiceCount = 12,
+  }) {
+    try {
+      _polyphonicAssetPlayers.putIfAbsent(
+        assetPath,
+        () => List<_AudioElement>.generate(voiceCount, (_) {
+          final player = _AudioElement('assets/$assetPath');
+          player.preload = 'auto';
+          return player;
+        }, growable: false),
+      );
+    } catch (_) {
+      // Asset preload support must never affect startup.
+    }
+  }
+
   static void playAsset(String assetPath) {
     if (!enabled) return;
     try {
@@ -265,6 +285,22 @@ abstract final class PopSound {
       player
         ..pause()
         ..currentTime = 0;
+      player.play();
+    } catch (_) {
+      // Missing browser audio support must never affect gameplay.
+    }
+  }
+
+  static void playAssetPolyphonic(String assetPath) {
+    if (!enabled) return;
+    try {
+      preloadPolyphonicAsset(assetPath);
+      final voices = _polyphonicAssetPlayers[assetPath];
+      if (voices == null || voices.isEmpty) return;
+      final index = _polyphonicVoiceIndexes[assetPath] ?? 0;
+      final player = voices[index % voices.length];
+      _polyphonicVoiceIndexes[assetPath] = (index + 1) % voices.length;
+      player.currentTime = 0;
       player.play();
     } catch (_) {
       // Missing browser audio support must never affect gameplay.

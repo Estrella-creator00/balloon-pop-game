@@ -356,7 +356,7 @@ abstract final class BalloonSkinCatalog {
       description: '예민하고 까칠함',
       rarity: BalloonRarity.heroic,
       rendererType: BalloonRendererType.image,
-      assetPath: 'assets/images/balloon_muggy_asset.png',
+      assetPath: 'assets/images/balloon_muggy_handle_alpha_asset.png',
       colorPalette: _slimePalette,
       popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic,
