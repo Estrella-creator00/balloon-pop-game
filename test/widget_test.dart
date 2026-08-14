@@ -8,6 +8,7 @@ import 'package:balloon_pop_game/gameplay/game_hit_tester.dart';
 import 'package:balloon_pop_game/gameplay/game_render_state.dart';
 import 'package:balloon_pop_game/gameplay/game_scene_painter.dart';
 import 'package:balloon_pop_game/gameplay/game_sprite_cache.dart';
+import 'package:balloon_pop_game/gameplay/gameplay_ab_test_flags.dart';
 import 'package:balloon_pop_game/audio/pop_sound.dart';
 import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
@@ -6386,6 +6387,52 @@ void main() {
     expect(PopSound.assetPlayCount, 5);
     expect(PopSound.polyphonicAssetPlayCount, 0);
     expect(PopSound.lastAssetPath, wari.popSoundAssetPath);
+  });
+
+  test('MUGI and BOO A/B sound switches only mute their target skin', () {
+    final muggy = BalloonSkinCatalog.byIdOrDefault('balloon-jello');
+    final boo = BalloonSkinCatalog.byIdOrDefault('balloon-boo');
+    final wari = BalloonSkinCatalog.byIdOrDefault('balloon-wari');
+
+    expect(mugiSoundTest, isTrue);
+    expect(booSoundTest, isTrue);
+
+    PopSound.resetDebug();
+    playGameplayBalloonPopSound(
+      muggy,
+      boss: false,
+      mugiSoundTestOverride: false,
+    );
+    expect(PopSound.polyphonicAssetPlayCount, 0);
+    expect(PopSound.assetPlayCount, 0);
+
+    playGameplayBalloonPopSound(
+      boo,
+      boss: false,
+      booSoundTestOverride: false,
+    );
+    expect(PopSound.assetPlayCount, 0);
+
+    playGameplayBalloonPopSound(
+      wari,
+      boss: false,
+      mugiSoundTestOverride: false,
+      booSoundTestOverride: false,
+    );
+    expect(PopSound.assetPlayCount, 1);
+    expect(PopSound.lastAssetPath, wari.popSoundAssetPath);
+  });
+
+  test('BOO idle A/B switch stops only its offset and rotation branch', () {
+    expect(booIdleTest, isTrue);
+    expect(
+      isBooIdleTestEnabled('balloon-boo', booIdleTestOverride: false),
+      isFalse,
+    );
+    expect(
+      isBooIdleTestEnabled('balloon-wari', booIdleTestOverride: false),
+      isTrue,
+    );
   });
 
   testWidgets('MUGI and BOO user-edited gameplay sounds are bundled', (

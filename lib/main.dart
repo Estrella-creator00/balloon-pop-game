@@ -16,6 +16,7 @@ import 'gameplay/game_draw_geometry.dart';
 import 'gameplay/game_hit_tester.dart';
 import 'gameplay/game_render_state.dart';
 import 'gameplay/game_sprite_cache.dart';
+import 'gameplay/gameplay_ab_test_flags.dart';
 import 'onboarding_page.dart';
 import 'ranking/ranking_page.dart';
 import 'services/coin_service.dart';
@@ -293,12 +294,14 @@ class Balloon implements BasicBalloonRenderView {
   bool get preserveMochiDetails => _cachedPreserveMochiDetails;
   @override
   Offset get visualOffset =>
-      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
+              isBooIdleTestEnabled(_skin.id)
           ? Offset(sin(floatPhase) * 1.4, cos(floatPhase) * 2.2)
           : Offset.zero;
   @override
   double get visualRotation =>
-      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
+              isBooIdleTestEnabled(_skin.id)
           ? sin(floatPhase * 0.7) * 0.018
           : 0;
   @override
@@ -413,7 +416,8 @@ class _BossRenderView implements BossBalloonRenderView {
       boss.isFake ? _fakePreserveMochiDetails : _normalPreserveMochiDetails;
   @override
   Offset get visualOffset =>
-      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
+              isBooIdleTestEnabled(_skin.id)
           ? Offset(
               sin(boss.visualPhase) * 1.4,
               cos(boss.visualPhase) * 2.2,
@@ -421,7 +425,8 @@ class _BossRenderView implements BossBalloonRenderView {
           : Offset.zero;
   @override
   double get visualRotation =>
-      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail
+      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
+              isBooIdleTestEnabled(_skin.id)
           ? sin(boss.visualPhase * 0.7) * 0.018
           : 0;
   @override
@@ -968,6 +973,24 @@ void playBalloonPopSound(
       PopSound.playCream();
       if (boss) PopSound.playBossExplosion();
   }
+}
+
+/// Gameplay-only A/B gate. Shop previews continue to use the normal sound path.
+void playGameplayBalloonPopSound(
+  BalloonSkinDefinition definition, {
+  required bool boss,
+  bool? mugiSoundTestOverride,
+  bool? booSoundTestOverride,
+}) {
+  if (!isGameplaySkinSoundEnabled(
+    definition.id,
+    mugiSoundTestOverride: mugiSoundTestOverride,
+    booSoundTestOverride: booSoundTestOverride,
+  )) {
+    if (boss) PopSound.playBossExplosion();
+    return;
+  }
+  playBalloonPopSound(definition, boss: boss);
 }
 
 class AssetVisualEffect {
@@ -3083,7 +3106,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _playSkinPopSound(BalloonSkinDefinition skin, {required bool boss}) {
     // Sound-pack selection can override this dispatch point in a later update.
-    playBalloonPopSound(skin, boss: boss);
+    playGameplayBalloonPopSound(skin, boss: boss);
   }
 
   void _spawnRing(Offset center, Color color, double radius) {
