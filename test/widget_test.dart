@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/dev/dev_coin_tool.dart';
 import 'package:balloon_pop_game/gameplay/game_canvas.dart';
+import 'package:balloon_pop_game/gameplay/boo_idle_motion.dart';
 import 'package:balloon_pop_game/gameplay/game_draw_geometry.dart';
 import 'package:balloon_pop_game/gameplay/game_hit_tester.dart';
 import 'package:balloon_pop_game/gameplay/game_render_state.dart';
@@ -6431,6 +6433,35 @@ void main() {
     );
     expect(
       isBooIdleTestEnabled('balloon-wari', booIdleTestOverride: false),
+      isTrue,
+    );
+  });
+
+  test('BOO idle lookup preserves the existing motion values', () {
+    for (final phase in <double>[0, 0.4, 1.2, pi, 7.5]) {
+      expect(BooIdleMotion.sinAt(phase), closeTo(sin(phase), 0.00001));
+      expect(BooIdleMotion.cosAt(phase), closeTo(cos(phase), 0.00001));
+      expect(
+        BooIdleMotion.sinAt(phase * 0.7) * 0.018,
+        closeTo(sin(phase * 0.7) * 0.018, 0.000001),
+      );
+    }
+  });
+
+  test('BOO animated sprite path does not replace the static fast path', () {
+    expect(
+      usesBooAnimatedSpriteFastPath(
+        offset: const Offset(1.4, 0),
+        scale: 1,
+      ),
+      isTrue,
+    );
+    expect(
+      usesBooAnimatedSpriteFastPath(offset: Offset.zero, scale: 1),
+      isFalse,
+    );
+    expect(
+      usesStaticSpriteFastPath(offset: Offset.zero, rotation: 0, scale: 1),
       isTrue,
     );
   });

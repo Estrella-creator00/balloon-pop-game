@@ -3,8 +3,8 @@
 /// Keep these enabled for normal gameplay. Change only these three values when
 /// producing a diagnostic build.
 const bool mugiSoundTest = true;
-const bool booSoundTest = false;
-const bool booIdleTest = false;
+const bool booSoundTest = true;
+const bool booIdleTest = true;
 
 bool isGameplaySkinSoundEnabled(
   String skinId, {

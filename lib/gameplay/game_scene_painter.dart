@@ -37,14 +37,29 @@ class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
           balloon.preserveMochiDetails,
           balloon.spriteOpacity,
         );
+        final visualOffset = balloon.visualOffset;
+        final visualRotation = balloon.visualRotation;
+        final visualScale = balloon.visualScale;
+        if (usesBooAnimatedSpriteFastPath(
+          offset: visualOffset,
+          scale: visualScale,
+        )) {
+          drawing.drawBooIdleAt(
+            canvas,
+            position: balloon.position,
+            offset: visualOffset,
+            rotation: visualRotation,
+          );
+          continue;
+        }
         canvas
           ..save()
           ..translate(balloon.position.dx, balloon.position.dy);
         drawing.draw(
           canvas,
-          offset: balloon.visualOffset,
-          rotation: balloon.visualRotation,
-          scale: balloon.visualScale,
+          offset: visualOffset,
+          rotation: visualRotation,
+          scale: visualScale,
         );
         canvas.restore();
         continue;
@@ -90,14 +105,54 @@ class GameScenePainter<T extends BasicBalloonRenderView> extends CustomPainter {
           boss.preserveMochiDetails,
           boss.spriteOpacity,
         );
+        final visualOffset = boss.visualOffset;
+        final visualRotation = boss.visualRotation;
+        final visualScale = boss.visualScale;
+        if (usesBooAnimatedSpriteFastPath(
+          offset: visualOffset,
+          scale: visualScale,
+        )) {
+          drawing.drawBooIdleAt(
+            canvas,
+            position: boss.position,
+            offset: visualOffset,
+            rotation: visualRotation,
+          );
+          var bossDrawing = _bossDrawings[boss.id];
+          if (bossDrawing == null ||
+              !bossDrawing.matches(
+                visualSize,
+                Colors.transparent,
+                opacity: boss.opacity,
+                hp: boss.hp,
+                maxHp: boss.maxHp,
+                showHealthBar: boss.showHealthBar,
+              )) {
+            bossDrawing = BossBalloonDrawing(
+              visualSize,
+              Colors.transparent,
+              opacity: boss.opacity,
+              hp: boss.hp,
+              maxHp: boss.maxHp,
+              showHealthBar: boss.showHealthBar,
+            );
+            _bossDrawings[boss.id] = bossDrawing;
+          }
+          canvas
+            ..save()
+            ..translate(boss.position.dx, boss.position.dy);
+          bossDrawing.drawHealthBar(canvas);
+          canvas.restore();
+          continue;
+        }
         canvas
           ..save()
           ..translate(boss.position.dx, boss.position.dy);
         drawing.draw(
           canvas,
-          offset: boss.visualOffset,
-          rotation: boss.visualRotation,
-          scale: boss.visualScale,
+          offset: visualOffset,
+          rotation: visualRotation,
+          scale: visualScale,
         );
         var bossDrawing = _bossDrawings[boss.id];
         if (bossDrawing == null ||

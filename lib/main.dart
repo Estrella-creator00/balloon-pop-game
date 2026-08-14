@@ -12,6 +12,7 @@ import 'balloon_skin_catalog.dart';
 import 'coin_purchase_page.dart';
 import 'dev/dev_coin_tool.dart';
 import 'gameplay/game_canvas.dart';
+import 'gameplay/boo_idle_motion.dart';
 import 'gameplay/game_draw_geometry.dart';
 import 'gameplay/game_hit_tester.dart';
 import 'gameplay/game_render_state.dart';
@@ -281,6 +282,19 @@ class Balloon implements BasicBalloonRenderView {
       _imageSpriteDetailColorMatrix(_skin, isFake: isFake);
   late final bool _cachedPreserveMochiDetails =
       _shouldPreserveMochiDetails(_skin, color, isFake: isFake);
+  double _cachedBooIdlePhase = double.nan;
+  Offset _cachedBooIdleOffset = Offset.zero;
+  double _cachedBooIdleRotation = 0;
+
+  void _refreshBooIdleTransform() {
+    if (_cachedBooIdlePhase == floatPhase) return;
+    _cachedBooIdlePhase = floatPhase;
+    _cachedBooIdleOffset = Offset(
+      BooIdleMotion.sinAt(floatPhase) * 1.4,
+      BooIdleMotion.cosAt(floatPhase) * 2.2,
+    );
+    _cachedBooIdleRotation = BooIdleMotion.sinAt(floatPhase * 0.7) * 0.018;
+  }
 
   @override
   String? get spriteAssetPath => _skin.rendererType == BalloonRendererType.image
@@ -293,17 +307,25 @@ class Balloon implements BasicBalloonRenderView {
   @override
   bool get preserveMochiDetails => _cachedPreserveMochiDetails;
   @override
-  Offset get visualOffset =>
-      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
-              isBooIdleTestEnabled(_skin.id)
-          ? Offset(sin(floatPhase) * 1.4, cos(floatPhase) * 2.2)
-          : Offset.zero;
+  Offset get visualOffset {
+    if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||
+        !isBooIdleTestEnabled(_skin.id)) {
+      return Offset.zero;
+    }
+    _refreshBooIdleTransform();
+    return _cachedBooIdleOffset;
+  }
+
   @override
-  double get visualRotation =>
-      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
-              isBooIdleTestEnabled(_skin.id)
-          ? sin(floatPhase * 0.7) * 0.018
-          : 0;
+  double get visualRotation {
+    if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||
+        !isBooIdleTestEnabled(_skin.id)) {
+      return 0;
+    }
+    _refreshBooIdleTransform();
+    return _cachedBooIdleRotation;
+  }
+
   @override
   double get visualScale =>
       isExiting ? (1 - exitProgress * 0.42).clamp(0.58, 1.0) : 1;
@@ -399,6 +421,20 @@ class _BossRenderView implements BossBalloonRenderView {
       _shouldPreserveMochiDetails(_skin, _skinColor, isFake: false);
   late final bool _fakePreserveMochiDetails =
       _shouldPreserveMochiDetails(_skin, _skinColor, isFake: true);
+  double _cachedBooIdlePhase = double.nan;
+  Offset _cachedBooIdleOffset = Offset.zero;
+  double _cachedBooIdleRotation = 0;
+
+  void _refreshBooIdleTransform() {
+    if (_cachedBooIdlePhase == boss.visualPhase) return;
+    _cachedBooIdlePhase = boss.visualPhase;
+    _cachedBooIdleOffset = Offset(
+      BooIdleMotion.sinAt(boss.visualPhase) * 1.4,
+      BooIdleMotion.cosAt(boss.visualPhase) * 2.2,
+    );
+    _cachedBooIdleRotation =
+        BooIdleMotion.sinAt(boss.visualPhase * 0.7) * 0.018;
+  }
 
   @override
   String? get spriteAssetPath => _skin.rendererType == BalloonRendererType.image
@@ -415,20 +451,25 @@ class _BossRenderView implements BossBalloonRenderView {
   bool get preserveMochiDetails =>
       boss.isFake ? _fakePreserveMochiDetails : _normalPreserveMochiDetails;
   @override
-  Offset get visualOffset =>
-      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
-              isBooIdleTestEnabled(_skin.id)
-          ? Offset(
-              sin(boss.visualPhase) * 1.4,
-              cos(boss.visualPhase) * 2.2,
-            )
-          : Offset.zero;
+  Offset get visualOffset {
+    if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||
+        !isBooIdleTestEnabled(_skin.id)) {
+      return Offset.zero;
+    }
+    _refreshBooIdleTransform();
+    return _cachedBooIdleOffset;
+  }
+
   @override
-  double get visualRotation =>
-      _skin.idleAnimation == BalloonIdleAnimationType.ghostTail &&
-              isBooIdleTestEnabled(_skin.id)
-          ? sin(boss.visualPhase * 0.7) * 0.018
-          : 0;
+  double get visualRotation {
+    if (_skin.idleAnimation != BalloonIdleAnimationType.ghostTail ||
+        !isBooIdleTestEnabled(_skin.id)) {
+      return 0;
+    }
+    _refreshBooIdleTransform();
+    return _cachedBooIdleRotation;
+  }
+
   @override
   double get visualScale => 1;
   @override
@@ -1876,6 +1917,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _lastScore = ProgressStorage.lastScore();
     _coinBalance = CoinService.balance;
     SettingsService.applyStoredPreferences();
+    BooIdleMotion.prepare();
     PopSound.preloadSharedAssets();
     _ownedProductIds = PurchaseService.ownedProductIds;
     _equippedProductIds = _loadEquippedProductIds();

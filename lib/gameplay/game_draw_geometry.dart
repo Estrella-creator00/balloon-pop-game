@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import 'game_sprite_cache.dart';
@@ -8,6 +10,12 @@ bool usesStaticSpriteFastPath({
   double scale = 1,
 }) =>
     offset == Offset.zero && rotation == 0 && scale == 1;
+
+bool usesBooAnimatedSpriteFastPath({
+  required Offset offset,
+  required double scale,
+}) =>
+    offset != Offset.zero && scale == 1;
 
 class SpriteBalloonDrawing {
   SpriteBalloonDrawing({
@@ -24,6 +32,8 @@ class SpriteBalloonDrawing {
             ? null
             : List<double>.of(detailColorMatrix),
         _destination = _containRect(sprite.sourceRect.size, size),
+        _spriteFitScale = _containRect(sprite.sourceRect.size, size).width /
+            sprite.sourceRect.width,
         _bodyPaint = Paint()
           ..filterQuality = FilterQuality.medium
           ..color = Colors.white.withValues(alpha: opacity)
@@ -36,6 +46,13 @@ class SpriteBalloonDrawing {
               ? null
               : ColorFilter.matrix(detailColorMatrix) {
     _detailClip = _mochiDetailPath(_destination);
+    _spriteBaseX = _destination.left - sprite.sourceRect.left * _spriteFitScale;
+    _spriteBaseY = _destination.top - sprite.sourceRect.top * _spriteFitScale;
+    _atlasRects
+      ..[0] = sprite.sourceRect.left
+      ..[1] = sprite.sourceRect.top
+      ..[2] = sprite.sourceRect.right
+      ..[3] = sprite.sourceRect.bottom;
   }
 
   final String path;
@@ -46,8 +63,13 @@ class SpriteBalloonDrawing {
   final bool preserveMochiDetails;
   final double opacity;
   final Rect _destination;
+  final double _spriteFitScale;
+  late final double _spriteBaseX;
+  late final double _spriteBaseY;
   final Paint _bodyPaint;
   final Paint _detailPaint;
+  final Float32List _booAtlasTransform = Float32List(4);
+  final Float32List _atlasRects = Float32List(4);
   late final Path _detailClip;
 
   bool matches(
@@ -120,6 +142,52 @@ class SpriteBalloonDrawing {
         ..restore();
     }
     canvas.restore();
+  }
+
+  /// Draws BOO's cached sprite with one atlas transform and no Canvas stack.
+  /// The transform is equivalent to the existing rotation around
+  /// `size.center(offset)`, including its current pivot behavior.
+  void drawBooIdleAt(
+    Canvas canvas, {
+    required Offset position,
+    required Offset offset,
+    required double rotation,
+  }) {
+    final centerX = size.width * 0.5 + offset.dx;
+    final centerY = size.height * 0.5 + offset.dy;
+
+    // BOO's angle is at most 0.018 rad. These approximations differ from the
+    // exact values by less than 0.0001 logical pixel at gameplay sprite sizes.
+    final sinRotation = rotation;
+    final cosRotation = 1 - rotation * rotation * 0.5;
+    final scos = cosRotation * _spriteFitScale;
+    final ssin = sinRotation * _spriteFitScale;
+
+    _booAtlasTransform
+      ..[0] = scos
+      ..[1] = ssin
+      ..[2] = position.dx +
+          cosRotation * _spriteBaseX -
+          sinRotation * _spriteBaseY +
+          centerX -
+          cosRotation * centerX +
+          sinRotation * centerY
+      ..[3] = position.dy +
+          sinRotation * _spriteBaseX +
+          cosRotation * _spriteBaseY +
+          centerY -
+          sinRotation * centerX -
+          cosRotation * centerY;
+
+    canvas.drawRawAtlas(
+      sprite.image,
+      _booAtlasTransform,
+      _atlasRects,
+      null,
+      null,
+      null,
+      _bodyPaint,
+    );
   }
 }
 
