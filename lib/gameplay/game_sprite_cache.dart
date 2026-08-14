@@ -63,6 +63,14 @@ class GameSpriteCache extends ChangeNotifier {
   }) =>
       _images.containsKey(GameSpriteCacheKey(path, resolution));
 
+  bool isPrepared(
+    String path, {
+    GameSpriteResolution resolution = GameSpriteResolution.normal,
+  }) {
+    final key = GameSpriteCacheKey(path, resolution);
+    return _images.containsKey(key) || _streams.containsKey(key);
+  }
+
   int get resolvedCount => _images.length;
   int get pendingCount => _streams.length;
 

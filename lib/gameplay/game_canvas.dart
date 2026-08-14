@@ -10,6 +10,7 @@ enum GameplayRendererMode {
   canvasPhase2,
   canvasPhase3,
   canvasPhase4A,
+  canvasPhase4B,
 }
 
 const phase4ACanvasSkinIds = <String>{
@@ -24,8 +25,14 @@ const phase4ACanvasSkinIds = <String>{
   'balloon-jello',
 };
 
+const phase4BCanvasSkinIds = <String>{
+  ...phase4ACanvasSkinIds,
+  'balloon-lumen',
+  'balloon-chouchou',
+};
+
 /// One-line rollback switch for production. Tests may inject either mode.
-const defaultGameplayRendererMode = GameplayRendererMode.canvasPhase4A;
+const defaultGameplayRendererMode = GameplayRendererMode.canvasPhase4B;
 
 bool gameplayCanvasStageEnabled({
   required GameplayRendererMode mode,
@@ -33,7 +40,8 @@ bool gameplayCanvasStageEnabled({
 }) {
   if (mode == GameplayRendererMode.legacy) return false;
   if (mode == GameplayRendererMode.canvasPhase3 ||
-      mode == GameplayRendererMode.canvasPhase4A) {
+      mode == GameplayRendererMode.canvasPhase4A ||
+      mode == GameplayRendererMode.canvasPhase4B) {
     return stage >= 1 && stage <= 30;
   }
   if (stage >= 1 && stage <= 9) return true;

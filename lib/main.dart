@@ -276,8 +276,16 @@ class Balloon implements BasicBalloonRenderView {
 
   late final BalloonSkinDefinition _skin =
       BalloonSkinCatalog.byIdOrDefault(skinId);
+  late final String? _cachedSpriteAssetPath = _imageSpriteAssetPath(
+    _skin,
+    color,
+    isFake: isFake,
+    visualVariant: visualVariant,
+  );
   late final List<double>? _cachedSpriteColorMatrix =
-      _imageSpriteColorMatrix(_skin, color, isFake: isFake);
+      _usesRuntimeSprite(_skin, color, isFake: isFake)
+          ? null
+          : _imageSpriteColorMatrix(_skin, color, isFake: isFake);
   late final List<double>? _cachedSpriteDetailColorMatrix =
       _imageSpriteDetailColorMatrix(_skin, isFake: isFake);
   late final bool _cachedPreserveMochiDetails =
@@ -298,7 +306,7 @@ class Balloon implements BasicBalloonRenderView {
 
   @override
   String? get spriteAssetPath => _skin.rendererType == BalloonRendererType.image
-      ? _skin.assetForVariant(visualVariant)
+      ? _cachedSpriteAssetPath
       : null;
   @override
   List<double>? get spriteColorMatrix =>
@@ -335,11 +343,18 @@ class Balloon implements BasicBalloonRenderView {
   }
 
   @override
-  double get visualScale =>
-      isExiting ? (1 - exitProgress * 0.42).clamp(0.58, 1.0) : 1;
+  double get visualScale {
+    final exitScale =
+        isExiting ? (1 - exitProgress * 0.42).clamp(0.58, 1.0) : 1.0;
+    final idleScale = _skin.idleAnimation == BalloonIdleAnimationType.breathe
+        ? 1 + sin(floatPhase) * 0.018
+        : 1.0;
+    return exitScale * idleScale;
+  }
+
   @override
   double get spriteOpacity =>
-      opacity *
+      (_usesPrecomposedFakeSprite(_skin, color, isFake: isFake) ? 1 : opacity) *
       (_skin.idleAnimation == BalloonIdleAnimationType.ghostTail ? 0.86 : 1);
 
   bool get isExiting => exitProgress > 0;
@@ -417,10 +432,20 @@ class _BossRenderView implements BossBalloonRenderView {
   late final BalloonSkinDefinition _skin =
       BalloonSkinCatalog.byIdOrDefault(boss.skinId);
   late final Color _skinColor = colorOf(boss);
+  late final String? _cachedSpriteAssetPath = _imageSpriteAssetPath(
+    _skin,
+    _skinColor,
+    isFake: boss.isFake,
+    visualVariant: boss.visualVariant,
+  );
   late final List<double>? _normalSpriteColorMatrix =
-      _imageSpriteColorMatrix(_skin, _skinColor, isFake: false);
+      _usesRuntimeSprite(_skin, _skinColor, isFake: false)
+          ? null
+          : _imageSpriteColorMatrix(_skin, _skinColor, isFake: false);
   late final List<double>? _fakeSpriteColorMatrix =
-      _imageSpriteColorMatrix(_skin, _skinColor, isFake: true);
+      _usesRuntimeSprite(_skin, _skinColor, isFake: true)
+          ? null
+          : _imageSpriteColorMatrix(_skin, _skinColor, isFake: true);
   late final List<double>? _normalSpriteDetailColorMatrix =
       _imageSpriteDetailColorMatrix(_skin, isFake: false);
   late final List<double>? _fakeSpriteDetailColorMatrix =
@@ -446,7 +471,7 @@ class _BossRenderView implements BossBalloonRenderView {
 
   @override
   String? get spriteAssetPath => _skin.rendererType == BalloonRendererType.image
-      ? _skin.assetForVariant(boss.visualVariant)
+      ? _cachedSpriteAssetPath
       : null;
   @override
   List<double>? get spriteColorMatrix => usesBooReferenceColorTest(_skin.id)
@@ -487,10 +512,15 @@ class _BossRenderView implements BossBalloonRenderView {
   }
 
   @override
-  double get visualScale => 1;
+  double get visualScale =>
+      _skin.idleAnimation == BalloonIdleAnimationType.breathe
+          ? 1 + sin(boss.visualPhase) * 0.018
+          : 1;
   @override
   double get spriteOpacity =>
-      opacity *
+      (_usesPrecomposedFakeSprite(_skin, _skinColor, isFake: boss.isFake)
+          ? 1
+          : opacity) *
       (_skin.idleAnimation == BalloonIdleAnimationType.ghostTail ? 0.86 : 1);
 }
 
@@ -512,6 +542,36 @@ List<double>? _imageSpriteColorMatrix(
     isFake: isFake,
   );
 }
+
+String? _imageSpriteAssetPath(
+  BalloonSkinDefinition definition,
+  Color color, {
+  required bool isFake,
+  required int visualVariant,
+}) {
+  final runtimeAsset = (isFake
+      ? definition.runtimeFakeColorAssetPaths
+      : definition.runtimeColorAssetPaths)[color.toARGB32()];
+  return runtimeAsset ?? definition.assetForVariant(visualVariant);
+}
+
+bool _usesPrecomposedFakeSprite(
+  BalloonSkinDefinition definition,
+  Color color, {
+  required bool isFake,
+}) =>
+    isFake &&
+    definition.runtimeFakeColorAssetPaths.containsKey(color.toARGB32());
+
+bool _usesRuntimeSprite(
+  BalloonSkinDefinition definition,
+  Color color, {
+  required bool isFake,
+}) =>
+    (isFake
+            ? definition.runtimeFakeColorAssetPaths
+            : definition.runtimeColorAssetPaths)
+        .containsKey(color.toARGB32());
 
 List<double>? _imageSpriteDetailColorMatrix(
   BalloonSkinDefinition definition, {
@@ -1972,7 +2032,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _precacheSkinAssets(BalloonSkinDefinition definition) {
     final paths = <String, int>{};
-    final spriteWidth = phase4ACanvasSkinIds.contains(definition.id)
+    final spriteWidth = _canvasSkinIdsForRendererMode.contains(definition.id)
         ? GameSpriteResolution.normal.cacheWidth
         : 512;
     void add(String? path, int width) {
@@ -2024,6 +2084,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   Set<String> _canvasSpritePaths(BalloonSkinDefinition definition) => <String>{
         if (definition.assetPath != null) definition.assetPath!,
         ...definition.variantAssetPaths,
+        ...definition.runtimeColorAssetPaths.values,
+        ...definition.runtimeFakeColorAssetPaths.values,
       };
 
   void _prepareCanvasSkinSprites(
@@ -2031,7 +2093,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     GameSpriteResolution resolution, {
     bool precache = true,
   }) {
-    if (!phase4ACanvasSkinIds.contains(definition.id)) return;
+    if (!_canvasSkinIdsForRendererMode.contains(definition.id)) return;
     final paths = _canvasSpritePaths(definition);
     if (paths.isEmpty) return;
     final configuration = createLocalImageConfiguration(context);
@@ -2582,7 +2644,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final toolApproach = definition.popEffectType == BalloonPopEffectType.cream
         ? _random.nextInt(3)
         : 0;
-    setState(() {
+    void enqueue() {
       _pendingToolHits.add(
         balloon != null
             ? PendingToolHit.balloon(
@@ -2596,7 +2658,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 toolApproach: toolApproach,
               ),
       );
-    });
+    }
+
+    if (_usesCanvasPlayfield) {
+      enqueue();
+    } else {
+      setState(enqueue);
+    }
     return true;
   }
 
@@ -5035,15 +5103,19 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       return false;
     }
     final skin = _equippedBalloonSkin;
-    final supportedSkinIds =
-        widget.gameplayRendererMode == GameplayRendererMode.canvasPhase4A
-            ? phase4ACanvasSkinIds
-            : const <String>{BalloonSkinCatalog.defaultId};
+    final supportedSkinIds = _canvasSkinIdsForRendererMode;
     return supportedSkinIds.contains(skin.id) &&
         _balloons
             .every((balloon) => supportedSkinIds.contains(balloon.skinId)) &&
         _bosses.every((boss) => supportedSkinIds.contains(boss.skinId));
   }
+
+  Set<String> get _canvasSkinIdsForRendererMode =>
+      switch (widget.gameplayRendererMode) {
+        GameplayRendererMode.canvasPhase4B => phase4BCanvasSkinIds,
+        GameplayRendererMode.canvasPhase4A => phase4ACanvasSkinIds,
+        _ => const <String>{BalloonSkinCatalog.defaultId},
+      };
 
   Widget _buildCanvasPlayfield(Widget? staticBackground) => Stack(
         clipBehavior: Clip.none,
@@ -5074,6 +5146,27 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               onPointerDown: _hitCanvasBalloonAt,
             ),
           ),
+          if (widget.gameplayRendererMode == GameplayRendererMode.canvasPhase4B)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _gameplayFrame,
+                  builder: (context, frame, _) => AssetEffectsCanvas(
+                    key: const ValueKey('asset-effects-boundary'),
+                    effects: _assetEffects,
+                    revision: _effectsRevision,
+                    preloadAssets: legendaryEffectPreloadAssets(
+                      _equippedBalloonSkin,
+                    ),
+                    toolVisuals: [
+                      for (final hit in _pendingToolHits)
+                        pendingToolVisual(hit),
+                    ],
+                    toolRevision: frame,
+                  ),
+                ),
+              ),
+            ),
           if (_phase == GamePhase.stageIntro) _buildStageIntro(),
           if (_phase == GamePhase.stageClear)
             _buildCenterMessage('Stage Clear!', null),
