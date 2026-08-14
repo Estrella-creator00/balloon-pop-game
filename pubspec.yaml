@@ -45,7 +45,6 @@ flutter:
     - assets/images/shushu_background_asset.png
     - assets/images/gemi_background_mobile.png
     - assets/images/shushu_background_mobile.png
-    - assets/images/muggy_break.mp3.mp3
     - assets/images/gemi_pickaxe_hit.mp3.mp3
     - assets/images/gemi_break.mp3.mp3
     - assets/images/shushu_fork_hit.mp3.mp3
@@ -69,7 +68,7 @@ flutter:
     - assets/sounds/wari_watermelon_bite.mp3.mp3
     - assets/sounds/kicks_soccer_kick.mp3.mp3
     - assets/sounds/boo_ghost_woo_short.mp3.mp3
-    - assets/sounds/mugi_break_short.mp3.mp3
+    - assets/sounds/muggy_break.mp3.mp3
     - assets/sounds/ui_click.mp3.mp3
     - assets/sounds/boss_appear.mp3.mp3
     - assets/sounds/boss_clear.mp3.mp3

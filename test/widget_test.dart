@@ -1115,7 +1115,7 @@ void main() {
       final muggy = BalloonSkinCatalog.byIdOrDefault('balloon-jello');
       expect(
         muggy.popSoundAssetPath,
-        'assets/sounds/mugi_break_short.mp3.mp3',
+        'assets/sounds/muggy_break.mp3.mp3',
       );
       final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
       expect(
@@ -6081,7 +6081,7 @@ void main() {
     );
     expect(
       BalloonSkinCatalog.byIdOrDefault('balloon-jello').popSoundAssetPath,
-      'assets/sounds/mugi_break_short.mp3.mp3',
+      'assets/sounds/muggy_break.mp3.mp3',
     );
   });
 
@@ -6393,13 +6393,13 @@ void main() {
   ) async {
     await tester.runAsync(() async {
       final mugiGameplay = await rootBundle.load(
-        'assets/sounds/mugi_break_short.mp3.mp3',
+        'assets/sounds/muggy_break.mp3.mp3',
       );
       final booGameplay = await rootBundle.load(
         'assets/sounds/boo_ghost_woo_short.mp3.mp3',
       );
 
-      expect(mugiGameplay.lengthInBytes, 47691);
+      expect(mugiGameplay.lengthInBytes, 18285);
       expect(booGameplay.lengthInBytes, 47691);
     });
   });

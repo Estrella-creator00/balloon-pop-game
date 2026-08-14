@@ -360,7 +360,7 @@ abstract final class BalloonSkinCatalog {
       colorPalette: _slimePalette,
       popEffectType: BalloonPopEffectType.shards,
       popSoundType: BalloonPopSoundType.basic,
-      popSoundAssetPath: 'assets/sounds/mugi_break_short.mp3.mp3',
+      popSoundAssetPath: 'assets/sounds/muggy_break.mp3.mp3',
       isDefault: false,
       supportsBossSkin: true,
       shopOrder: 8,
