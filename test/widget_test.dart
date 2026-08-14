@@ -6466,6 +6466,46 @@ void main() {
     );
   });
 
+  test('BOO reference-color diagnostic removes every gameplay color filter',
+      () {
+    final boo = BalloonSkinCatalog.byIdOrDefault('balloon-boo');
+    final tinted = Balloon(
+      id: 80,
+      position: Offset.zero,
+      velocity: Offset.zero,
+      color: boo.colorPalette[1],
+      size: 80,
+      floatPhase: 1.2,
+      floatPower: 0,
+      hp: 1,
+      maxHp: 2,
+      skinId: boo.id,
+    );
+    final fake = Balloon(
+      id: 81,
+      position: Offset.zero,
+      velocity: Offset.zero,
+      color: boo.colorPalette[1],
+      size: 80,
+      floatPhase: 1.2,
+      floatPower: 0,
+      hp: 1,
+      maxHp: 2,
+      skinId: boo.id,
+      isFake: true,
+    );
+
+    expect(booReferenceColorTest, isTrue);
+    expect(tinted.spriteColorMatrix, isNull);
+    expect(fake.spriteColorMatrix, isNull);
+    expect(fake.spriteOpacity, lessThan(tinted.spriteOpacity));
+    expect(tinted.visualOffset, isNot(Offset.zero));
+    expect(tinted.visualRotation, isNot(0));
+    expect(tinted.spriteOpacity, closeTo(0.86, 0.001));
+    expect(booSoundTest, isTrue);
+    expect(booIdleTest, isTrue);
+  });
+
   testWidgets('MUGI and BOO user-edited gameplay sounds are bundled', (
     tester,
   ) async {

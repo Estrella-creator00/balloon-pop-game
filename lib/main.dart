@@ -301,7 +301,8 @@ class Balloon implements BasicBalloonRenderView {
       ? _skin.assetForVariant(visualVariant)
       : null;
   @override
-  List<double>? get spriteColorMatrix => _cachedSpriteColorMatrix;
+  List<double>? get spriteColorMatrix =>
+      usesBooReferenceColorTest(_skin.id) ? null : _cachedSpriteColorMatrix;
   @override
   List<double>? get spriteDetailColorMatrix => _cachedSpriteDetailColorMatrix;
   @override
@@ -441,8 +442,9 @@ class _BossRenderView implements BossBalloonRenderView {
       ? _skin.assetForVariant(boss.visualVariant)
       : null;
   @override
-  List<double>? get spriteColorMatrix =>
-      boss.isFake ? _fakeSpriteColorMatrix : _normalSpriteColorMatrix;
+  List<double>? get spriteColorMatrix => usesBooReferenceColorTest(_skin.id)
+      ? null
+      : (boss.isFake ? _fakeSpriteColorMatrix : _normalSpriteColorMatrix);
   @override
   List<double>? get spriteDetailColorMatrix => boss.isFake
       ? _fakeSpriteDetailColorMatrix

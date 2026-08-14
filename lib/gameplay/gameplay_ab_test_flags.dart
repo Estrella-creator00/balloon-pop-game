@@ -1,10 +1,11 @@
 /// Temporary device A/B switches for isolating MUGI/BOO latency.
 ///
-/// Keep these enabled for normal gameplay. Change only these three values when
-/// producing a diagnostic build.
+/// Keep the sound/idle switches enabled for normal gameplay. The reference
+/// color switch is enabled only for the current BOO GPU diagnostic build.
 const bool mugiSoundTest = true;
 const bool booSoundTest = true;
 const bool booIdleTest = true;
+const bool booReferenceColorTest = true;
 
 bool isGameplaySkinSoundEnabled(
   String skinId, {
@@ -25,3 +26,10 @@ bool isBooIdleTestEnabled(
   bool? booIdleTestOverride,
 }) =>
     skinId != 'balloon-boo' || (booIdleTestOverride ?? booIdleTest);
+
+bool usesBooReferenceColorTest(
+  String skinId, {
+  bool? booReferenceColorTestOverride,
+}) =>
+    skinId == 'balloon-boo' &&
+    (booReferenceColorTestOverride ?? booReferenceColorTest);
