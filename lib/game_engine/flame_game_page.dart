@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import 'game_session_state.dart';
 import 'poppop_game.dart';
+import 'session/game_session_snapshot.dart';
 
 typedef PoppopGameFactory = PoppopGame Function(
   GameSessionState sessionState,
@@ -13,10 +16,14 @@ class FlameGamePage extends StatefulWidget {
     super.key,
     required this.onExit,
     this.gameFactory,
+    this.onHudBuild,
   });
 
   final VoidCallback onExit;
   final PoppopGameFactory? gameFactory;
+
+  @visibleForTesting
+  final VoidCallback? onHudBuild;
 
   @override
   State<FlameGamePage> createState() => _FlameGamePageState();
@@ -37,8 +44,7 @@ class _FlameGamePageState extends State<FlameGamePage>
     _game =
         widget.gameFactory?.call(_sessionState) ?? PoppopGame(_sessionState);
     final lifecycleState = WidgetsBinding.instance.lifecycleState;
-    if (lifecycleState != null &&
-        lifecycleState != AppLifecycleState.resumed) {
+    if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
       _lifecyclePaused = true;
       _game.pausePreview();
     }
@@ -75,6 +81,11 @@ class _FlameGamePageState extends State<FlameGamePage>
     widget.onExit();
   }
 
+  void _restartStageOne() {
+    setState(() => _manuallyPaused = false);
+    unawaited(_game.restartStageOne(resume: !_lifecyclePaused));
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -93,6 +104,7 @@ class _FlameGamePageState extends State<FlameGamePage>
             _PreviewHud(
               sessionState: _sessionState,
               manuallyPaused: _manuallyPaused,
+              onBuild: widget.onHudBuild,
             ),
             Expanded(
               child: Padding(
@@ -111,22 +123,29 @@ class _FlameGamePageState extends State<FlameGamePage>
               child: Row(
                 children: [
                   Expanded(
-                    child: FilledButton.tonalIcon(
+                    child: FilledButton.tonal(
                       key: const ValueKey('flame-preview-pause-button'),
                       onPressed: _togglePause,
-                      icon: Icon(
-                        _manuallyPaused ? Icons.play_arrow : Icons.pause,
-                      ),
-                      label: Text(_manuallyPaused ? 'RESUME' : 'PAUSE'),
+                      style: _previewButtonStyle(),
+                      child: Text(_manuallyPaused ? 'RESUME' : 'PAUSE'),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: FilledButton.icon(
+                    child: FilledButton.tonal(
+                      key: const ValueKey('flame-preview-restart-button'),
+                      onPressed: _restartStageOne,
+                      style: _previewButtonStyle(),
+                      child: const Text('RESTART'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton(
                       key: const ValueKey('flame-preview-exit-button'),
                       onPressed: _exitPreview,
-                      icon: const Icon(Icons.close),
-                      label: const Text('EXIT'),
+                      style: _previewButtonStyle(),
+                      child: const Text('EXIT'),
                     ),
                   ),
                 ],
@@ -137,49 +156,75 @@ class _FlameGamePageState extends State<FlameGamePage>
       ),
     );
   }
+
+  ButtonStyle _previewButtonStyle() => FilledButton.styleFrom(
+        minimumSize: const Size(0, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+      );
 }
 
 class _PreviewHud extends StatelessWidget {
   const _PreviewHud({
     required this.sessionState,
     required this.manuallyPaused,
+    this.onBuild,
   });
 
   final GameSessionState sessionState;
   final bool manuallyPaused;
+  final VoidCallback? onBuild;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Expanded(
-            child: Text(
-              'FLAME PREVIEW',
-              key: ValueKey('flame-preview-title'),
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.2,
-              ),
+          const Text(
+            'FLAME PREVIEW',
+            key: ValueKey('flame-preview-title'),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
             ),
           ),
+          const SizedBox(height: 4),
           AnimatedBuilder(
             animation: sessionState,
-            builder: (context, child) => Text(
-              '${manuallyPaused || !sessionState.isRunning ? 'PAUSED' : 'RUNNING'}'
-              '  •  ${sessionState.updateCount}',
-              key: const ValueKey('flame-preview-status'),
-              style: const TextStyle(
-                color: Color(0xFFB8E6FF),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            builder: (context, child) {
+              onBuild?.call();
+              final snapshot = sessionState.snapshot;
+              return Text(
+                'STAGE ${snapshot.stage}  •  SCORE ${snapshot.score}  •  '
+                'LEFT ${snapshot.remainingBalloons}  •  '
+                'TIME ${snapshot.secondsLeft}  •  '
+                '${_phaseLabel(snapshot.phase, manuallyPaused)}',
+                key: const ValueKey('flame-preview-status'),
+                style: const TextStyle(
+                  color: Color(0xFFB8E6FF),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              );
+            },
           ),
         ],
       ),
     );
+  }
+
+  static String _phaseLabel(GameSessionPhase phase, bool manuallyPaused) {
+    if (manuallyPaused || phase == GameSessionPhase.paused) return 'PAUSED';
+    return switch (phase) {
+      GameSessionPhase.ready => 'READY',
+      GameSessionPhase.playing => 'PLAYING',
+      GameSessionPhase.stageClear => 'STAGE CLEAR',
+      GameSessionPhase.failed => 'TIME UP',
+      GameSessionPhase.paused => 'PAUSED',
+      GameSessionPhase.disposed => 'STOPPED',
+    };
   }
 }
