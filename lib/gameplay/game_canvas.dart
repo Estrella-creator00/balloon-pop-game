@@ -32,7 +32,7 @@ const phase4BCanvasSkinIds = <String>{
 };
 
 /// One-line rollback switch for production. Tests may inject either mode.
-const defaultGameplayRendererMode = GameplayRendererMode.canvasPhase4B;
+const defaultGameplayRendererMode = GameplayRendererMode.canvasPhase4A;
 
 bool gameplayCanvasStageEnabled({
   required GameplayRendererMode mode,

@@ -549,11 +549,9 @@ String? _imageSpriteAssetPath(
   required bool isFake,
   required int visualVariant,
 }) {
-  final colorKey = color.toARGB32();
-  final runtimeAsset = isFake
-      ? definition.runtimeFakeColorAssetPaths[colorKey] ??
-          definition.runtimeColorAssetPaths[colorKey]
-      : definition.runtimeColorAssetPaths[colorKey];
+  final runtimeAsset = (isFake
+      ? definition.runtimeFakeColorAssetPaths
+      : definition.runtimeColorAssetPaths)[color.toARGB32()];
   return runtimeAsset ?? definition.assetForVariant(visualVariant);
 }
 
@@ -1236,78 +1234,6 @@ class AssetEffectsCanvas extends StatefulWidget {
   State<AssetEffectsCanvas> createState() => _AssetEffectsCanvasState();
 }
 
-/// Keeps the legendary effect image cache mounted, but only rebuilds the
-/// effect layout while a tool or particle is actually alive.
-class LegendaryEffectsOverlay extends StatefulWidget {
-  const LegendaryEffectsOverlay({
-    super.key,
-    required this.effects,
-    required this.pendingToolHits,
-    required this.definition,
-    required this.frameListenable,
-    required this.revision,
-  });
-
-  final List<AssetVisualEffect> effects;
-  final List<PendingToolHit> pendingToolHits;
-  final BalloonSkinDefinition definition;
-  final ValueListenable<int> frameListenable;
-  final int Function() revision;
-
-  @override
-  State<LegendaryEffectsOverlay> createState() =>
-      _LegendaryEffectsOverlayState();
-}
-
-class _LegendaryEffectsOverlayState extends State<LegendaryEffectsOverlay> {
-  var _wasActive = false;
-
-  bool get _isActive =>
-      widget.effects.isNotEmpty || widget.pendingToolHits.isNotEmpty;
-
-  @override
-  void initState() {
-    super.initState();
-    _wasActive = _isActive;
-    widget.frameListenable.addListener(_handleFrame);
-  }
-
-  @override
-  void didUpdateWidget(covariant LegendaryEffectsOverlay oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.frameListenable != widget.frameListenable) {
-      oldWidget.frameListenable.removeListener(_handleFrame);
-      widget.frameListenable.addListener(_handleFrame);
-    }
-    _wasActive = _isActive;
-  }
-
-  void _handleFrame() {
-    final active = _isActive;
-    if (!active && !_wasActive) return;
-    _wasActive = active;
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    widget.frameListenable.removeListener(_handleFrame);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AssetEffectsCanvas(
-        key: const ValueKey('asset-effects-boundary'),
-        effects: widget.effects,
-        revision: widget.revision(),
-        preloadAssets: legendaryEffectPreloadAssets(widget.definition),
-        toolVisuals: <LegendaryToolVisual>[
-          for (final hit in widget.pendingToolHits) pendingToolVisual(hit),
-        ],
-        toolRevision: widget.frameListenable.value,
-      );
-}
-
 final Map<String, Map<String, int>> _legendaryEffectPreloadCache =
     <String, Map<String, int>>{};
 
@@ -1588,9 +1514,6 @@ class _AssetEffectsPainter extends CustomPainter {
   static final Paint _spritePaint = Paint()
     ..isAntiAlias = true
     ..filterQuality = FilterQuality.low;
-  static final Map<int, Float32List> _atlasTransforms = <int, Float32List>{};
-  static final Map<int, Float32List> _atlasRects = <int, Float32List>{};
-  static final Map<int, Int32List> _atlasColors = <int, Int32List>{};
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1632,122 +1555,36 @@ class _AssetEffectsPainter extends CustomPainter {
       }
       return;
     }
-    for (var index = 0; index < effects.length; index++) {
-      final first = effects[index];
-      if (first.paintLayer != paintLayer) continue;
-      final resolved = images[first.assetPath];
+    for (final effect in effects) {
+      if (effect.paintLayer != paintLayer) continue;
+      final resolved = images[effect.assetPath];
       if (resolved == null) continue;
-      var end = index + 1;
-      while (end < effects.length &&
-          effects[end].paintLayer == paintLayer &&
-          effects[end].assetPath == first.assetPath) {
-        end++;
-      }
-      final count = end - index;
-      if (count == 1) {
-        _drawSingleEffect(canvas, first, resolved, paint);
-      } else {
-        _drawEffectAtlas(canvas, index, end, resolved, paint);
-      }
-      index = end - 1;
-    }
-  }
-
-  void _drawSingleEffect(
-    Canvas canvas,
-    AssetVisualEffect effect,
-    _ResolvedEffectImage resolved,
-    Paint paint,
-  ) {
-    final opacity = (effect.life / effect.maxLife).clamp(0.0, 1.0);
-    final alpha = (opacity * 255).round().clamp(0, 255);
-    paint
-      ..color = _effectAlphaColors[alpha]
-      ..colorFilter = null;
-    final aspectRatio = resolved.aspectRatio;
-    final destinationWidth =
-        aspectRatio >= 1 ? effect.size : effect.size * aspectRatio;
-    final destinationHeight =
-        aspectRatio >= 1 ? effect.size / aspectRatio : effect.size;
-    final destination = Rect.fromCenter(
-      center: Offset.zero,
-      width: destinationWidth,
-      height: destinationHeight,
-    );
-    canvas
-      ..save()
-      ..translate(
-        effect.center.dx - origin.dx,
-        effect.center.dy - origin.dy,
-      )
-      ..rotate(effect.rotation)
-      ..drawImageRect(
-        resolved.imageInfo.image,
-        resolved.sourceRect,
-        destination,
-        paint,
-      )
-      ..restore();
-  }
-
-  void _drawEffectAtlas(
-    Canvas canvas,
-    int start,
-    int end,
-    _ResolvedEffectImage resolved,
-    Paint paint,
-  ) {
-    final count = end - start;
-    final transforms = _atlasTransforms.putIfAbsent(
-      count,
-      () => Float32List(count * 4),
-    );
-    final rects = _atlasRects.putIfAbsent(
-      count,
-      () => Float32List(count * 4),
-    );
-    final colors = _atlasColors.putIfAbsent(count, () => Int32List(count));
-    final source = resolved.sourceRect;
-    final sourceWidth = source.width;
-    final sourceHeight = source.height;
-    var atlasIndex = 0;
-    for (var effectIndex = start; effectIndex < end; effectIndex++) {
-      final effect = effects[effectIndex];
-      final scale = effect.size / max(sourceWidth, sourceHeight);
-      final scos = cos(effect.rotation) * scale;
-      final ssin = sin(effect.rotation) * scale;
-      final centerX = effect.center.dx - origin.dx;
-      final centerY = effect.center.dy - origin.dy;
-      final transformOffset = atlasIndex * 4;
-      transforms
-        ..[transformOffset] = scos
-        ..[transformOffset + 1] = ssin
-        ..[transformOffset + 2] =
-            centerX - scos * sourceWidth / 2 + ssin * sourceHeight / 2
-        ..[transformOffset + 3] =
-            centerY - ssin * sourceWidth / 2 - scos * sourceHeight / 2;
-      rects
-        ..[transformOffset] = source.left
-        ..[transformOffset + 1] = source.top
-        ..[transformOffset + 2] = source.right
-        ..[transformOffset + 3] = source.bottom;
       final opacity = (effect.life / effect.maxLife).clamp(0.0, 1.0);
       final alpha = (opacity * 255).round().clamp(0, 255);
-      colors[atlasIndex] = (alpha << 24 | 0x00FFFFFF).toSigned(32);
-      atlasIndex++;
+      paint
+        ..color = _effectAlphaColors[alpha]
+        ..colorFilter = null;
+      final image = resolved.imageInfo.image;
+      final aspectRatio = resolved.aspectRatio;
+      final destinationWidth =
+          aspectRatio >= 1 ? effect.size : effect.size * aspectRatio;
+      final destinationHeight =
+          aspectRatio >= 1 ? effect.size / aspectRatio : effect.size;
+      final destination = Rect.fromCenter(
+        center: Offset.zero,
+        width: destinationWidth,
+        height: destinationHeight,
+      );
+      canvas
+        ..save()
+        ..translate(
+          effect.center.dx - origin.dx,
+          effect.center.dy - origin.dy,
+        )
+        ..rotate(effect.rotation)
+        ..drawImageRect(image, resolved.sourceRect, destination, paint)
+        ..restore();
     }
-    paint
-      ..color = Colors.white
-      ..colorFilter = null;
-    canvas.drawRawAtlas(
-      resolved.imageInfo.image,
-      transforms,
-      rects,
-      colors,
-      BlendMode.modulate,
-      null,
-      paint,
-    );
   }
 
   @override
@@ -5312,13 +5149,21 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           if (widget.gameplayRendererMode == GameplayRendererMode.canvasPhase4B)
             Positioned.fill(
               child: IgnorePointer(
-                child: LegendaryEffectsOverlay(
-                  key: const ValueKey('legendary-effects-overlay'),
-                  effects: _assetEffects,
-                  pendingToolHits: _pendingToolHits,
-                  definition: _equippedBalloonSkin,
-                  frameListenable: _gameplayFrame,
-                  revision: () => _effectsRevision,
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _gameplayFrame,
+                  builder: (context, frame, _) => AssetEffectsCanvas(
+                    key: const ValueKey('asset-effects-boundary'),
+                    effects: _assetEffects,
+                    revision: _effectsRevision,
+                    preloadAssets: legendaryEffectPreloadAssets(
+                      _equippedBalloonSkin,
+                    ),
+                    toolVisuals: [
+                      for (final hit in _pendingToolHits)
+                        pendingToolVisual(hit),
+                    ],
+                    toolRevision: frame,
+                  ),
                 ),
               ),
             ),
@@ -7150,18 +6995,10 @@ class BalloonSkinArtwork extends StatelessWidget {
         );
 
     final colorKey = color.toARGB32();
-    final fakeRuntimeAsset = definition.runtimeFakeColorAssetPaths[colorKey];
-    if (fakeRuntimeAsset != null && isFake) return assetImage(fakeRuntimeAsset);
-    final runtimeAsset = definition.runtimeColorAssetPaths[colorKey];
-    if (runtimeAsset != null) {
-      final image = assetImage(runtimeAsset);
-      return isFake
-          ? ColorFiltered(
-              colorFilter: ColorFilter.matrix(_fakeToneMatrix),
-              child: image,
-            )
-          : image;
-    }
+    final runtimeAsset = (isFake
+        ? definition.runtimeFakeColorAssetPaths
+        : definition.runtimeColorAssetPaths)[colorKey];
+    if (runtimeAsset != null) return assetImage(runtimeAsset);
 
     if (definition.imageDetailMask == BalloonImageDetailMask.mochiFace) {
       if (usesOriginalAsset(definition, color) && !isFake) {

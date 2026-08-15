@@ -1704,7 +1704,7 @@ void main() {
 
   test('production renderer keeps the selected default and legacy rollback',
       () {
-    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4B);
+    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4A);
     expect(GameplayRendererMode.values, contains(GameplayRendererMode.legacy));
     expect(
       GameplayRendererMode.values,
@@ -5963,12 +5963,7 @@ void main() {
         EquipResult.success,
       );
 
-      await tester.pumpWidget(
-        const BalloonPopApp(
-          gameplayRendererMode: GameplayRendererMode.legacy,
-          toolHitDeltaForTest: 0.15,
-        ),
-      );
+      await tester.pumpWidget(const BalloonPopApp(toolHitDeltaForTest: 0.15));
       await tester.pump();
       await tapSectionStart(tester, 1);
       expect(find.byKey(const ValueKey<int>(0)), findsOneWidget);
@@ -6042,7 +6037,7 @@ void main() {
     );
     expect(phase4ACanvasSkinIds, isNot(contains('balloon-lumen')));
     expect(phase4ACanvasSkinIds, isNot(contains('balloon-chouchou')));
-    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4B);
+    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4A);
   });
 
   test('phase 4A image render views select variants and cached transforms', () {
@@ -6306,6 +6301,74 @@ void main() {
     }
   });
 
+  testWidgets(
+    'production renderer completes GEMI stage one with matching visual state',
+    (tester) async {
+      equipBalloonSkinForTest('balloon-lumen');
+      await tester.pumpWidget(
+        const BalloonPopApp(toolHitDeltaForTest: 0.15),
+      );
+      await tester.pump();
+      await tapSectionStart(tester, 1);
+
+      expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4A);
+      expect(
+        find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+        findsNothing,
+      );
+      final background = tester.widget<BalloonBackgroundRenderer>(
+        find.byKey(const ValueKey('game-balloon-background')),
+      );
+      expect(background.background, BalloonBackgroundType.crystalCave);
+      expect(find.byType(BalloonSkinRenderer), findsNWidgets(2));
+      expect(find.byKey(const ValueKey<int>(0)), findsOneWidget);
+      expect(find.byKey(const ValueKey<int>(1)), findsOneWidget);
+      expect(
+        tester.widget<GameHeader>(find.byType(GameHeader)).data.value.remaining,
+        2,
+      );
+
+      await tapGameTarget(tester, 0);
+      await tester.pump(gameLoopInterval);
+      expect(find.byKey(const ValueKey<int>(0)), findsNothing);
+      expect(find.byKey(const ValueKey<int>(1)), findsOneWidget);
+      expect(find.byType(BalloonSkinRenderer), findsOneWidget);
+      expect(
+        tester.widget<GameHeader>(find.byType(GameHeader)).data.value.remaining,
+        1,
+      );
+      expect(find.text('Stage Clear!'), findsNothing);
+
+      await tapGameTarget(tester, 1);
+      await tester.pump(gameLoopInterval);
+      expect(find.byKey(const ValueKey<int>(1)), findsNothing);
+      expect(find.text('Stage Clear!'), findsOneWidget);
+      expect(
+        tester.widget<GameHeader>(find.byType(GameHeader)).data.value.remaining,
+        0,
+      );
+      expect(
+        find.byKey(const ValueKey('game-balloon-background')),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('2 STAGE'), findsOneWidget);
+      expect(find.byKey(const ValueKey<int>(2)), findsOneWidget);
+      expect(find.byKey(const ValueKey<int>(3)), findsOneWidget);
+      expect(find.byKey(const ValueKey<int>(4)), findsOneWidget);
+      expect(find.byType(BalloonSkinRenderer), findsNWidgets(3));
+      expect(
+        tester.widget<GameHeader>(find.byType(GameHeader)).data.value.remaining,
+        3,
+      );
+      expect(
+        find.byKey(const ValueKey('game-balloon-background')),
+        findsOneWidget,
+      );
+    },
+  );
+
   test('phase 4B adds only GEMI and SHUSHU to the phase 4A Canvas scope', () {
     expect(phase4BCanvasSkinIds, containsAll(phase4ACanvasSkinIds));
     expect(
@@ -6319,7 +6382,7 @@ void main() {
       ),
       isTrue,
     );
-    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4B);
+    expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4A);
   });
 
   test('phase 4B render views keep GEMI runtime bodies and SHUSHU breathe', () {
@@ -6376,123 +6439,10 @@ void main() {
     expect(fakeGemi.spriteOpacity, 1);
     expect(
       shushu.spriteAssetPath,
-      'assets/images/balloon_shushu_canvas_runtime.png',
+      'assets/images/balloon_shushu_asset.png',
     );
     expect(shushu.spriteColorMatrix, isNull);
     expect(shushu.visualScale, closeTo(1.018, 0.0001));
-  });
-
-  testWidgets('SHUSHU Canvas runtime sprite removes the low-alpha edge matte', (
-    tester,
-  ) async {
-    await tester.runAsync(() async {
-      Future<(ui.Image, ByteData)> decode(String path) async {
-        final data = await rootBundle.load(path);
-        final codec = await ui.instantiateImageCodec(
-          data.buffer.asUint8List(),
-        );
-        final frame = await codec.getNextFrame();
-        codec.dispose();
-        final bytes = await frame.image.toByteData(
-          format: ui.ImageByteFormat.rawRgba,
-        );
-        return (frame.image, bytes!);
-      }
-
-      int lowAlphaPixels(ui.Image image, ByteData bytes) {
-        var count = 0;
-        for (var pixel = 0; pixel < image.width * image.height; pixel++) {
-          final alpha = bytes.getUint8(pixel * 4 + 3);
-          if (alpha > 0 && alpha < 64) count++;
-        }
-        return count;
-      }
-
-      final (source, sourceBytes) = await decode(
-        'assets/images/balloon_shushu_asset.png',
-      );
-      final (runtime, runtimeBytes) = await decode(
-        'assets/images/balloon_shushu_canvas_runtime.png',
-      );
-      expect(runtime.width, source.width);
-      expect(runtime.height, source.height);
-      expect(
-        lowAlphaPixels(runtime, runtimeBytes),
-        lessThan(lowAlphaPixels(source, sourceBytes) ~/ 10),
-      );
-      for (final offset in <int>[
-        3,
-        (runtime.width - 1) * 4 + 3,
-        (runtime.height - 1) * runtime.width * 4 + 3,
-        (runtime.width * runtime.height - 1) * 4 + 3,
-      ]) {
-        expect(runtimeBytes.getUint8(offset), 0);
-      }
-      source.dispose();
-      runtime.dispose();
-    });
-  });
-
-  testWidgets('legendary effect overlay stops rebuilding while idle', (
-    tester,
-  ) async {
-    final effects = <AssetVisualEffect>[];
-    final pendingTools = <PendingToolHit>[];
-    final frame = ValueNotifier<int>(0);
-    var revision = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SizedBox(
-          width: 390,
-          height: 700,
-          child: LegendaryEffectsOverlay(
-            effects: effects,
-            pendingToolHits: pendingTools,
-            definition: BalloonSkinCatalog.defaultSkin,
-            frameListenable: frame,
-            revision: () => revision,
-          ),
-        ),
-      ),
-    );
-    final finder = find.byKey(const ValueKey('asset-effects-boundary'));
-    final initial = tester.widget<AssetEffectsCanvas>(finder);
-
-    frame.value++;
-    await tester.pump();
-    expect(
-        identical(tester.widget<AssetEffectsCanvas>(finder), initial), isTrue);
-
-    effects.add(
-      AssetVisualEffect(
-        assetPath: 'assets/images/gemi_shard_runtime.png',
-        center: const Offset(120, 180),
-        velocity: Offset.zero,
-        size: 32,
-        rotation: 0,
-        spin: 0,
-        life: 0.4,
-        maxLife: 0.4,
-      ),
-    );
-    revision++;
-    frame.value++;
-    await tester.pump();
-    expect(
-        identical(tester.widget<AssetEffectsCanvas>(finder), initial), isFalse);
-
-    effects.clear();
-    revision++;
-    frame.value++;
-    await tester.pump();
-    final finalIdle = tester.widget<AssetEffectsCanvas>(finder);
-    frame.value++;
-    await tester.pump();
-    expect(
-      identical(tester.widget<AssetEffectsCanvas>(finder), finalIdle),
-      isTrue,
-    );
-    frame.dispose();
   });
 
   testWidgets(

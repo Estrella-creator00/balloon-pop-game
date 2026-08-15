@@ -121,22 +121,6 @@ class SpriteBalloonDrawing {
       }
       return;
     }
-    if (!preserveMochiDetails && offset == Offset.zero && rotation == 0) {
-      final destination = scale == 1
-          ? _destination
-          : Rect.fromCenter(
-              center: _destination.center,
-              width: _destination.width * scale,
-              height: _destination.height * scale,
-            );
-      canvas.drawImageRect(
-        sprite.image,
-        sprite.sourceRect,
-        destination,
-        _bodyPaint,
-      );
-      return;
-    }
     final center = size.center(offset);
     canvas
       ..save()
