@@ -11,6 +11,8 @@ import 'balloon_background.dart';
 import 'balloon_skin_catalog.dart';
 import 'coin_purchase_page.dart';
 import 'dev/dev_coin_tool.dart';
+import 'game_engine/flame_game_page.dart';
+import 'game_engine/poppop_engine_mode.dart';
 import 'gameplay/game_canvas.dart';
 import 'gameplay/boo_idle_motion.dart';
 import 'gameplay/game_draw_geometry.dart';
@@ -28,7 +30,54 @@ import 'settings_page.dart';
 import 'storage/progress_storage.dart';
 
 void main() {
-  runApp(const BalloonPopApp());
+  runApp(PoppopAppEntry(engineMode: poppopEngineModeFromUri(Uri.base)));
+}
+
+class PoppopAppEntry extends StatefulWidget {
+  const PoppopAppEntry({
+    super.key,
+    this.engineMode = defaultPoppopEngineMode,
+    this.flameGameFactory,
+  });
+
+  final PoppopEngineMode engineMode;
+
+  @visibleForTesting
+  final PoppopGameFactory? flameGameFactory;
+
+  @override
+  State<PoppopAppEntry> createState() => _PoppopAppEntryState();
+}
+
+class _PoppopAppEntryState extends State<PoppopAppEntry> {
+  late PoppopEngineMode _engineMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _engineMode = widget.engineMode;
+  }
+
+  void _exitFlamePreview() {
+    if (!mounted) return;
+    setState(() => _engineMode = PoppopEngineMode.production);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_engineMode == PoppopEngineMode.production) {
+      return const BalloonPopApp();
+    }
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'POPPOP Flame Preview',
+      theme: ThemeData.dark(useMaterial3: true),
+      home: FlameGamePage(
+        gameFactory: widget.flameGameFactory,
+        onExit: _exitFlamePreview,
+      ),
+    );
+  }
 }
 
 class BalloonPopApp extends StatefulWidget {
