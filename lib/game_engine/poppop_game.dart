@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 
@@ -9,32 +10,45 @@ import 'components/basic_pop_effect.dart';
 import 'components/game_diagnostics_component.dart';
 import 'game_session_state.dart';
 import 'session/game_session_snapshot.dart';
+import 'stages/flame_stage_definition.dart';
+import 'stages/stage_balloon_spawner.dart';
 
-/// Flame root for the isolated Stage 1 vertical slice.
+/// Flame root for the isolated Stage 1-3 preview loop.
 class PoppopGame extends FlameGame {
   PoppopGame(
     this.sessionState, {
-    this.stageOneSpawns = stageOneBalloonSpawns,
-  }) {
-    // Flame's default lifecycle policy treats `inactive` like `resumed`.
-    // The preview page owns lifecycle decisions so inactive/background states
-    // are always paused and a manual pause is preserved on foreground return.
+    this.stageDefinitions = flamePreviewStages,
+    this.stageSpawner = const StageBalloonSpawner(),
+  }) : assert(stageDefinitions.isNotEmpty) {
+    // The Flutter host owns lifecycle decisions so inactive/background states
+    // always pause and a manual pause is preserved on foreground return.
     pauseWhenBackgrounded = false;
   }
 
+  static const double stageTransitionDuration = 0.45;
+
   final GameSessionState sessionState;
-  final List<StageOneBalloonSpawn> stageOneSpawns;
+  final List<FlameStageDefinition> stageDefinitions;
+  final StageBalloonSpawner stageSpawner;
   final Map<int, BalloonComponent> _balloons = <int, BalloonComponent>{};
   final Set<BasicPopEffect> _popEffects = <BasicPopEffect>{};
   bool _shutdown = false;
   bool _hostWantsRunning = true;
+  bool _stageTransitionInFlight = false;
+  bool _restartInFlight = false;
+  double _stageTransitionElapsed = 0;
   double _lastAppliedDelta = 0;
+  int _operationEpoch = 0;
+  int _componentGeneration = 0;
 
   bool get isShutdown => _shutdown;
+  bool get isStageTransitionInFlight => _stageTransitionInFlight;
   double get lastAppliedDelta => _lastAppliedDelta;
   int get activeBalloonCount => _balloons.length;
+  int get activeEffectCount => _popEffects.length;
   int get activeParticleCount =>
       _popEffects.length * BasicPopEffect.particleCount;
+  int get componentGeneration => _componentGeneration;
   Iterable<BalloonComponent> get balloonComponents => _balloons.values;
   bool get isComponentStateSynchronized =>
       sessionState.matchesActiveComponentIds(_balloons.keys);
@@ -52,13 +66,13 @@ class PoppopGame extends FlameGame {
     await camera.viewport.add(
       GameDiagnosticsComponent(textProvider: _diagnosticsText),
     );
-    await _startStageOne();
-    if (_hostWantsRunning) {
-      resumeEngine();
-    } else {
-      pauseEngine();
-      sessionState.pause();
-    }
+    final operation = ++_operationEpoch;
+    await _installStage(
+      stageDefinitions.first,
+      operation: operation,
+      resetSession: true,
+    );
+    _applyHostRunIntent();
   }
 
   @override
@@ -66,51 +80,91 @@ class PoppopGame extends FlameGame {
     if (_shutdown) return;
     final clampedDt = min(dt, BalloonComponent.maxUpdateDelta);
     _lastAppliedDelta = clampedDt;
-    if (sessionState.phase == GameSessionPhase.stageClear) {
-      if (_popEffects.isNotEmpty) {
+
+    switch (sessionState.phase) {
+      case GameSessionPhase.stageClear:
         super.update(clampedDt);
-      } else {
-        // Process the effects' queued removals before stopping the loop.
-        super.update(0);
-        pauseEngine();
-      }
-      return;
+        _stageTransitionElapsed += clampedDt;
+        if (_stageTransitionElapsed >= stageTransitionDuration &&
+            !_stageTransitionInFlight) {
+          unawaited(_advanceToNextStage());
+        }
+      case GameSessionPhase.gameClear:
+        if (_popEffects.isNotEmpty) {
+          super.update(clampedDt);
+        } else {
+          super.update(0);
+          pauseEngine();
+        }
+      case GameSessionPhase.playing:
+        super.update(clampedDt);
+        sessionState.recordUpdate(clampedDt);
+        if (sessionState.phase == GameSessionPhase.failed) pauseEngine();
+      case GameSessionPhase.ready:
+      case GameSessionPhase.paused:
+      case GameSessionPhase.failed:
+      case GameSessionPhase.disposed:
+        return;
     }
-    if (!sessionState.isPlaying) return;
-    super.update(clampedDt);
-    sessionState.recordUpdate(clampedDt);
-    if (sessionState.phase == GameSessionPhase.failed) pauseEngine();
   }
 
-  Future<void> _startStageOne() async {
-    final created = <BalloonComponent>[];
-    final availableWidth = max(0.0, size.x - BalloonComponent.balloonWidth);
-    final availableHeight = max(0.0, size.y - BalloonComponent.balloonHeight);
-    for (final spawn in stageOneSpawns) {
-      created.add(
-        BalloonComponent(
-          balloonId: spawn.id,
-          position: Vector2(
-            availableWidth * spawn.positionFactor.dx,
-            availableHeight * spawn.positionFactor.dy,
-          ),
-          velocity: Vector2(spawn.velocity.dx, spawn.velocity.dy),
-          playfieldSize: () => size,
-          onPopRequested: _handlePopRequest,
-          color: spawn.color,
-        ),
+  Future<void> _advanceToNextStage() async {
+    if (_shutdown || _stageTransitionInFlight) return;
+    final currentIndex = stageDefinitions.indexWhere(
+      (definition) => definition.stage == sessionState.stage,
+    );
+    if (currentIndex < 0 || currentIndex + 1 >= stageDefinitions.length) return;
+
+    _stageTransitionInFlight = true;
+    final operation = ++_operationEpoch;
+    try {
+      await _installStage(
+        stageDefinitions[currentIndex + 1],
+        operation: operation,
+        resetSession: false,
       );
+      _applyHostRunIntent();
+    } finally {
+      if (operation == _operationEpoch) _stageTransitionInFlight = false;
     }
+  }
+
+  Future<void> _installStage(
+    FlameStageDefinition definition, {
+    required int operation,
+    required bool resetSession,
+  }) async {
+    _removeGameplayComponents();
+    _stageTransitionElapsed = 0;
+    final generation = ++_componentGeneration;
+    final created = stageSpawner.create(
+      definition: definition,
+      playfieldSize: size,
+      idBase: generation * 1000,
+      onPopRequested: _handlePopRequest,
+    );
     await world.addAll(created);
-    _balloons
-      ..clear()
-      ..addEntries(
-        created.map((balloon) => MapEntry(balloon.balloonId, balloon)),
-      );
-    sessionState.startStageOne(_balloons.keys);
+    if (_shutdown || operation != _operationEpoch) {
+      for (final balloon in created) {
+        balloon.removeFromParent();
+      }
+      processLifecycleEvents();
+      return;
+    }
+    _balloons.addEntries(
+      created.map((balloon) => MapEntry(balloon.balloonId, balloon)),
+    );
+    if (resetSession) {
+      sessionState.startNewGame(definition, _balloons.keys);
+    } else {
+      sessionState.beginNextStage(definition, _balloons.keys);
+    }
   }
 
   bool _handlePopRequest(BalloonComponent balloon) {
+    if (_shutdown || !identical(_balloons[balloon.balloonId], balloon)) {
+      return false;
+    }
     final result = sessionState.popBalloon(balloon.balloonId);
     if (result == BalloonPopResult.ignored) return false;
     _balloons.remove(balloon.balloonId);
@@ -129,9 +183,28 @@ class PoppopGame extends FlameGame {
     _popEffects.remove(effect);
   }
 
-  Future<void> restartStageOne({bool resume = true}) async {
-    if (_shutdown) return;
+  Future<void> restartGame({bool resume = true}) async {
+    if (_shutdown || _restartInFlight) return;
+    _restartInFlight = true;
     _hostWantsRunning = resume;
+    _stageTransitionInFlight = false;
+    final operation = ++_operationEpoch;
+    try {
+      await _installStage(
+        stageDefinitions.first,
+        operation: operation,
+        resetSession: true,
+      );
+      _applyHostRunIntent();
+    } finally {
+      if (operation == _operationEpoch) _restartInFlight = false;
+    }
+  }
+
+  Future<void> restartStageOne({bool resume = true}) =>
+      restartGame(resume: resume);
+
+  void _removeGameplayComponents() {
     for (final balloon in _balloons.values) {
       balloon.removeFromParent();
     }
@@ -141,7 +214,10 @@ class PoppopGame extends FlameGame {
     _balloons.clear();
     _popEffects.clear();
     processLifecycleEvents();
-    await _startStageOne();
+  }
+
+  void _applyHostRunIntent() {
+    if (_shutdown) return;
     if (_hostWantsRunning) {
       resumeEngine();
     } else {
@@ -155,7 +231,7 @@ class PoppopGame extends FlameGame {
         '${averageFrameMilliseconds.toStringAsFixed(1)}ms\n'
         'BALLOONS $activeBalloonCount / ${sessionState.remainingBalloons}  '
         'PARTICLES $activeParticleCount\n'
-        'PHASE ${sessionState.phase.name}';
+        'STAGE ${sessionState.stage}  PHASE ${sessionState.phase.name}';
   }
 
   void pausePreview() {
@@ -168,20 +244,24 @@ class PoppopGame extends FlameGame {
   void resumePreview() {
     if (_shutdown) return;
     _hostWantsRunning = true;
-    if (sessionState.phase == GameSessionPhase.stageClear ||
+    if (sessionState.phase == GameSessionPhase.gameClear ||
         sessionState.phase == GameSessionPhase.failed) {
       return;
     }
-    resumeEngine();
     sessionState.resume();
+    resumeEngine();
   }
 
   void shutdown() {
     if (_shutdown) return;
     _shutdown = true;
     _hostWantsRunning = false;
+    _operationEpoch++;
+    _stageTransitionInFlight = false;
+    _restartInFlight = false;
     pauseEngine();
-    sessionState.pause();
+    _removeGameplayComponents();
+    sessionState.endSession();
   }
 
   @override

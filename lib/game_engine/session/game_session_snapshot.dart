@@ -1,6 +1,14 @@
 import 'package:flutter/foundation.dart';
 
-enum GameSessionPhase { ready, playing, stageClear, failed, paused, disposed }
+enum GameSessionPhase {
+  ready,
+  playing,
+  paused,
+  stageClear,
+  gameClear,
+  failed,
+  disposed,
+}
 
 @immutable
 class GameSessionSnapshot {
@@ -21,4 +29,7 @@ class GameSessionSnapshot {
   final int stageClearCount;
 
   bool get isPaused => phase == GameSessionPhase.paused;
+  bool get isStageClear => phase == GameSessionPhase.stageClear;
+  bool get isGameClear => phase == GameSessionPhase.gameClear;
+  bool get isTimeOver => phase == GameSessionPhase.failed;
 }

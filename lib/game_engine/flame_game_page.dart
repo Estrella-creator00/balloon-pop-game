@@ -81,9 +81,9 @@ class _FlameGamePageState extends State<FlameGamePage>
     widget.onExit();
   }
 
-  void _restartStageOne() {
+  void _restartGame() {
     setState(() => _manuallyPaused = false);
-    unawaited(_game.restartStageOne(resume: !_lifecyclePaused));
+    unawaited(_game.restartGame(resume: !_lifecyclePaused));
   }
 
   @override
@@ -134,7 +134,7 @@ class _FlameGamePageState extends State<FlameGamePage>
                   Expanded(
                     child: FilledButton.tonal(
                       key: const ValueKey('flame-preview-restart-button'),
-                      onPressed: _restartStageOne,
+                      onPressed: _restartGame,
                       style: _previewButtonStyle(),
                       child: const Text('RESTART'),
                     ),
@@ -222,6 +222,7 @@ class _PreviewHud extends StatelessWidget {
       GameSessionPhase.ready => 'READY',
       GameSessionPhase.playing => 'PLAYING',
       GameSessionPhase.stageClear => 'STAGE CLEAR',
+      GameSessionPhase.gameClear => 'GAME CLEAR',
       GameSessionPhase.failed => 'TIME UP',
       GameSessionPhase.paused => 'PAUSED',
       GameSessionPhase.disposed => 'STOPPED',

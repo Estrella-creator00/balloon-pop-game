@@ -3,32 +3,33 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import 'session/game_session_snapshot.dart';
+import 'stages/flame_stage_definition.dart';
 
-enum BalloonPopResult { ignored, popped, stageCleared }
+enum BalloonPopResult { ignored, popped, stageCleared, gameCleared }
 
-/// Single session state for the Stage 1 Flame vertical slice.
+/// Single session state for the Stage 1-3 Flame preview loop.
 ///
 /// The active balloon id set is authoritative. The HUD never recounts Flame
 /// components, and a pop updates the id set, score, remaining count and phase
 /// before listeners are notified once.
 class GameSessionState extends ChangeNotifier {
-  static const int stageOne = 1;
-  static const int stageOneSeconds = 15;
   static const int scorePerBalloon = 100;
 
   GameSessionPhase _phase = GameSessionPhase.ready;
   GameSessionPhase _phaseBeforePause = GameSessionPhase.playing;
   final Set<int> _activeBalloonIds = <int>{};
+  FlameStageDefinition? _stageDefinition;
   int _score = 0;
-  int _secondsLeft = stageOneSeconds;
-  double _preciseSecondsLeft = stageOneSeconds.toDouble();
+  int _secondsLeft = 0;
+  double _preciseSecondsLeft = 0;
   int _stageClearCount = 0;
   int _updateCount = 0;
   Duration _elapsed = Duration.zero;
   bool _disposed = false;
 
   GameSessionPhase get phase => _phase;
-  int get stage => stageOne;
+  int get stage => _stageDefinition?.stage ?? 0;
+  FlameStageDefinition? get stageDefinition => _stageDefinition;
   int get updateCount => _updateCount;
   int get score => _score;
   int get remainingBalloons => _activeBalloonIds.length;
@@ -38,6 +39,9 @@ class GameSessionState extends ChangeNotifier {
   bool get isPlaying => _phase == GameSessionPhase.playing;
   bool get isRunning => isPlaying;
   bool get isPaused => _phase == GameSessionPhase.paused;
+  bool get isStageClear => _phase == GameSessionPhase.stageClear;
+  bool get isGameClear => _phase == GameSessionPhase.gameClear;
+  bool get isTimeOver => _phase == GameSessionPhase.failed;
   bool get isDisposed => _disposed;
   Set<int> get activeBalloonIds => Set<int>.unmodifiable(_activeBalloonIds);
 
@@ -50,30 +54,60 @@ class GameSessionState extends ChangeNotifier {
         stageClearCount: stageClearCount,
       );
 
-  void startStageOne(Iterable<int> balloonIds) {
+  void startNewGame(
+    FlameStageDefinition definition,
+    Iterable<int> balloonIds,
+  ) {
     if (_disposed) return;
-    _activeBalloonIds
-      ..clear()
-      ..addAll(balloonIds);
     _score = 0;
-    _secondsLeft = stageOneSeconds;
-    _preciseSecondsLeft = stageOneSeconds.toDouble();
     _stageClearCount = 0;
     _updateCount = 0;
     _elapsed = Duration.zero;
+    _beginStage(definition, balloonIds);
+  }
+
+  void beginNextStage(
+    FlameStageDefinition definition,
+    Iterable<int> balloonIds,
+  ) {
+    if (_disposed || _phase != GameSessionPhase.stageClear) return;
+    _beginStage(definition, balloonIds);
+  }
+
+  void _beginStage(
+    FlameStageDefinition definition,
+    Iterable<int> balloonIds,
+  ) {
+    _stageDefinition = definition;
+    _activeBalloonIds
+      ..clear()
+      ..addAll(balloonIds);
+    _secondsLeft = definition.timeLimitSeconds;
+    _preciseSecondsLeft = definition.timeLimitSeconds.toDouble();
     _phase = GameSessionPhase.playing;
     _phaseBeforePause = GameSessionPhase.playing;
     notifyListeners();
   }
 
   BalloonPopResult popBalloon(int id) {
-    if (_disposed || !isPlaying || !_activeBalloonIds.remove(id)) {
+    final definition = _stageDefinition;
+    if (_disposed ||
+        !isPlaying ||
+        definition == null ||
+        definition.successCondition !=
+            StageSuccessCondition.allBalloonsPopped ||
+        !_activeBalloonIds.remove(id)) {
       return BalloonPopResult.ignored;
     }
     _score += scorePerBalloon;
     if (_activeBalloonIds.isEmpty) {
-      _phase = GameSessionPhase.stageClear;
       _stageClearCount++;
+      if (definition.completion == StageCompletion.gameClear) {
+        _phase = GameSessionPhase.gameClear;
+        notifyListeners();
+        return BalloonPopResult.gameCleared;
+      }
+      _phase = GameSessionPhase.stageClear;
       notifyListeners();
       return BalloonPopResult.stageCleared;
     }
@@ -82,7 +116,11 @@ class GameSessionState extends ChangeNotifier {
   }
 
   void pause() {
-    if (_disposed || _phase != GameSessionPhase.playing) return;
+    if (_disposed ||
+        (_phase != GameSessionPhase.playing &&
+            _phase != GameSessionPhase.stageClear)) {
+      return;
+    }
     _phaseBeforePause = _phase;
     _phase = GameSessionPhase.paused;
     notifyListeners();
@@ -94,7 +132,7 @@ class GameSessionState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Advances diagnostics and the Stage 1 clock without rebuilding Flutter
+  /// Advances diagnostics and the current stage clock without rebuilding Flutter
   /// for movement frames. Listeners are notified only when the displayed
   /// second changes or the stage reaches its failure state.
   void recordUpdate(double deltaSeconds) {
@@ -107,7 +145,9 @@ class GameSessionState extends ChangeNotifier {
     final nextDisplayedSecond = _preciseSecondsLeft.ceil();
     if (nextDisplayedSecond == _secondsLeft) return;
     _secondsLeft = nextDisplayedSecond;
-    if (_secondsLeft == 0) {
+    if (_secondsLeft == 0 &&
+        _stageDefinition?.failureCondition ==
+            StageFailureCondition.timeExpired) {
       _phase = GameSessionPhase.failed;
     }
     notifyListeners();
@@ -115,6 +155,13 @@ class GameSessionState extends ChangeNotifier {
 
   bool matchesActiveComponentIds(Iterable<int> componentIds) {
     return setEquals(_activeBalloonIds, componentIds.toSet());
+  }
+
+  void endSession() {
+    if (_disposed) return;
+    _activeBalloonIds.clear();
+    _phase = GameSessionPhase.ready;
+    notifyListeners();
   }
 
   @override

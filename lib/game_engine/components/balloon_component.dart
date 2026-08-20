@@ -3,39 +3,8 @@ import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
-import 'package:flutter/foundation.dart';
 
 typedef BalloonPopRequest = bool Function(BalloonComponent balloon);
-
-@immutable
-class StageOneBalloonSpawn {
-  const StageOneBalloonSpawn({
-    required this.id,
-    required this.positionFactor,
-    required this.velocity,
-    required this.color,
-  });
-
-  final int id;
-  final Offset positionFactor;
-  final Offset velocity;
-  final Color color;
-}
-
-const stageOneBalloonSpawns = <StageOneBalloonSpawn>[
-  StageOneBalloonSpawn(
-    id: 1,
-    positionFactor: Offset(0.16, 0.18),
-    velocity: Offset(58, 72),
-    color: Color(0xFFFF6B9D),
-  ),
-  StageOneBalloonSpawn(
-    id: 2,
-    positionFactor: Offset(0.70, 0.58),
-    velocity: Offset(-64, -56),
-    color: Color(0xFF5BC0EB),
-  ),
-];
 
 /// A complete Stage 1 gameplay object: state, movement, rendering and hit area.
 class BalloonComponent extends PositionComponent with TapCallbacks {
@@ -46,13 +15,15 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     required this.playfieldSize,
     required this.onPopRequested,
     required this.color,
+    Vector2? balloonSize,
   }) : super(
           position: position,
-          size: Vector2(balloonWidth, balloonHeight),
+          size: balloonSize ?? Vector2(balloonWidth, balloonHeight),
           anchor: Anchor.topLeft,
         ) {
     _bodyPaint.color = color;
     _tailPaint.color = color;
+    _buildGeometry();
   }
 
   static const double balloonWidth = 72;
@@ -76,16 +47,12 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   final Paint _highlightPaint = Paint()
     ..isAntiAlias = true
     ..color = const Color(0x66FFFFFF);
-  final Path _bodyPath = Path()
-    ..addOval(const Rect.fromLTWH(2, 0, 68, bodyHeight));
-  final Path _tailPath = Path()
-    ..moveTo(31, 69)
-    ..lineTo(41, 69)
-    ..lineTo(36, 78)
-    ..close();
-  static const Offset _stringStart = Offset(36, 77);
-  static const Offset _stringEnd = Offset(36, balloonHeight);
-  static const Offset _highlightCenter = Offset(24, 21);
+  late final Path _bodyPath;
+  late final Path _tailPath;
+  late final Offset _stringStart;
+  late final Offset _stringEnd;
+  late final Offset _highlightCenter;
+  late final double _highlightRadius;
 
   bool _popRequested = false;
   double lastAppliedDelta = 0;
@@ -103,7 +70,32 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     canvas.drawLine(_stringStart, _stringEnd, _stringPaint);
     canvas.drawPath(_bodyPath, _bodyPaint);
     canvas.drawPath(_tailPath, _tailPaint);
-    canvas.drawCircle(_highlightCenter, 7, _highlightPaint);
+    canvas.drawCircle(_highlightCenter, _highlightRadius, _highlightPaint);
+  }
+
+  void _buildGeometry() {
+    final scaleX = size.x / balloonWidth;
+    final scaleY = size.y / balloonHeight;
+    final bodyHeight = BalloonComponent.bodyHeight * scaleY;
+    final centerX = size.x / 2;
+    _bodyPath = Path()
+      ..addOval(
+        Rect.fromLTWH(
+          2 * scaleX,
+          0,
+          68 * scaleX,
+          bodyHeight,
+        ),
+      );
+    _tailPath = Path()
+      ..moveTo(centerX - 5 * scaleX, bodyHeight - 3 * scaleY)
+      ..lineTo(centerX + 5 * scaleX, bodyHeight - 3 * scaleY)
+      ..lineTo(centerX, bodyHeight + 6 * scaleY)
+      ..close();
+    _stringStart = Offset(centerX, bodyHeight + 5 * scaleY);
+    _stringEnd = Offset(centerX, size.y);
+    _highlightCenter = Offset(24 * scaleX, 21 * scaleY);
+    _highlightRadius = 7 * min(scaleX, scaleY);
   }
 
   @override

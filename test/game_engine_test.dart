@@ -5,6 +5,8 @@ import 'package:balloon_pop_game/game_engine/game_session_state.dart';
 import 'package:balloon_pop_game/game_engine/poppop_engine_mode.dart';
 import 'package:balloon_pop_game/game_engine/poppop_game.dart';
 import 'package:balloon_pop_game/game_engine/session/game_session_snapshot.dart';
+import 'package:balloon_pop_game/game_engine/stages/flame_stage_definition.dart';
+import 'package:balloon_pop_game/game_engine/stages/stage_balloon_spawner.dart';
 import 'package:balloon_pop_game/gameplay/game_canvas.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/settings_service.dart';
@@ -40,12 +42,75 @@ void main() {
     );
   });
 
+  test('Stage 1-3 rules are defined once in the Flame stage catalog', () {
+    expect(flamePreviewStages.map((stage) => stage.stage), <int>[1, 2, 3]);
+    expect(
+      flamePreviewStages.map((stage) => stage.balloonCount),
+      <int>[2, 3, 4],
+    );
+    expect(
+      flamePreviewStages.take(2).every(
+            (stage) => stage.completion == StageCompletion.nextStage,
+          ),
+      isTrue,
+    );
+    expect(
+      flamePreviewStages.last.completion,
+      StageCompletion.gameClear,
+    );
+    for (final stage in flamePreviewStages) {
+      expect(stage.successCondition, StageSuccessCondition.allBalloonsPopped);
+      expect(stage.failureCondition, StageFailureCondition.timeExpired);
+      expect(stage.timeLimitSeconds, greaterThan(0));
+    }
+  });
+
+  test('stage spawner uses bounded in-playfield placement on narrow screens',
+      () {
+    const spawner = StageBalloonSpawner(seed: 41);
+    final playfield = Vector2(288, 320);
+    final balloons = spawner.create(
+      definition: flamePreviewStages.last,
+      playfieldSize: playfield,
+      idBase: 3000,
+      onPopRequested: (_) => true,
+    );
+    final restarted = spawner.create(
+      definition: flamePreviewStages.last,
+      playfieldSize: playfield,
+      idBase: 9000,
+      onPopRequested: (_) => true,
+    );
+
+    expect(balloons, hasLength(4));
+    expect(
+      restarted.map((balloon) => balloon.position),
+      balloons.map((balloon) => balloon.position),
+    );
+    expect(
+      restarted.map((balloon) => balloon.velocity),
+      balloons.map((balloon) => balloon.velocity),
+    );
+    expect(
+      StageBalloonSpawner.maxPlacementAttemptsPerBalloon,
+      lessThanOrEqualTo(20),
+    );
+    for (final balloon in balloons) {
+      expect(balloon.position.x, greaterThanOrEqualTo(0));
+      expect(balloon.position.y, greaterThanOrEqualTo(0));
+      expect(
+          balloon.position.x + balloon.size.x, lessThanOrEqualTo(playfield.x));
+      expect(
+          balloon.position.y + balloon.size.y, lessThanOrEqualTo(playfield.y));
+    }
+  });
+
   test('Stage 1 session atomically owns count score and clear phase', () {
     final session = GameSessionState();
     final snapshots = <GameSessionSnapshot>[];
     session.addListener(() => snapshots.add(session.snapshot));
 
-    session.startStageOne(const <int>[1, 2]);
+    session.startNewGame(flamePreviewStages.first, const <int>[1, 2]);
     expect(session.remainingBalloons, 2);
     expect(session.phase, GameSessionPhase.playing);
     expect(session.score, 0);
@@ -67,9 +132,43 @@ void main() {
     expect(snapshots.last.phase, GameSessionPhase.stageClear);
   });
 
+  test('session advances stages and derives clear and time-over states', () {
+    final session = GameSessionState();
+    session.startNewGame(flamePreviewStages[0], const <int>[1, 2]);
+    session.popBalloon(1);
+    session.popBalloon(2);
+    expect(session.isStageClear, isTrue);
+    session.pause();
+    expect(session.isPaused, isTrue);
+    session.resume();
+    expect(session.isStageClear, isTrue);
+
+    session.beginNextStage(flamePreviewStages[1], const <int>[3, 4, 5]);
+    expect(session.stage, 2);
+    expect(session.remainingBalloons, 3);
+    expect(session.score, GameSessionState.scorePerBalloon * 2);
+    for (final id in const <int>[3, 4, 5]) {
+      session.popBalloon(id);
+    }
+
+    session.beginNextStage(flamePreviewStages[2], const <int>[6, 7, 8, 9]);
+    for (final id in const <int>[6, 7, 8]) {
+      session.popBalloon(id);
+    }
+    expect(session.popBalloon(9), BalloonPopResult.gameCleared);
+    expect(session.isGameClear, isTrue);
+    expect(session.snapshot.isGameClear, isTrue);
+    expect(session.stageClearCount, 3);
+
+    session.startNewGame(flamePreviewStages[0], const <int>[10, 11]);
+    session.recordUpdate(flamePreviewStages[0].timeLimitSeconds.toDouble());
+    expect(session.isTimeOver, isTrue);
+    expect(session.snapshot.isTimeOver, isTrue);
+  });
+
   test('Stage 1 clock notifies only on displayed-second changes', () {
     final session = GameSessionState();
-    session.startStageOne(const <int>[1, 2]);
+    session.startNewGame(flamePreviewStages.first, const <int>[1, 2]);
     var notifications = 0;
     session.addListener(() => notifications++);
 
@@ -250,7 +349,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
-  testWidgets('two pointers clear Stage 1 once and restart restores it', (
+  testWidgets('two pointers clear Stage 1 once and create Stage 2 once', (
     tester,
   ) async {
     final harness = await _pumpFlamePreview(tester);
@@ -276,26 +375,110 @@ void main() {
     await second.up();
 
     final updatesAtClear = harness.session.updateCount;
-    await _pumpFlameFrames(tester, 8);
+    await _pumpStageTransition(tester);
     expect(harness.session.updateCount, updatesAtClear);
     expect(harness.game.activeParticleCount, 0);
-    expect(harness.game.paused, isTrue);
+    expect(harness.session.stage, 2);
+    expect(harness.game.activeBalloonCount, 3);
+    expect(harness.session.remainingBalloons, 3);
+    expect(harness.session.phase, GameSessionPhase.playing);
+    expect(harness.session.stageClearCount, 1);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+    expect(find.textContaining('STAGE 2'), findsOneWidget);
+    expect(balloons.every((balloon) => balloon.isRemoved), isTrue);
     expect(
       harness.game.world.children.whereType<BasicPopEffect>(),
       isEmpty,
     );
+
+    final generationAtStageTwo = harness.game.componentGeneration;
+    await _pumpFlameFrames(tester, 12);
+    expect(harness.game.componentGeneration, generationAtStageTwo);
+    expect(harness.game.activeBalloonCount, 3);
+  });
+
+  testWidgets('Stage 1 to 3 progresses once and ends in Game Clear', (
+    tester,
+  ) async {
+    final harness = await _pumpFlamePreview(tester);
+
+    await _popEveryBalloon(harness.game);
+    expect(harness.session.phase, GameSessionPhase.stageClear);
+    await _pumpStageTransition(tester);
+    expect(harness.session.stage, 2);
+    expect(harness.game.activeBalloonCount, 3);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+
+    await _popEveryBalloon(harness.game);
+    expect(harness.session.phase, GameSessionPhase.stageClear);
+    await _pumpStageTransition(tester);
+    expect(harness.session.stage, 3);
+    expect(harness.game.activeBalloonCount, 4);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+
+    await _popEveryBalloon(harness.game);
+    await tester.pump();
+    expect(harness.session.stage, 3);
+    expect(harness.session.phase, GameSessionPhase.gameClear);
+    expect(harness.session.isGameClear, isTrue);
+    expect(harness.session.stageClearCount, 3);
+    expect(harness.session.score, GameSessionState.scorePerBalloon * 9);
+    expect(harness.game.activeBalloonCount, 0);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+    expect(find.textContaining('GAME CLEAR'), findsOneWidget);
+
+    await _pumpFlameFrames(tester, 8);
+    expect(harness.game.activeEffectCount, 0);
+    expect(harness.game.paused, isTrue);
 
     await tester.tap(
       find.byKey(const ValueKey('flame-preview-restart-button')),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(harness.game.activeBalloonCount, 2);
-    expect(harness.session.remainingBalloons, 2);
+    expect(harness.session.stage, 1);
     expect(harness.session.phase, GameSessionPhase.playing);
-    expect(harness.session.stageClearCount, 0);
+    expect(harness.session.score, 0);
+    expect(harness.session.remainingBalloons, 2);
+    expect(harness.game.activeBalloonCount, 2);
     expect(harness.game.isComponentStateSynchronized, isTrue);
-    expect(find.textContaining('LEFT 2'), findsOneWidget);
+  });
+
+  testWidgets('failure restart resets Stage 1 and rejects stale components', (
+    tester,
+  ) async {
+    final harness = await _pumpFlamePreview(tester);
+    final initialBalloons = harness.game.balloonComponents.toList();
+    final staleBalloon = initialBalloons.first;
+    expect(initialBalloons.last.requestPop(), isTrue);
+    await tester.pump();
+    expect(harness.session.score, GameSessionState.scorePerBalloon);
+
+    for (var frame = 0; frame < 310; frame++) {
+      harness.game.update(BalloonComponent.maxUpdateDelta);
+    }
+    expect(harness.session.phase, GameSessionPhase.failed);
+    expect(harness.session.isTimeOver, isTrue);
+    await tester.pump();
+    expect(find.textContaining('TIME UP'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('flame-preview-restart-button')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(harness.session.stage, 1);
+    expect(harness.session.phase, GameSessionPhase.playing);
+    expect(harness.session.score, 0);
+    expect(harness.session.remainingBalloons, 2);
+    expect(
+        harness.session.secondsLeft, flamePreviewStages.first.timeLimitSeconds);
+    expect(harness.game.activeBalloonCount, 2);
+    expect(harness.game.activeEffectCount, 0);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+    expect(staleBalloon.requestPop(), isFalse);
+    expect(harness.session.remainingBalloons, 2);
   });
 
   testWidgets('Flame preview creates one game without production game loop', (
@@ -426,6 +609,10 @@ void main() {
     expect(session.updateCount, 1);
 
     game.shutdown();
+    expect(game.activeBalloonCount, 0);
+    expect(session.remainingBalloons, 0);
+    expect(session.phase, GameSessionPhase.ready);
+    expect(game.isComponentStateSynchronized, isTrue);
     session.dispose();
     game.update(1 / 60);
 
@@ -510,4 +697,16 @@ Future<void> _pumpFlameFrames(WidgetTester tester, int count) async {
   for (var frame = 0; frame < count; frame++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
+}
+
+Future<void> _popEveryBalloon(PoppopGame game) async {
+  final balloons = game.balloonComponents.toList();
+  for (final balloon in balloons) {
+    expect(balloon.requestPop(), isTrue);
+  }
+}
+
+Future<void> _pumpStageTransition(WidgetTester tester) async {
+  await _pumpFlameFrames(tester, 10);
+  await tester.pump();
 }
