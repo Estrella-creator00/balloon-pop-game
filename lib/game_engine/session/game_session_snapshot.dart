@@ -5,7 +5,7 @@ enum GameSessionPhase {
   playing,
   paused,
   stageClear,
-  gameClear,
+  normalClear,
   failed,
   disposed,
 }
@@ -30,6 +30,6 @@ class GameSessionSnapshot {
 
   bool get isPaused => phase == GameSessionPhase.paused;
   bool get isStageClear => phase == GameSessionPhase.stageClear;
-  bool get isGameClear => phase == GameSessionPhase.gameClear;
+  bool get isNormalClear => phase == GameSessionPhase.normalClear;
   bool get isTimeOver => phase == GameSessionPhase.failed;
 }

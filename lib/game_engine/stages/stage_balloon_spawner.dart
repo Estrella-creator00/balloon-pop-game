@@ -1,8 +1,9 @@
-import 'dart:math';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
 
+import '../../balloon_skin_catalog.dart';
 import '../components/balloon_component.dart';
 import 'flame_stage_definition.dart';
 
@@ -18,40 +19,47 @@ class StageBalloonSpawner {
 
   List<BalloonComponent> create({
     required FlameStageDefinition definition,
-    required Vector2 playfieldSize,
+    required Vector2 Function() playfieldSize,
     required int idBase,
     required StageBalloonPopRequest onPopRequested,
+    required Image Function(Color color) spriteForColor,
   }) {
     // Component ids change per generation, but a seeded stage keeps the same
     // initial layout and motion after restart.
-    final random = Random(seed + definition.stage * 997);
+    final random = math.Random(seed + definition.stage * 997);
     final placedBounds = <Rect>[];
     final balloons = <BalloonComponent>[];
+    final initialPlayfieldSize = playfieldSize();
+    final palette = BalloonSkinCatalog.defaultSkin.colorPalette;
 
     for (var index = 0; index < definition.balloonCount; index++) {
-      final scale = definition.sizeScaleRange.valueAt(random.nextDouble());
+      final width = definition.sizeRange.valueAt(random.nextDouble());
       final balloonSize = Vector2(
-        BalloonComponent.balloonWidth * scale,
-        BalloonComponent.balloonHeight * scale,
+        width,
+        width + BalloonComponent.stringHeight,
       );
       final position = _findPosition(
         index: index,
+        totalCount: definition.balloonCount,
         size: balloonSize,
-        playfieldSize: playfieldSize,
+        playfieldSize: initialPlayfieldSize,
         occupied: placedBounds,
         random: random,
       );
       final speed = definition.speedRange.valueAt(random.nextDouble());
-      final direction = _directions[index % _directions.length];
-      final color = _colors[index % _colors.length];
+      final angle = random.nextDouble() * math.pi * 2;
+      final color = palette[random.nextInt(palette.length)];
       final balloon = BalloonComponent(
         balloonId: idBase + index,
         position: position,
         balloonSize: balloonSize,
-        velocity: Vector2(direction.dx * speed, direction.dy * speed),
-        playfieldSize: () => playfieldSize,
+        velocity: Vector2(math.cos(angle) * speed, math.sin(angle) * speed),
+        playfieldSize: playfieldSize,
         onPopRequested: onPopRequested,
         color: color,
+        sprite: spriteForColor(color),
+        floatPhase: random.nextDouble() * math.pi * 2,
+        floatPower: 10 + random.nextDouble() * 10,
       );
       balloons.add(balloon);
       placedBounds.add(balloon.playfieldBounds.inflate(minimumGap / 2));
@@ -61,13 +69,14 @@ class StageBalloonSpawner {
 
   Vector2 _findPosition({
     required int index,
+    required int totalCount,
     required Vector2 size,
     required Vector2 playfieldSize,
     required List<Rect> occupied,
-    required Random random,
+    required math.Random random,
   }) {
-    final maxX = max(0.0, playfieldSize.x - size.x);
-    final maxY = max(0.0, playfieldSize.y - size.y);
+    final maxX = math.max(0.0, playfieldSize.x - size.x);
+    final maxY = math.max(0.0, playfieldSize.y - size.y);
     final preferred = _preferredPositions[index % _preferredPositions.length];
 
     for (var attempt = 0; attempt < maxPlacementAttemptsPerBalloon; attempt++) {
@@ -86,12 +95,15 @@ class StageBalloonSpawner {
 
     // Bounded fallback: use a deterministic grid even when a very small
     // viewport cannot satisfy the preferred gap. No retry loop can run forever.
-    final columns = max(1, (playfieldSize.x / size.x).floor());
+    final aspect =
+        playfieldSize.y <= 0 ? 1.0 : playfieldSize.x / playfieldSize.y;
+    final columns = math.max(1, math.sqrt(totalCount * aspect).ceil());
+    final rows = math.max(1, (totalCount / columns).ceil());
     final row = index ~/ columns;
     final column = index % columns;
     return Vector2(
-      min(maxX, column * (maxX / max(1, columns - 1))),
-      min(maxY, row * size.y),
+      math.min(maxX, column * (maxX / math.max(1, columns - 1))),
+      math.min(maxY, row * (maxY / math.max(1, rows - 1))),
     );
   }
 
@@ -100,19 +112,5 @@ class StageBalloonSpawner {
     Offset(0.70, 0.58),
     Offset(0.42, 0.36),
     Offset(0.08, 0.72),
-  ];
-
-  static const List<Offset> _directions = <Offset>[
-    Offset(0.63, 0.78),
-    Offset(-0.75, -0.66),
-    Offset(0.82, -0.57),
-    Offset(-0.66, 0.75),
-  ];
-
-  static const List<Color> _colors = <Color>[
-    Color(0xFFFF6B9D),
-    Color(0xFF5BC0EB),
-    Color(0xFFFFC857),
-    Color(0xFF8ED081),
   ];
 }
