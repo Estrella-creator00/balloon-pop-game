@@ -4,77 +4,88 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 
-typedef BalloonPopRequest = bool Function(BalloonComponent balloon);
+typedef BalloonHitRequest = bool Function(BalloonComponent balloon);
+typedef BalloonSpriteResolver = Image Function(
+  Color color,
+  int hp,
+  int maxHp,
+  bool isFake,
+);
 
-/// A single Flame-owned balloon. Position, movement, rendering and input all
-/// use this component as their shared source of truth.
 class BalloonComponent extends PositionComponent with TapCallbacks {
   BalloonComponent({
     required this.balloonId,
+    required this.generation,
     required Vector2 position,
     required Vector2 balloonSize,
     required this.velocity,
     required this.playfieldSize,
-    required this.onPopRequested,
+    required this.onHitRequested,
+    required this.readHp,
     required this.color,
-    required this.sprite,
+    required this.maxHp,
+    required this.isFake,
+    required Image sprite,
+    required this.spriteResolver,
     required this.floatPhase,
     required this.floatPower,
-  })  : _sourceRect = Rect.fromLTWH(
-          0,
-          0,
-          sprite.width.toDouble(),
-          sprite.height.toDouble(),
-        ),
-        _destinationRect = Rect.fromLTWH(
-          0,
-          0,
-          balloonSize.x,
-          balloonSize.y,
-        ),
-        super(position: position, size: balloonSize, priority: balloonId);
+    required this.firstHitSizeMultiplier,
+  })  : _sprite = sprite,
+        _visualHp = maxHp,
+        _sourceRect = Rect.fromLTWH(
+            0, 0, sprite.width.toDouble(), sprite.height.toDouble()),
+        _destinationRect = Rect.fromLTWH(0, 0, balloonSize.x, balloonSize.y),
+        super(position: position, size: balloonSize, priority: balloonId) {
+    if (isFake) _spritePaint.color = const Color(0x59FFFFFF);
+  }
 
   static const double maxUpdateDelta = 0.05;
   static const double stringHeight = 26;
   static const double floatPhaseSpeed = 2.4;
 
   final int balloonId;
+  final int generation;
   final Vector2 velocity;
   final Vector2 Function() playfieldSize;
-  final BalloonPopRequest onPopRequested;
+  final BalloonHitRequest onHitRequested;
+  final int Function(int id) readHp;
   final Color color;
-  final Image sprite;
-  final Rect _sourceRect;
-  final Rect _destinationRect;
+  final int maxHp;
+  final bool isFake;
+  final BalloonSpriteResolver spriteResolver;
+  final double floatPower;
+  final double firstHitSizeMultiplier;
   final Paint _spritePaint = Paint()
     ..isAntiAlias = true
     ..filterQuality = FilterQuality.medium;
-  final double floatPower;
 
+  Image _sprite;
+  Rect _sourceRect;
+  Rect _destinationRect;
+  int _visualHp;
+  bool _hitInProgress = false;
+  bool _removed = false;
   double floatPhase;
   double _lastAppliedDelta = 0;
-  bool _popRequested = false;
 
-  bool get isPopRequested => _popRequested;
+  int get currentHp => readHp(balloonId);
+  int get visualHp => _visualHp;
+  bool get isRemovedFromGame => _removed;
+  bool get isPopRequested => _removed;
   double get lastAppliedDelta => _lastAppliedDelta;
-  Rect get playfieldBounds => Rect.fromLTWH(
-        position.x,
-        position.y,
-        size.x,
-        size.y,
-      );
+  Rect get playfieldBounds =>
+      Rect.fromLTWH(position.x, position.y, size.x, size.y);
 
   @override
   void update(double dt) {
     super.update(dt);
-    if (_popRequested) return;
-
-    final clampedDt = dt.clamp(0.0, maxUpdateDelta).toDouble();
-    _lastAppliedDelta = clampedDt;
-    floatPhase += clampedDt * floatPhaseSpeed;
-    position.x += velocity.x * clampedDt;
+    if (_removed) return;
+    final clamped = dt.clamp(0.0, maxUpdateDelta).toDouble();
+    _lastAppliedDelta = clamped;
+    floatPhase += clamped * floatPhaseSpeed;
+    position.x += velocity.x * clamped;
     position.y +=
-        velocity.y * clampedDt + math.sin(floatPhase) * floatPower * clampedDt;
+        velocity.y * clamped + math.sin(floatPhase) * floatPower * clamped;
     _reflectInsidePlayfield();
   }
 
@@ -90,20 +101,34 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     position.y = position.y.clamp(0.0, maxY).toDouble();
   }
 
-  @override
-  void render(Canvas canvas) {
-    canvas.drawImageRect(sprite, _sourceRect, _destinationRect, _spritePaint);
+  void applyRegisteredHit(int hp) {
+    if (_removed || hp <= 0 || hp >= _visualHp) return;
+    _visualHp = hp;
+    _sprite = spriteResolver(color, hp, maxHp, isFake);
+    final width = size.x * firstHitSizeMultiplier;
+    size.setValues(width, width + stringHeight);
+    _sourceRect = Rect.fromLTWH(
+        0, 0, _sprite.width.toDouble(), _sprite.height.toDouble());
+    _destinationRect = Rect.fromLTWH(0, 0, size.x, size.y);
+    _reflectInsidePlayfield();
   }
 
+  void markRemoved() => _removed = true;
+
   @override
-  void onTapDown(TapDownEvent event) {
-    requestPop();
+  void render(Canvas canvas) => canvas.drawImageRect(
+      _sprite, _sourceRect, _destinationRect, _spritePaint);
+
+  @override
+  void onTapDown(TapDownEvent event) => requestHit();
+
+  bool requestHit() {
+    if (_removed || _hitInProgress) return false;
+    _hitInProgress = true;
+    final accepted = onHitRequested(this);
+    _hitInProgress = false;
+    return accepted;
   }
 
-  bool requestPop() {
-    if (_popRequested) return false;
-    if (!onPopRequested(this)) return false;
-    _popRequested = true;
-    return true;
-  }
+  bool requestPop() => requestHit();
 }

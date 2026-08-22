@@ -7,7 +7,11 @@ import 'package:flame/events.dart';
 import '../stages/flame_stage_definition.dart';
 import 'balloon_component.dart';
 
-typedef BossHitRequest = bool Function(BossBalloonComponent boss);
+typedef BossHitRequest = bool Function(
+  BossBalloonComponent boss,
+  Vector2? worldPoint,
+);
+typedef BossSpriteResolver = Image Function(int hp, {bool fake});
 
 class BossBalloonComponent extends PositionComponent with TapCallbacks {
   BossBalloonComponent({
@@ -19,12 +23,17 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
     required this.rule,
     required this.initialSize,
     required this.readHp,
+    required this.readIsFake,
     required this.onHitRequested,
     required this.directionRoll,
+    required this.spriteResolver,
     required Image initialSprite,
+    required bool initialIsFake,
+    this.turnIntervalOffset = 0,
+    double? initialTurnCooldown,
   })  : _sprite = initialSprite,
         _visualHp = rule.maxHp,
-        turnCooldown = rule.initialTurnCooldown,
+        turnCooldown = initialTurnCooldown ?? rule.initialTurnCooldown,
         _sourceRect = Rect.fromLTWH(
           0,
           0,
@@ -36,7 +45,9 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
           position: position,
           size: Vector2(initialSize, initialSize + 32),
           priority: 100,
-        );
+        ) {
+    if (initialIsFake) _spritePaint.color = const Color(0x59FFFFFF);
+  }
 
   final int bossId;
   final int generation;
@@ -45,8 +56,11 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   final FlameBossRule rule;
   final double initialSize;
   final int Function(int bossId) readHp;
+  final bool Function(int bossId) readIsFake;
   final BossHitRequest onHitRequested;
   final double Function() directionRoll;
+  final BossSpriteResolver spriteResolver;
+  final double turnIntervalOffset;
   final Paint _spritePaint = Paint()
     ..isAntiAlias = true
     ..filterQuality = FilterQuality.medium;
@@ -64,6 +78,7 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   int get visualHp => _visualHp;
   int get maxHp => rule.maxHp;
   bool get isDefeated => _defeated;
+  bool get isFake => readIsFake(bossId);
   double get diameter => size.x;
   double get lastAppliedDelta => _lastAppliedDelta;
   Color get displayColor => rule.colorForHp(_visualHp);
@@ -86,7 +101,10 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
       final speed = velocity.length;
       final angle = directionRoll() * math.pi * 2;
       velocity.setValues(math.cos(angle) * speed, math.sin(angle) * speed);
-      turnCooldown = rule.turnCooldownForHp(currentHp);
+      turnCooldown = rule.turnCooldownForHp(
+        currentHp,
+        offset: turnIntervalOffset,
+      );
     }
 
     position.addScaled(velocity, clampedDt);
@@ -105,17 +123,17 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
     position.y = position.y.clamp(0.0, maxY).toDouble();
   }
 
-  void applyRegisteredHit({required int hp, required Image sprite}) {
+  void applyRegisteredHit({required int hp}) {
     if (_defeated || hp <= 0 || hp >= _visualHp) return;
     _visualHp = hp;
-    _sprite = sprite;
+    _sprite = spriteResolver(hp, fake: isFake);
     final nextDiameter = rule.sizeForHp(initialSize, hp);
     size.setValues(nextDiameter, nextDiameter + 32);
     _sourceRect = Rect.fromLTWH(
       0,
       0,
-      sprite.width.toDouble(),
-      sprite.height.toDouble(),
+      _sprite.width.toDouble(),
+      _sprite.height.toDouble(),
     );
     _destinationRect = Rect.fromLTWH(0, 0, size.x, size.y);
 
@@ -124,8 +142,24 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
     if (currentSpeed > 0) {
       velocity.scale(speed / currentSpeed);
     }
-    turnCooldown = math.min(turnCooldown, rule.hitTurnCooldownForHp(hp));
+    turnCooldown = math.min(
+      turnCooldown,
+      rule.hitTurnCooldownForHp(hp, offset: turnIntervalOffset),
+    );
     _reflectInsidePlayfield();
+  }
+
+  void refreshRole() {
+    if (_defeated || currentHp <= 0) return;
+    _sprite = spriteResolver(currentHp, fake: isFake);
+    _sourceRect = Rect.fromLTWH(
+      0,
+      0,
+      _sprite.width.toDouble(),
+      _sprite.height.toDouble(),
+    );
+    _spritePaint.color =
+        isFake ? const Color(0x59FFFFFF) : const Color(0xFFFFFFFF);
   }
 
   void markDefeated() {
@@ -139,13 +173,13 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
 
   @override
   void onTapDown(TapDownEvent event) {
-    requestHit();
+    requestHit(worldPoint: position + event.localPosition);
   }
 
-  bool requestHit() {
+  bool requestHit({Vector2? worldPoint}) {
     if (_defeated || _hitRequestInProgress) return false;
     _hitRequestInProgress = true;
-    final accepted = onHitRequested(this);
+    final accepted = onHitRequested(this, worldPoint);
     _hitRequestInProgress = false;
     return accepted;
   }

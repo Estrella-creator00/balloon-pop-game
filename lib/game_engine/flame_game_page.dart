@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'game_session_state.dart';
 import 'poppop_game.dart';
+import 'poppop_engine_mode.dart';
 import 'session/game_session_snapshot.dart';
 
 typedef PoppopGameFactory = PoppopGame Function(
@@ -17,10 +18,12 @@ class FlameGamePage extends StatefulWidget {
     required this.onExit,
     this.gameFactory,
     this.onHudBuild,
+    this.initialStage,
   });
 
   final VoidCallback onExit;
   final PoppopGameFactory? gameFactory;
+  final int? initialStage;
 
   @visibleForTesting
   final VoidCallback? onHudBuild;
@@ -41,8 +44,12 @@ class _FlameGamePageState extends State<FlameGamePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _sessionState = GameSessionState();
-    _game =
-        widget.gameFactory?.call(_sessionState) ?? PoppopGame(_sessionState);
+    _game = widget.gameFactory?.call(_sessionState) ??
+        PoppopGame(
+          _sessionState,
+          initialStage:
+              widget.initialStage ?? flamePreviewStageFromUri(Uri.base),
+        );
     final lifecycleState = WidgetsBinding.instance.lifecycleState;
     if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
       _lifecyclePaused = true;
@@ -86,6 +93,15 @@ class _FlameGamePageState extends State<FlameGamePage>
     unawaited(_game.restartGame(resume: !_lifecyclePaused));
   }
 
+  void _startBoss() {
+    _game.startBossStage();
+  }
+
+  void _jumpToStage(int stage) {
+    setState(() => _manuallyPaused = false);
+    unawaited(_game.jumpToStage(stage, resume: !_lifecyclePaused));
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -105,6 +121,7 @@ class _FlameGamePageState extends State<FlameGamePage>
               sessionState: _sessionState,
               manuallyPaused: _manuallyPaused,
               onBuild: widget.onHudBuild,
+              onStartBoss: _startBoss,
             ),
             Expanded(
               child: Padding(
@@ -128,6 +145,33 @@ class _FlameGamePageState extends State<FlameGamePage>
                       onPressed: _togglePause,
                       style: _previewButtonStyle(),
                       child: Text(_manuallyPaused ? 'RESUME' : 'PAUSE'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  PopupMenuButton<int>(
+                    key: const ValueKey('flame-preview-stage-menu'),
+                    tooltip: 'Jump to stage',
+                    onSelected: _jumpToStage,
+                    itemBuilder: (context) => const <int>[
+                      1,
+                      9,
+                      10,
+                      11,
+                      19,
+                      20,
+                      21,
+                      29,
+                      30,
+                    ]
+                        .map((stage) => PopupMenuItem<int>(
+                              value: stage,
+                              child: Text('STAGE $stage'),
+                            ))
+                        .toList(),
+                    child: const SizedBox(
+                      width: 52,
+                      height: 44,
+                      child: Icon(Icons.list_alt),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -168,11 +212,13 @@ class _PreviewHud extends StatelessWidget {
     required this.sessionState,
     required this.manuallyPaused,
     this.onBuild,
+    required this.onStartBoss,
   });
 
   final GameSessionState sessionState;
   final bool manuallyPaused;
   final VoidCallback? onBuild;
+  final VoidCallback onStartBoss;
 
   @override
   Widget build(BuildContext context) {
@@ -200,17 +246,31 @@ class _PreviewHud extends StatelessWidget {
               final bossStatus = snapshot.bossMaxHp > 0
                   ? '  •  BOSS HP ${snapshot.bossHp}/${snapshot.bossMaxHp}'
                   : '';
-              return Text(
-                'STAGE ${snapshot.stage}  •  SCORE ${snapshot.score}  •  '
-                'LEFT ${snapshot.remainingBalloons}  •  '
-                'TIME ${snapshot.secondsLeft}  •  '
-                '${_phaseLabel(snapshot.phase, manuallyPaused)}$bossStatus',
-                key: const ValueKey('flame-preview-status'),
-                style: const TextStyle(
-                  color: Color(0xFFB8E6FF),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'STAGE ${snapshot.stage}  •  SCORE ${snapshot.score}  •  '
+                    'LEFT ${snapshot.remainingBalloons}  •  '
+                    'TIME ${snapshot.secondsLeft}  •  '
+                    '${_phaseLabel(snapshot.phase, manuallyPaused)}$bossStatus',
+                    key: const ValueKey('flame-preview-status'),
+                    style: const TextStyle(
+                      color: Color(0xFFB8E6FF),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (snapshot.phase == GameSessionPhase.bossReady)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: FilledButton.tonal(
+                        key: const ValueKey('flame-preview-boss-start-button'),
+                        onPressed: onStartBoss,
+                        child: Text('STAGE ${snapshot.stage} BOSS START'),
+                      ),
+                    ),
+                ],
               );
             },
           ),
@@ -223,10 +283,11 @@ class _PreviewHud extends StatelessWidget {
     if (manuallyPaused || phase == GameSessionPhase.paused) return 'PAUSED';
     return switch (phase) {
       GameSessionPhase.ready => 'READY',
+      GameSessionPhase.bossReady => 'BOSS READY',
       GameSessionPhase.playing => 'PLAYING',
       GameSessionPhase.stageClear => 'STAGE CLEAR',
       GameSessionPhase.bossClear => 'BOSS CLEAR',
-      GameSessionPhase.sectionClear => 'SECTION CLEAR',
+      GameSessionPhase.coreClear => 'CORE CLEAR',
       GameSessionPhase.failed => 'TIME UP',
       GameSessionPhase.paused => 'PAUSED',
       GameSessionPhase.disposed => 'STOPPED',

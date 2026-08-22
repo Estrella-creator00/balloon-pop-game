@@ -7,7 +7,7 @@ import '../../balloon_skin_catalog.dart';
 import '../components/balloon_component.dart';
 import 'flame_stage_definition.dart';
 
-typedef StageBalloonPopRequest = bool Function(BalloonComponent balloon);
+typedef StageBalloonHitRequest = bool Function(BalloonComponent balloon);
 
 class StageBalloonSpawner {
   const StageBalloonSpawner({this.seed = 3107});
@@ -20,9 +20,11 @@ class StageBalloonSpawner {
   List<BalloonComponent> create({
     required FlameStageDefinition definition,
     required Vector2 Function() playfieldSize,
+    required int generation,
     required int idBase,
-    required StageBalloonPopRequest onPopRequested,
-    required Image Function(Color color) spriteForColor,
+    required StageBalloonHitRequest onHitRequested,
+    required int Function(int id) readHp,
+    required BalloonSpriteResolver spriteResolver,
   }) {
     // Component ids change per generation, but a seeded stage keeps the same
     // initial layout and motion after restart.
@@ -32,7 +34,10 @@ class StageBalloonSpawner {
     final initialPlayfieldSize = playfieldSize();
     final palette = BalloonSkinCatalog.defaultSkin.colorPalette;
 
-    for (var index = 0; index < definition.balloonCount; index++) {
+    final totalCount =
+        definition.balloonCount + definition.balloonRule.fakeCount;
+    for (var index = 0; index < totalCount; index++) {
+      final isFake = index >= definition.balloonCount;
       final width = definition.sizeRange.valueAt(random.nextDouble());
       final balloonSize = Vector2(
         width,
@@ -40,7 +45,7 @@ class StageBalloonSpawner {
       );
       final position = _findPosition(
         index: index,
-        totalCount: definition.balloonCount,
+        totalCount: totalCount,
         size: balloonSize,
         playfieldSize: initialPlayfieldSize,
         occupied: placedBounds,
@@ -51,15 +56,26 @@ class StageBalloonSpawner {
       final color = palette[random.nextInt(palette.length)];
       final balloon = BalloonComponent(
         balloonId: idBase + index,
+        generation: generation,
         position: position,
         balloonSize: balloonSize,
         velocity: Vector2(math.cos(angle) * speed, math.sin(angle) * speed),
         playfieldSize: playfieldSize,
-        onPopRequested: onPopRequested,
+        onHitRequested: onHitRequested,
+        readHp: readHp,
         color: color,
-        sprite: spriteForColor(color),
+        maxHp: isFake ? 1 : definition.balloonRule.requiredHits,
+        isFake: isFake,
+        sprite: spriteResolver(
+          color,
+          isFake ? 1 : definition.balloonRule.requiredHits,
+          isFake ? 1 : definition.balloonRule.requiredHits,
+          isFake,
+        ),
+        spriteResolver: spriteResolver,
         floatPhase: random.nextDouble() * math.pi * 2,
         floatPower: 10 + random.nextDouble() * 10,
+        firstHitSizeMultiplier: definition.balloonRule.firstHitSizeMultiplier,
       );
       balloons.add(balloon);
       placedBounds.add(balloon.playfieldBounds.inflate(minimumGap / 2));

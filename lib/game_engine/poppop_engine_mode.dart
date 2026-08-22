@@ -8,3 +8,8 @@ PoppopEngineMode poppopEngineModeFromUri(Uri uri) {
       ? PoppopEngineMode.flamePreview
       : defaultPoppopEngineMode;
 }
+
+int flamePreviewStageFromUri(Uri uri) {
+  final stage = int.tryParse(uri.queryParameters['stage'] ?? '');
+  return stage != null && stage >= 1 && stage <= 30 ? stage : 1;
+}

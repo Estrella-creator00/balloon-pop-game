@@ -2,11 +2,12 @@ import 'package:flutter/foundation.dart';
 
 enum GameSessionPhase {
   ready,
+  bossReady,
   playing,
   paused,
   stageClear,
   bossClear,
-  sectionClear,
+  coreClear,
   failed,
   disposed,
 }
@@ -23,6 +24,10 @@ class GameSessionSnapshot {
     required this.activeBossCount,
     required this.bossHp,
     required this.bossMaxHp,
+    required this.damagedBalloonCount,
+    required this.fakeCount,
+    required this.stage30RealBossId,
+    required this.generation,
   });
 
   final int stage;
@@ -34,10 +39,8 @@ class GameSessionSnapshot {
   final int activeBossCount;
   final int bossHp;
   final int bossMaxHp;
-
-  bool get isPaused => phase == GameSessionPhase.paused;
-  bool get isStageClear => phase == GameSessionPhase.stageClear;
-  bool get isBossClear => phase == GameSessionPhase.bossClear;
-  bool get isSectionClear => phase == GameSessionPhase.sectionClear;
-  bool get isTimeOver => phase == GameSessionPhase.failed;
+  final int damagedBalloonCount;
+  final int fakeCount;
+  final int? stage30RealBossId;
+  final int generation;
 }
