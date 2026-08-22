@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'session/game_session_snapshot.dart';
 import 'stages/flame_stage_definition.dart';
 
-enum BalloonPopResult { ignored, popped, stageCleared, normalCleared }
+enum BalloonPopResult { ignored, popped, stageCleared }
 
-/// Single session state for the Stage 1-9 Flame preview loop.
+enum BossHitResult { ignored, hit, bossCleared }
+
+/// Single session state for the Stage 1-10 Flame preview loop.
 ///
 /// The active balloon id set is authoritative. The HUD never recounts Flame
 /// components, and a pop updates the id set, score, remaining count and phase
@@ -16,6 +18,7 @@ class GameSessionState extends ChangeNotifier {
   GameSessionPhase _phase = GameSessionPhase.ready;
   GameSessionPhase _phaseBeforePause = GameSessionPhase.playing;
   final Set<int> _activeBalloonIds = <int>{};
+  final Map<int, int> _activeBossHp = <int, int>{};
   FlameStageDefinition? _stageDefinition;
   int _score = 0;
   int _secondsLeft = 0;
@@ -32,6 +35,13 @@ class GameSessionState extends ChangeNotifier {
   int get updateCount => _updateCount;
   int get score => _score;
   int get remainingBalloons => _activeBalloonIds.length;
+  int get activeBossCount => _activeBossHp.length;
+  int get bossHp => _activeBossHp.values.fold(0, (sum, hp) => sum + hp);
+  int get bossMaxHp {
+    final rule = _stageDefinition?.bossRule;
+    return rule == null ? 0 : rule.maxHp * rule.bossCount;
+  }
+
   int get secondsLeft => _secondsLeft;
   int get stageClearCount => _stageClearCount;
   int get lastClearBonus => _lastClearBonus;
@@ -40,10 +50,12 @@ class GameSessionState extends ChangeNotifier {
   bool get isRunning => isPlaying;
   bool get isPaused => _phase == GameSessionPhase.paused;
   bool get isStageClear => _phase == GameSessionPhase.stageClear;
-  bool get isNormalClear => _phase == GameSessionPhase.normalClear;
+  bool get isBossClear => _phase == GameSessionPhase.bossClear;
+  bool get isSectionClear => _phase == GameSessionPhase.sectionClear;
   bool get isTimeOver => _phase == GameSessionPhase.failed;
   bool get isDisposed => _disposed;
   Set<int> get activeBalloonIds => Set<int>.unmodifiable(_activeBalloonIds);
+  Set<int> get activeBossIds => Set<int>.unmodifiable(_activeBossHp.keys);
 
   GameSessionSnapshot get snapshot => GameSessionSnapshot(
         stage: stage,
@@ -52,37 +64,46 @@ class GameSessionState extends ChangeNotifier {
         phase: phase,
         secondsLeft: secondsLeft,
         stageClearCount: stageClearCount,
+        activeBossCount: activeBossCount,
+        bossHp: bossHp,
+        bossMaxHp: bossMaxHp,
       );
 
   void startNewGame(
     FlameStageDefinition definition,
-    Iterable<int> balloonIds,
-  ) {
+    Iterable<int> balloonIds, {
+    Map<int, int> bossHpById = const <int, int>{},
+  }) {
     if (_disposed) return;
     _score = 0;
     _stageClearCount = 0;
     _lastClearBonus = 0;
     _updateCount = 0;
     _elapsed = Duration.zero;
-    _beginStage(definition, balloonIds);
+    _beginStage(definition, balloonIds, bossHpById);
   }
 
   void beginNextStage(
     FlameStageDefinition definition,
-    Iterable<int> balloonIds,
-  ) {
+    Iterable<int> balloonIds, {
+    Map<int, int> bossHpById = const <int, int>{},
+  }) {
     if (_disposed || _phase != GameSessionPhase.stageClear) return;
-    _beginStage(definition, balloonIds);
+    _beginStage(definition, balloonIds, bossHpById);
   }
 
   void _beginStage(
     FlameStageDefinition definition,
     Iterable<int> balloonIds,
+    Map<int, int> bossHpById,
   ) {
     _stageDefinition = definition;
     _activeBalloonIds
       ..clear()
       ..addAll(balloonIds);
+    _activeBossHp
+      ..clear()
+      ..addAll(bossHpById);
     _secondsLeft = definition.timeLimitSeconds;
     _preciseSecondsLeft = definition.timeLimitSeconds.toDouble();
     _lastClearBonus = 0;
@@ -106,11 +127,6 @@ class GameSessionState extends ChangeNotifier {
       _stageClearCount++;
       _lastClearBonus = definition.scoreRule.clearBonus(_secondsLeft);
       _score += _lastClearBonus;
-      if (definition.completion == StageCompletion.normalClear) {
-        _phase = GameSessionPhase.normalClear;
-        notifyListeners();
-        return BalloonPopResult.normalCleared;
-      }
       _phase = GameSessionPhase.stageClear;
       notifyListeners();
       return BalloonPopResult.stageCleared;
@@ -119,10 +135,60 @@ class GameSessionState extends ChangeNotifier {
     return BalloonPopResult.popped;
   }
 
+  BossHitResult hitBoss(int id) {
+    final definition = _stageDefinition;
+    final rule = definition?.bossRule;
+    final currentHp = _activeBossHp[id];
+    if (_disposed ||
+        !isPlaying ||
+        definition == null ||
+        rule == null ||
+        definition.successCondition !=
+            StageSuccessCondition.allBossesDefeated ||
+        currentHp == null ||
+        currentHp <= 0) {
+      return BossHitResult.ignored;
+    }
+
+    final nextHp = currentHp - 1;
+    if (nextHp > 0) {
+      _activeBossHp[id] = nextHp;
+      notifyListeners();
+      return BossHitResult.hit;
+    }
+
+    _activeBossHp.remove(id);
+    _score += rule.defeatPoints;
+    if (_activeBossHp.isNotEmpty) {
+      notifyListeners();
+      return BossHitResult.hit;
+    }
+
+    _stageClearCount++;
+    _lastClearBonus = _secondsLeft * rule.remainingSecondMultiplier;
+    _score += _lastClearBonus;
+    _phase = GameSessionPhase.bossClear;
+    notifyListeners();
+    return BossHitResult.bossCleared;
+  }
+
+  int bossHpFor(int id) => _activeBossHp[id] ?? 0;
+
+  void completeSectionClear() {
+    if (_disposed ||
+        _phase != GameSessionPhase.bossClear ||
+        _stageDefinition?.completion != StageCompletion.sectionClear) {
+      return;
+    }
+    _phase = GameSessionPhase.sectionClear;
+    notifyListeners();
+  }
+
   void pause() {
     if (_disposed ||
         (_phase != GameSessionPhase.playing &&
-            _phase != GameSessionPhase.stageClear)) {
+            _phase != GameSessionPhase.stageClear &&
+            _phase != GameSessionPhase.bossClear)) {
       return;
     }
     _phaseBeforePause = _phase;
@@ -153,6 +219,7 @@ class GameSessionState extends ChangeNotifier {
         _stageDefinition?.failureCondition ==
             StageFailureCondition.timeExpired) {
       _phase = GameSessionPhase.failed;
+      if (_stageDefinition?.isBoss ?? false) _activeBossHp.clear();
     }
     notifyListeners();
   }
@@ -161,9 +228,14 @@ class GameSessionState extends ChangeNotifier {
     return setEquals(_activeBalloonIds, componentIds.toSet());
   }
 
+  bool matchesActiveBossComponentIds(Iterable<int> componentIds) {
+    return setEquals(_activeBossHp.keys.toSet(), componentIds.toSet());
+  }
+
   void endSession() {
     if (_disposed) return;
     _activeBalloonIds.clear();
+    _activeBossHp.clear();
     _phase = GameSessionPhase.ready;
     notifyListeners();
   }
@@ -173,6 +245,7 @@ class GameSessionState extends ChangeNotifier {
     _disposed = true;
     _phase = GameSessionPhase.disposed;
     _activeBalloonIds.clear();
+    _activeBossHp.clear();
     super.dispose();
   }
 }

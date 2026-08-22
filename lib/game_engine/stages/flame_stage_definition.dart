@@ -1,10 +1,15 @@
+import 'dart:math' as math;
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
 
-enum StageSuccessCondition { allBalloonsPopped }
+enum FlameStageType { normal, boss }
+
+enum StageSuccessCondition { allBalloonsPopped, allBossesDefeated }
 
 enum StageFailureCondition { timeExpired }
 
-enum StageCompletion { nextStage, normalClear }
+enum StageCompletion { nextStage, sectionClear }
 
 @immutable
 class DoubleRange {
@@ -33,6 +38,74 @@ class StageScoreRule {
 }
 
 @immutable
+class FlameBossRule {
+  const FlameBossRule({
+    required this.bossCount,
+    required this.maxHp,
+    required this.initialSpeed,
+    required this.minimumSize,
+    required this.maximumSize,
+    required this.playfieldSizeFactor,
+    required this.hitSizeMultiplier,
+    required this.hitSpeedMultiplier,
+    required this.initialTurnCooldown,
+    required this.minimumTurnCooldown,
+    required this.turnCooldownBase,
+    required this.turnCooldownHpFactor,
+    required this.hitTurnCooldownBase,
+    required this.hitTurnCooldownHpFactor,
+    required this.defeatPoints,
+    required this.remainingSecondMultiplier,
+    required this.fakeBossCount,
+  });
+
+  final int bossCount;
+  final int maxHp;
+  final double initialSpeed;
+  final double minimumSize;
+  final double maximumSize;
+  final double playfieldSizeFactor;
+  final double hitSizeMultiplier;
+  final double hitSpeedMultiplier;
+  final double initialTurnCooldown;
+  final double minimumTurnCooldown;
+  final double turnCooldownBase;
+  final double turnCooldownHpFactor;
+  final double hitTurnCooldownBase;
+  final double hitTurnCooldownHpFactor;
+  final int defeatPoints;
+  final int remainingSecondMultiplier;
+  final int fakeBossCount;
+
+  double initialSizeFor(double playfieldShortestSide) => math
+      .min(playfieldShortestSide * playfieldSizeFactor, maximumSize)
+      .clamp(minimumSize, maximumSize)
+      .toDouble();
+
+  double sizeForHp(double initialSize, int hp) =>
+      initialSize * math.pow(hitSizeMultiplier, maxHp - hp);
+
+  double speedForHp(int hp) =>
+      initialSpeed * math.pow(hitSpeedMultiplier, maxHp - hp);
+
+  double get maximumSpeed => speedForHp(1);
+
+  double turnCooldownForHp(int hp) => math.max(
+        minimumTurnCooldown,
+        turnCooldownBase + (hp / maxHp) * turnCooldownHpFactor,
+      );
+
+  double hitTurnCooldownForHp(int hp) =>
+      hitTurnCooldownBase + (hp / maxHp) * hitTurnCooldownHpFactor;
+
+  Color colorForHp(int hp) => Color.lerp(
+        const Color(0xFF7E57C2),
+        const Color(0xFFFF3D67),
+        (maxHp - hp) / maxHp,
+      )!;
+}
+
+@immutable
 class FlameStageDefinition {
   const FlameStageDefinition({
     required this.stage,
@@ -44,9 +117,14 @@ class FlameStageDefinition {
     required this.successCondition,
     required this.failureCondition,
     required this.completion,
+    this.bossRule,
   })  : assert(stage > 0),
         assert(timeLimitSeconds > 0),
-        assert(balloonCount > 0);
+        assert(balloonCount >= 0),
+        assert(
+          (bossRule == null && balloonCount > 0) ||
+              (bossRule != null && balloonCount == 0),
+        );
 
   final int stage;
   final int timeLimitSeconds;
@@ -57,6 +135,11 @@ class FlameStageDefinition {
   final StageSuccessCondition successCondition;
   final StageFailureCondition failureCondition;
   final StageCompletion completion;
+  final FlameBossRule? bossRule;
+
+  FlameStageType get type =>
+      bossRule == null ? FlameStageType.normal : FlameStageType.boss;
+  bool get isBoss => bossRule != null;
 }
 
 const _productionNormalScoreRule = StageScoreRule(
@@ -64,6 +147,25 @@ const _productionNormalScoreRule = StageScoreRule(
   remainingSecondMultiplier: 1,
 );
 const _productionNormalSizeRange = DoubleRange(78, 102);
+const stage10BossRule = FlameBossRule(
+  bossCount: 1,
+  maxHp: 10,
+  initialSpeed: 105,
+  minimumSize: 210,
+  maximumSize: 270,
+  playfieldSizeFactor: 0.62,
+  hitSizeMultiplier: 0.965,
+  hitSpeedMultiplier: 1.075,
+  initialTurnCooldown: 0.65,
+  minimumTurnCooldown: 0.12,
+  turnCooldownBase: 0.24,
+  turnCooldownHpFactor: 0.38,
+  hitTurnCooldownBase: 0.18,
+  hitTurnCooldownHpFactor: 0.28,
+  defeatPoints: 10,
+  remainingSecondMultiplier: 1,
+  fakeBossCount: 0,
+);
 
 // Mirrors StageConfig.forStage and _spawnBalloonGroup for production Stages
 // 1-9. The upper speed and size bounds are exclusive because Random.nextDouble
@@ -166,7 +268,19 @@ const flamePreviewStages = <FlameStageDefinition>[
     scoreRule: _productionNormalScoreRule,
     successCondition: StageSuccessCondition.allBalloonsPopped,
     failureCondition: StageFailureCondition.timeExpired,
-    completion: StageCompletion.normalClear,
+    completion: StageCompletion.nextStage,
+  ),
+  FlameStageDefinition(
+    stage: 10,
+    timeLimitSeconds: 8,
+    balloonCount: 0,
+    speedRange: DoubleRange(105, 201.310059560274),
+    sizeRange: DoubleRange(210, 270),
+    scoreRule: _productionNormalScoreRule,
+    successCondition: StageSuccessCondition.allBossesDefeated,
+    failureCondition: StageFailureCondition.timeExpired,
+    completion: StageCompletion.sectionClear,
+    bossRule: stage10BossRule,
   ),
 ];
 

@@ -1,8 +1,10 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/game_engine/components/balloon_component.dart';
 import 'package:balloon_pop_game/game_engine/components/basic_pop_effect.dart';
+import 'package:balloon_pop_game/game_engine/components/boss_balloon_component.dart';
 import 'package:balloon_pop_game/game_engine/flame_game_page.dart';
 import 'package:balloon_pop_game/game_engine/game_session_state.dart';
 import 'package:balloon_pop_game/game_engine/poppop_engine_mode.dart';
@@ -11,6 +13,7 @@ import 'package:balloon_pop_game/game_engine/rendering/basic_balloon_sprite_cach
 import 'package:balloon_pop_game/game_engine/session/game_session_snapshot.dart';
 import 'package:balloon_pop_game/game_engine/stages/flame_stage_definition.dart';
 import 'package:balloon_pop_game/game_engine/stages/stage_balloon_spawner.dart';
+import 'package:balloon_pop_game/game_engine/stages/stage_boss_spawner.dart';
 import 'package:balloon_pop_game/gameplay/game_canvas.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/settings_service.dart';
@@ -49,13 +52,13 @@ void main() {
   test('Flame Stage 1-9 definitions match production normal-stage rules', () {
     expect(
       flamePreviewStages.map((stage) => stage.stage),
-      List<int>.generate(9, (index) => index + 1),
+      List<int>.generate(10, (index) => index + 1),
     );
     expect(
-      flamePreviewStages.map((stage) => stage.balloonCount),
+      flamePreviewStages.take(9).map((stage) => stage.balloonCount),
       List<int>.generate(9, (index) => index + 2),
     );
-    for (final stage in flamePreviewStages) {
+    for (final stage in flamePreviewStages.take(9)) {
       final production = StageConfig.forStage(stage.stage);
       expect(stage.balloonCount, production.balloonCount);
       expect(stage.timeLimitSeconds, production.duration.inSeconds);
@@ -73,13 +76,29 @@ void main() {
       expect(stage.scoreRule.remainingSecondMultiplier, 1);
       expect(stage.successCondition, StageSuccessCondition.allBalloonsPopped);
       expect(stage.failureCondition, StageFailureCondition.timeExpired);
-      expect(
-        stage.completion,
-        stage.stage == 9
-            ? StageCompletion.normalClear
-            : StageCompletion.nextStage,
-      );
+      expect(stage.completion, StageCompletion.nextStage);
     }
+  });
+
+  test('Flame Stage 10 definition matches the production boss rule', () {
+    final production = StageConfig.forStage(10);
+    final definition = flamePreviewStage(10);
+    final rule = definition.bossRule!;
+
+    expect(definition.type, FlameStageType.boss);
+    expect(definition.timeLimitSeconds, production.duration.inSeconds);
+    expect(rule.bossCount, production.bossCount);
+    expect(rule.maxHp, production.bossHp);
+    expect(rule.initialSpeed, production.bossSpeed);
+    expect(rule.maximumSpeed, closeTo(105 * math.pow(1.075, 9), 0.0001));
+    expect(rule.minimumSize, 210);
+    expect(rule.maximumSize, 270);
+    expect(rule.hitSizeMultiplier, 0.965);
+    expect(rule.hitSpeedMultiplier, 1.075);
+    expect(rule.defeatPoints, 10);
+    expect(rule.remainingSecondMultiplier, 1);
+    expect(rule.fakeBossCount, 0);
+    expect(definition.completion, StageCompletion.sectionClear);
   });
 
   test('stage spawner uses bounded in-playfield placement on narrow screens',
@@ -90,14 +109,14 @@ void main() {
     addTearDown(cache.dispose);
     final playfield = Vector2(288, 320);
     final balloons = spawner.create(
-      definition: flamePreviewStages.last,
+      definition: flamePreviewStage(9),
       playfieldSize: () => playfield,
       idBase: 3000,
       onPopRequested: (_) => true,
       spriteForColor: cache.imageFor,
     );
     final restarted = spawner.create(
-      definition: flamePreviewStages.last,
+      definition: flamePreviewStage(9),
       playfieldSize: () => playfield,
       idBase: 9000,
       onPopRequested: (_) => true,
@@ -149,6 +168,18 @@ void main() {
         cache.imageCount, BalloonSkinCatalog.defaultSkin.colorPalette.length);
     final color = BalloonSkinCatalog.defaultSkin.colorPalette.first;
     expect(cache.imageFor(color), same(cache.imageFor(color)));
+
+    final rule = flamePreviewStage(10).bossRule!;
+    final initialSize = rule.initialSizeFor(320);
+    await cache.prepareStage10Boss(initialSize: initialSize, rule: rule);
+    await cache.prepareStage10Boss(initialSize: initialSize, rule: rule);
+    expect(cache.bossPreloadCount, 1);
+    expect(cache.bossImageCount, rule.maxHp);
+    expect(
+      cache.bossImageCount,
+      lessThanOrEqualTo(BasicBalloonSpriteCache.maxBossSpriteCount),
+    );
+    expect(cache.bossImageForHp(10), same(cache.bossImageForHp(10)));
   });
 
   test('Stage 1 session atomically owns count score and clear phase', () {
@@ -179,11 +210,11 @@ void main() {
     expect(snapshots.last.phase, GameSessionPhase.stageClear);
   });
 
-  test('session advances Stage 1-9 and awards each clear bonus once', () {
+  test('session advances Stage 1-10 and awards boss score once', () {
     final session = GameSessionState();
     var nextId = 1;
     var expectedScore = 0;
-    for (var index = 0; index < flamePreviewStages.length; index++) {
+    for (var index = 0; index < 9; index++) {
       final definition = flamePreviewStages[index];
       final ids = List<int>.generate(
         definition.balloonCount,
@@ -204,14 +235,34 @@ void main() {
       expect(session.stageClearCount, index + 1);
       expect(
         result,
-        index == flamePreviewStages.length - 1
-            ? BalloonPopResult.normalCleared
-            : BalloonPopResult.stageCleared,
+        BalloonPopResult.stageCleared,
       );
     }
-    expect(session.isNormalClear, isTrue);
-    expect(session.snapshot.isNormalClear, isTrue);
     expect(session.stageClearCount, 9);
+    expect(session.score, 135);
+
+    final bossDefinition = flamePreviewStage(10);
+    session.beginNextStage(
+      bossDefinition,
+      const <int>[],
+      bossHpById: const <int, int>{100: 10},
+    );
+    expect(session.bossHp, 10);
+    for (var hit = 0; hit < 9; hit++) {
+      expect(session.hitBoss(100), BossHitResult.hit);
+    }
+    expect(session.score, 135);
+    expect(session.hitBoss(100), BossHitResult.bossCleared);
+    expect(session.bossHp, 0);
+    expect(session.score, 153);
+    expect(session.lastClearBonus, 8);
+    expect(session.hitBoss(100), BossHitResult.ignored);
+    expect(session.score, 153);
+    expect(session.isBossClear, isTrue);
+    session.completeSectionClear();
+    expect(session.isSectionClear, isTrue);
+    expect(session.snapshot.isSectionClear, isTrue);
+    expect(session.stageClearCount, 10);
 
     session.startNewGame(flamePreviewStages[0], const <int>[10, 11]);
     session.recordUpdate(flamePreviewStages[0].timeLimitSeconds.toDouble());
@@ -472,7 +523,79 @@ void main() {
     expect(harness.game.activeBalloonCount, 3);
   });
 
-  testWidgets('Stage 1 to 9 progresses once and ends in NORMAL CLEAR', (
+  testWidgets('Stage 10 boss accepts multitouch without movement HUD rebuild', (
+    tester,
+  ) async {
+    addTearDown(() {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    });
+    var hudBuilds = 0;
+    final harness = await _pumpFlamePreview(
+      tester,
+      onHudBuild: () => hudBuilds++,
+      stageDefinitions: <FlameStageDefinition>[flamePreviewStage(10)],
+    );
+    final boss = harness.game.bossComponents.single;
+    final rule = flamePreviewStage(10).bossRule!;
+
+    expect(harness.session.stage, 10);
+    expect(harness.session.bossHp, 10);
+    expect(harness.game.activeBossCount, 1);
+    expect(boss.diameter, inInclusiveRange(rule.minimumSize, rule.maximumSize));
+    expect(boss.displayColor, rule.colorForHp(10));
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+
+    final point = _bossComponentCenter(tester, boss);
+    final first = await tester.startGesture(point, pointer: 101);
+    final second = await tester.startGesture(point, pointer: 102);
+    await tester.pump();
+    expect(harness.session.bossHp, 8);
+    expect(boss.visualHp, 8);
+    expect(harness.session.score, 0);
+    expect(harness.session.phase, GameSessionPhase.playing);
+    await first.up();
+    await second.up();
+
+    final buildsBeforeMovement = hudBuilds;
+    final positionBeforeMovement = boss.position.clone();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(boss.position, isNot(positionBeforeMovement));
+    expect(hudBuilds, buildsBeforeMovement);
+
+    await tester.tap(
+      find.byKey(const ValueKey('flame-preview-pause-button')),
+    );
+    await tester.pump();
+    final pausedPosition = boss.position.clone();
+    final pausedSeconds = harness.session.secondsLeft;
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(boss.position, pausedPosition);
+    expect(harness.session.secondsLeft, pausedSeconds);
+    await tester.tap(
+      find.byKey(const ValueKey('flame-preview-pause-button')),
+    );
+    await tester.pump();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    final inactivePosition = boss.position.clone();
+    final inactiveSeconds = harness.session.secondsLeft;
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(boss.position, inactivePosition);
+    expect(harness.session.secondsLeft, inactiveSeconds);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(boss.position, isNot(inactivePosition));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    expect(harness.game.isShutdown, isTrue);
+    expect(harness.game.activeBossCount, 0);
+    expect(harness.session.isDisposed, isTrue);
+  });
+
+  testWidgets('Stage 1 to 10 progresses once and ends in SECTION CLEAR', (
     tester,
   ) async {
     final harness = await _pumpFlamePreview(tester);
@@ -497,29 +620,74 @@ void main() {
       expectedScore += definition.timeLimitSeconds;
       expect(harness.session.score, expectedScore);
       expect(harness.session.stageClearCount, stage);
-      if (stage < 9) {
-        expect(harness.session.phase, GameSessionPhase.stageClear);
-        await _pumpStageTransition(tester);
-      }
+      expect(harness.session.phase, GameSessionPhase.stageClear);
+      await _pumpStageTransition(tester);
     }
 
-    expect(harness.session.stage, 9);
-    expect(harness.session.phase, GameSessionPhase.normalClear);
-    expect(harness.session.isNormalClear, isTrue);
+    expect(harness.session.stage, 10);
+    expect(harness.session.phase, GameSessionPhase.playing);
     expect(harness.session.stageClearCount, 9);
     expect(harness.session.score, 135);
     expect(harness.game.activeBalloonCount, 0);
+    expect(harness.game.activeBossCount, 1);
     expect(harness.game.isComponentStateSynchronized, isTrue);
     expect(harness.game.spriteCache.preloadCount, 1);
-    expect(find.textContaining('NORMAL CLEAR'), findsOneWidget);
+    expect(harness.game.spriteCache.bossPreloadCount, 1);
+    expect(harness.game.spriteCache.bossImageCount, 10);
 
-    await _pumpFlameFrames(tester, 8);
+    final boss = harness.game.bossComponents.single;
+    final staleBoss = boss;
+    final initialSize = boss.diameter;
+    final initialColor = boss.displayColor;
+    final initialSpeed = boss.velocity.length;
+    for (var hit = 0; hit < 9; hit++) {
+      expect(boss.requestHit(), isTrue);
+      final expectedHp = 9 - hit;
+      expect(boss.currentHp, expectedHp);
+      expect(boss.visualHp, expectedHp);
+      expect(
+        boss.diameter,
+        closeTo(
+          stage10BossRule.sizeForHp(initialSize, expectedHp),
+          0.0001,
+        ),
+      );
+      expect(boss.displayColor, stage10BossRule.colorForHp(expectedHp));
+    }
+    expect(harness.session.bossHp, 1);
+    expect(boss.visualHp, 1);
+    expect(
+      boss.diameter,
+      closeTo(initialSize * math.pow(0.965, 9), 0.0001),
+    );
+    expect(
+      boss.velocity.length,
+      closeTo(initialSpeed * math.pow(1.075, 9), 0.0001),
+    );
+    expect(boss.displayColor, isNot(initialColor));
+    expect(boss.requestHit(), isTrue);
+    expect(boss.requestHit(), isFalse);
+    expect(harness.session.phase, GameSessionPhase.bossClear);
+    expect(harness.session.score, 153);
+    expect(harness.session.stageClearCount, 10);
+    expect(harness.game.activeBossCount, 0);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+    await tester.pump();
+    expect(find.textContaining('BOSS CLEAR'), findsOneWidget);
+
+    await _pumpFlameFrames(tester, 19);
+    expect(harness.session.phase, GameSessionPhase.bossClear);
+    await _pumpFlameFrames(tester, 2);
+    await tester.pump();
     expect(harness.game.activeEffectCount, 0);
     expect(harness.game.paused, isTrue);
+    expect(harness.session.phase, GameSessionPhase.sectionClear);
+    expect(find.textContaining('SECTION CLEAR'), findsOneWidget);
     final generationAtClear = harness.game.componentGeneration;
     await _pumpFlameFrames(tester, 8);
     expect(harness.game.componentGeneration, generationAtClear);
     expect(harness.game.activeBalloonCount, 0);
+    expect(harness.game.activeBossCount, 0);
 
     await tester.tap(
       find.byKey(const ValueKey('flame-preview-restart-button')),
@@ -531,7 +699,9 @@ void main() {
     expect(harness.session.score, 0);
     expect(harness.session.remainingBalloons, 2);
     expect(harness.game.activeBalloonCount, 2);
+    expect(harness.game.activeBossCount, 0);
     expect(harness.game.isComponentStateSynchronized, isTrue);
+    expect(staleBoss.requestHit(), isFalse);
   });
 
   testWidgets('failure restart resets Stage 1 and rejects stale components', (
@@ -725,6 +895,55 @@ void main() {
     expect(game.paused, isTrue);
     expect(game.activeBalloonCount, 2);
   });
+
+  test('Stage 10 boss turns, reflects, times out, and is cleaned up', () async {
+    final session = GameSessionState();
+    final game = PoppopGame(
+      session,
+      stageDefinitions: <FlameStageDefinition>[flamePreviewStage(10)],
+      stageBossSpawner: const StageBossSpawner(seed: 77),
+    );
+    game.onGameResize(Vector2(320, 480));
+    await game.onLoad();
+    final boss = game.bossComponents.single;
+    final initialVelocity = boss.velocity.clone();
+
+    for (var frame = 0; frame < 14; frame++) {
+      game.update(BalloonComponent.maxUpdateDelta);
+    }
+    expect(boss.velocity, isNot(initialVelocity));
+    expect(
+      boss.velocity.length,
+      closeTo(stage10BossRule.initialSpeed, 0.0001),
+    );
+
+    boss
+      ..position.setValues(-1, -1)
+      ..velocity.setValues(-10, -10)
+      ..update(0);
+    expect(boss.position, Vector2.zero());
+    expect(boss.velocity.x, greaterThan(0));
+    expect(boss.velocity.y, greaterThan(0));
+
+    for (var frame = 0; frame < 143; frame++) {
+      game.update(BalloonComponent.maxUpdateDelta);
+    }
+    expect(session.phase, GameSessionPhase.playing);
+    expect(boss.requestHit(), isTrue);
+    expect(game.activeEffectCount, 1);
+    game.processLifecycleEvents();
+
+    while (session.phase == GameSessionPhase.playing) {
+      game.update(BalloonComponent.maxUpdateDelta);
+    }
+    expect(session.phase, GameSessionPhase.failed);
+    expect(session.bossHp, 0);
+    expect(game.activeBossCount, 0);
+    expect(game.activeEffectCount, 0);
+    expect(game.isComponentStateSynchronized, isTrue);
+    expect(boss.requestHit(), isFalse);
+    game.shutdown();
+  });
 }
 
 class _FlamePreviewHarness {
@@ -737,6 +956,7 @@ class _FlamePreviewHarness {
 Future<_FlamePreviewHarness> _pumpFlamePreview(
   WidgetTester tester, {
   VoidCallback? onHudBuild,
+  List<FlameStageDefinition> stageDefinitions = flamePreviewStages,
 }) async {
   late PoppopGame game;
   late GameSessionState session;
@@ -747,7 +967,10 @@ Future<_FlamePreviewHarness> _pumpFlamePreview(
         onHudBuild: onHudBuild,
         gameFactory: (createdSession) {
           session = createdSession;
-          return game = PoppopGame(createdSession);
+          return game = PoppopGame(
+            createdSession,
+            stageDefinitions: stageDefinitions,
+          );
         },
       ),
     ),
@@ -758,6 +981,20 @@ Future<_FlamePreviewHarness> _pumpFlamePreview(
 }
 
 Offset _componentCenter(WidgetTester tester, BalloonComponent component) {
+  final gameOrigin = tester.getTopLeft(
+    find.byKey(const ValueKey('flame-preview-game-widget')),
+  );
+  return gameOrigin +
+      Offset(
+        component.position.x + component.size.x / 2,
+        component.position.y + component.size.y / 2,
+      );
+}
+
+Offset _bossComponentCenter(
+  WidgetTester tester,
+  BossBalloonComponent component,
+) {
   final gameOrigin = tester.getTopLeft(
     find.byKey(const ValueKey('flame-preview-game-widget')),
   );

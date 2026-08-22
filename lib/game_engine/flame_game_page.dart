@@ -197,11 +197,14 @@ class _PreviewHud extends StatelessWidget {
             builder: (context, child) {
               onBuild?.call();
               final snapshot = sessionState.snapshot;
+              final bossStatus = snapshot.bossMaxHp > 0
+                  ? '  •  BOSS HP ${snapshot.bossHp}/${snapshot.bossMaxHp}'
+                  : '';
               return Text(
                 'STAGE ${snapshot.stage}  •  SCORE ${snapshot.score}  •  '
                 'LEFT ${snapshot.remainingBalloons}  •  '
                 'TIME ${snapshot.secondsLeft}  •  '
-                '${_phaseLabel(snapshot.phase, manuallyPaused)}',
+                '${_phaseLabel(snapshot.phase, manuallyPaused)}$bossStatus',
                 key: const ValueKey('flame-preview-status'),
                 style: const TextStyle(
                   color: Color(0xFFB8E6FF),
@@ -222,7 +225,8 @@ class _PreviewHud extends StatelessWidget {
       GameSessionPhase.ready => 'READY',
       GameSessionPhase.playing => 'PLAYING',
       GameSessionPhase.stageClear => 'STAGE CLEAR',
-      GameSessionPhase.normalClear => 'NORMAL CLEAR',
+      GameSessionPhase.bossClear => 'BOSS CLEAR',
+      GameSessionPhase.sectionClear => 'SECTION CLEAR',
       GameSessionPhase.failed => 'TIME UP',
       GameSessionPhase.paused => 'PAUSED',
       GameSessionPhase.disposed => 'STOPPED',

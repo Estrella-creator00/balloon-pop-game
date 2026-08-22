@@ -7,19 +7,22 @@ import 'package:flame/game.dart';
 
 import 'components/balloon_component.dart';
 import 'components/basic_pop_effect.dart';
+import 'components/boss_balloon_component.dart';
 import 'components/game_diagnostics_component.dart';
 import 'game_session_state.dart';
 import 'rendering/basic_balloon_sprite_cache.dart';
 import 'session/game_session_snapshot.dart';
 import 'stages/flame_stage_definition.dart';
 import 'stages/stage_balloon_spawner.dart';
+import 'stages/stage_boss_spawner.dart';
 
-/// Flame root for the isolated Stage 1-9 preview loop.
+/// Flame root for the isolated Stage 1-10 preview loop.
 class PoppopGame extends FlameGame {
   PoppopGame(
     this.sessionState, {
     this.stageDefinitions = flamePreviewStages,
     this.stageSpawner = const StageBalloonSpawner(),
+    this.stageBossSpawner = const StageBossSpawner(),
     BasicBalloonSpriteCache? spriteCache,
   })  : spriteCache = spriteCache ?? BasicBalloonSpriteCache(),
         assert(stageDefinitions.isNotEmpty) {
@@ -29,12 +32,15 @@ class PoppopGame extends FlameGame {
   }
 
   static const double stageTransitionDuration = 0.4;
+  static const double bossClearTransitionDuration = 1;
 
   final GameSessionState sessionState;
   final List<FlameStageDefinition> stageDefinitions;
   final StageBalloonSpawner stageSpawner;
+  final StageBossSpawner stageBossSpawner;
   final BasicBalloonSpriteCache spriteCache;
   final Map<int, BalloonComponent> _balloons = <int, BalloonComponent>{};
+  final Map<int, BossBalloonComponent> _bosses = <int, BossBalloonComponent>{};
   final Set<BasicPopEffect> _popEffects = <BasicPopEffect>{};
   bool _shutdown = false;
   bool _hostWantsRunning = true;
@@ -49,13 +55,16 @@ class PoppopGame extends FlameGame {
   bool get isStageTransitionInFlight => _stageTransitionInFlight;
   double get lastAppliedDelta => _lastAppliedDelta;
   int get activeBalloonCount => _balloons.length;
+  int get activeBossCount => _bosses.length;
   int get activeEffectCount => _popEffects.length;
   int get activeParticleCount =>
       _popEffects.length * BasicPopEffect.particleCount;
   int get componentGeneration => _componentGeneration;
   Iterable<BalloonComponent> get balloonComponents => _balloons.values;
+  Iterable<BossBalloonComponent> get bossComponents => _bosses.values;
   bool get isComponentStateSynchronized =>
-      sessionState.matchesActiveComponentIds(_balloons.keys);
+      sessionState.matchesActiveComponentIds(_balloons.keys) &&
+      sessionState.matchesActiveBossComponentIds(_bosses.keys);
 
   @override
   Color backgroundColor() => const Color(0xFF14243A);
@@ -65,6 +74,16 @@ class PoppopGame extends FlameGame {
     await super.onLoad();
     if (_shutdown) return;
     await spriteCache.preload();
+    if (_shutdown) return;
+    for (final definition in stageDefinitions) {
+      final rule = definition.bossRule;
+      if (rule == null) continue;
+      await spriteCache.prepareStage10Boss(
+        initialSize: rule.initialSizeFor(min(size.x, size.y)),
+        rule: rule,
+      );
+      break;
+    }
     if (_shutdown) return;
     camera.viewfinder
       ..anchor = Anchor.topLeft
@@ -95,7 +114,14 @@ class PoppopGame extends FlameGame {
             !_stageTransitionInFlight) {
           unawaited(_advanceToNextStage());
         }
-      case GameSessionPhase.normalClear:
+      case GameSessionPhase.bossClear:
+        super.update(clampedDt);
+        _stageTransitionElapsed += clampedDt;
+        if (_stageTransitionElapsed >= bossClearTransitionDuration) {
+          sessionState.completeSectionClear();
+          _stageTransitionElapsed = 0;
+        }
+      case GameSessionPhase.sectionClear:
         if (_popEffects.isNotEmpty) {
           super.update(clampedDt);
         } else {
@@ -105,7 +131,10 @@ class PoppopGame extends FlameGame {
       case GameSessionPhase.playing:
         super.update(clampedDt);
         sessionState.recordUpdate(clampedDt);
-        if (sessionState.phase == GameSessionPhase.failed) pauseEngine();
+        if (sessionState.phase == GameSessionPhase.failed) {
+          _removeBossComponents();
+          pauseEngine();
+        }
       case GameSessionPhase.ready:
       case GameSessionPhase.paused:
       case GameSessionPhase.failed:
@@ -143,28 +172,70 @@ class PoppopGame extends FlameGame {
     _removeGameplayComponents();
     _stageTransitionElapsed = 0;
     final generation = ++_componentGeneration;
-    final created = stageSpawner.create(
-      definition: definition,
-      playfieldSize: () => size,
-      idBase: generation * 1000,
-      onPopRequested: _handlePopRequest,
-      spriteForColor: spriteCache.imageFor,
-    );
-    await world.addAll(created);
+    final createdBalloons = <BalloonComponent>[];
+    final createdBosses = <BossBalloonComponent>[];
+    if (definition.isBoss) {
+      final rule = definition.bossRule!;
+      final initialSize = rule.initialSizeFor(min(size.x, size.y));
+      await spriteCache.prepareStage10Boss(
+        initialSize: initialSize,
+        rule: rule,
+      );
+      createdBosses.addAll(
+        stageBossSpawner.create(
+          definition: definition,
+          generation: generation,
+          idBase: generation * 1000,
+          playfieldSize: () => size,
+          readHp: sessionState.bossHpFor,
+          onHitRequested: _handleBossHitRequest,
+          spriteForHp: spriteCache.bossImageForHp,
+        ),
+      );
+      await world.addAll(createdBosses);
+    } else {
+      createdBalloons.addAll(
+        stageSpawner.create(
+          definition: definition,
+          playfieldSize: () => size,
+          idBase: generation * 1000,
+          onPopRequested: _handlePopRequest,
+          spriteForColor: spriteCache.imageFor,
+        ),
+      );
+      await world.addAll(createdBalloons);
+    }
     if (_shutdown || operation != _operationEpoch) {
-      for (final balloon in created) {
-        balloon.removeFromParent();
+      for (final component in <PositionComponent>[
+        ...createdBalloons,
+        ...createdBosses,
+      ]) {
+        component.removeFromParent();
       }
       processLifecycleEvents();
       return;
     }
     _balloons.addEntries(
-      created.map((balloon) => MapEntry(balloon.balloonId, balloon)),
+      createdBalloons.map((balloon) => MapEntry(balloon.balloonId, balloon)),
     );
+    _bosses.addEntries(
+      createdBosses.map((boss) => MapEntry(boss.bossId, boss)),
+    );
+    final bossHpById = <int, int>{
+      for (final boss in createdBosses) boss.bossId: boss.maxHp,
+    };
     if (resetSession) {
-      sessionState.startNewGame(definition, _balloons.keys);
+      sessionState.startNewGame(
+        definition,
+        _balloons.keys,
+        bossHpById: bossHpById,
+      );
     } else {
-      sessionState.beginNextStage(definition, _balloons.keys);
+      sessionState.beginNextStage(
+        definition,
+        _balloons.keys,
+        bossHpById: bossHpById,
+      );
     }
   }
 
@@ -188,6 +259,36 @@ class PoppopGame extends FlameGame {
 
   void _handleEffectFinished(BasicPopEffect effect) {
     _popEffects.remove(effect);
+  }
+
+  bool _handleBossHitRequest(BossBalloonComponent boss) {
+    if (_shutdown || !identical(_bosses[boss.bossId], boss)) return false;
+    final center = boss.position + boss.size / 2;
+    final hitColor = boss.displayColor;
+    final result = sessionState.hitBoss(boss.bossId);
+    if (result == BossHitResult.ignored) return false;
+
+    final effect = BasicPopEffect(
+      center: center,
+      color: hitColor,
+      onFinished: _handleEffectFinished,
+    );
+    _popEffects.add(effect);
+    world.add(effect);
+
+    if (result == BossHitResult.bossCleared) {
+      _bosses.remove(boss.bossId);
+      boss.markDefeated();
+      boss.removeFromParent();
+      _stageTransitionElapsed = 0;
+    } else {
+      final hp = sessionState.bossHpFor(boss.bossId);
+      boss.applyRegisteredHit(
+        hp: hp,
+        sprite: spriteCache.bossImageForHp(hp),
+      );
+    }
+    return true;
   }
 
   Future<void> restartGame({bool resume = true}) async {
@@ -218,7 +319,25 @@ class PoppopGame extends FlameGame {
     for (final effect in _popEffects) {
       effect.removeFromParent();
     }
+    for (final boss in _bosses.values) {
+      boss.markDefeated();
+      boss.removeFromParent();
+    }
     _balloons.clear();
+    _bosses.clear();
+    _popEffects.clear();
+    processLifecycleEvents();
+  }
+
+  void _removeBossComponents() {
+    for (final boss in _bosses.values) {
+      boss.markDefeated();
+      boss.removeFromParent();
+    }
+    _bosses.clear();
+    for (final effect in _popEffects) {
+      effect.removeFromParent();
+    }
     _popEffects.clear();
     processLifecycleEvents();
   }
@@ -239,6 +358,8 @@ class PoppopGame extends FlameGame {
         'STAGE ${sessionState.stage}  SCORE ${sessionState.score}  '
         'TIME ${sessionState.secondsLeft}\n'
         'BALLOONS $activeBalloonCount / ${sessionState.remainingBalloons}  '
+        'BOSSES $activeBossCount  '
+        'HP ${sessionState.bossHp}/${sessionState.bossMaxHp}\n'
         'EFFECTS $activeEffectCount  PARTICLES $activeParticleCount\n'
         'PHASE ${sessionState.phase.name}';
   }
@@ -253,7 +374,7 @@ class PoppopGame extends FlameGame {
   void resumePreview() {
     if (_shutdown) return;
     _hostWantsRunning = true;
-    if (sessionState.phase == GameSessionPhase.normalClear ||
+    if (sessionState.phase == GameSessionPhase.sectionClear ||
         sessionState.phase == GameSessionPhase.failed) {
       return;
     }
