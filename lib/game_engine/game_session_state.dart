@@ -98,10 +98,18 @@ class GameSessionState extends ChangeNotifier {
   }) {
     if (_disposed ||
         (_phase != GameSessionPhase.stageClear &&
-            _phase != GameSessionPhase.bossClear)) {
+            _phase != GameSessionPhase.bossClear &&
+            _phase != GameSessionPhase.loading)) {
       return;
     }
     _beginStage(definition, targetHp, fakeIds, bossHpById, generation);
+  }
+
+  void beginLoading() {
+    if (_disposed || _phase == GameSessionPhase.loading) return;
+    _clearLogicalObjects();
+    _phase = GameSessionPhase.loading;
+    notifyListeners();
   }
 
   void _beginStage(

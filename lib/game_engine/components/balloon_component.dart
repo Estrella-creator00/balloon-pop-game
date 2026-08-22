@@ -30,13 +30,18 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     required this.floatPhase,
     required this.floatPower,
     required this.firstHitSizeMultiplier,
+    this.preserveSpriteAspectRatio = false,
+    this.breatheIdle = false,
+    double? spriteOpacity,
   })  : _sprite = sprite,
         _visualHp = maxHp,
         _sourceRect = Rect.fromLTWH(
             0, 0, sprite.width.toDouble(), sprite.height.toDouble()),
         _destinationRect = Rect.fromLTWH(0, 0, balloonSize.x, balloonSize.y),
         super(position: position, size: balloonSize, priority: balloonId) {
-    if (isFake) _spritePaint.color = const Color(0x59FFFFFF);
+    final opacity = spriteOpacity ?? (isFake ? 0.35 : 1);
+    _spritePaint.color = Color.fromRGBO(255, 255, 255, opacity);
+    _refreshDestinationRect();
   }
 
   static const double maxUpdateDelta = 0.05;
@@ -55,6 +60,8 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   final BalloonSpriteResolver spriteResolver;
   final double floatPower;
   final double firstHitSizeMultiplier;
+  final bool preserveSpriteAspectRatio;
+  final bool breatheIdle;
   final Paint _spritePaint = Paint()
     ..isAntiAlias = true
     ..filterQuality = FilterQuality.medium;
@@ -67,6 +74,12 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   bool _removed = false;
   double floatPhase;
   double _lastAppliedDelta = 0;
+
+  static final List<double> _breatheScale = List<double>.generate(
+    256,
+    (index) => 1 + math.sin(index * math.pi * 2 / 256) * 0.018,
+    growable: false,
+  );
 
   int get currentHp => readHp(balloonId);
   int get visualHp => _visualHp;
@@ -109,18 +122,58 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     size.setValues(width, width + stringHeight);
     _sourceRect = Rect.fromLTWH(
         0, 0, _sprite.width.toDouble(), _sprite.height.toDouble());
-    _destinationRect = Rect.fromLTWH(0, 0, size.x, size.y);
+    _refreshDestinationRect();
     _reflectInsidePlayfield();
+  }
+
+  void _refreshDestinationRect() {
+    if (!preserveSpriteAspectRatio) {
+      _destinationRect = Rect.fromLTWH(0, 0, size.x, size.y);
+      return;
+    }
+    final sourceAspect = _sprite.width / _sprite.height;
+    final targetAspect = size.x / size.y;
+    final width = sourceAspect > targetAspect ? size.x : size.y * sourceAspect;
+    final height = sourceAspect > targetAspect ? size.x / sourceAspect : size.y;
+    _destinationRect = Rect.fromLTWH(
+      (size.x - width) / 2,
+      (size.y - height) / 2,
+      width,
+      height,
+    );
   }
 
   void markRemoved() => _removed = true;
 
   @override
-  void render(Canvas canvas) => canvas.drawImageRect(
-      _sprite, _sourceRect, _destinationRect, _spritePaint);
+  void render(Canvas canvas) {
+    if (!breatheIdle) {
+      canvas.drawImageRect(
+          _sprite, _sourceRect, _destinationRect, _spritePaint);
+      return;
+    }
+    final index = ((floatPhase / (math.pi * 2) * 256).floor()) & 255;
+    final scale = _breatheScale[index];
+    canvas
+      ..save()
+      ..translate(size.x / 2, size.y / 2)
+      ..scale(scale, scale)
+      ..translate(-size.x / 2, -size.y / 2)
+      ..drawImageRect(_sprite, _sourceRect, _destinationRect, _spritePaint)
+      ..restore();
+  }
 
   @override
   void onTapDown(TapDownEvent event) => requestHit();
+
+  @override
+  bool containsLocalPoint(Vector2 point) {
+    if (!preserveSpriteAspectRatio) return super.containsLocalPoint(point);
+    final hitBounds = breatheIdle
+        ? _destinationRect.inflate(size.x * 0.02)
+        : _destinationRect;
+    return hitBounds.contains(Offset(point.x, point.y));
+  }
 
   bool requestHit() {
     if (_removed || _hitInProgress) return false;

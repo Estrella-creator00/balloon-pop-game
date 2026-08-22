@@ -1,7 +1,13 @@
+import 'dart:ui' as ui;
+
+import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/game_engine/components/balloon_component.dart';
 import 'package:balloon_pop_game/game_engine/components/basic_pop_effect.dart';
 import 'package:balloon_pop_game/game_engine/flame_game_page.dart';
 import 'package:balloon_pop_game/game_engine/game_session_state.dart';
+import 'package:balloon_pop_game/game_engine/legendary/flame_preview_skin.dart';
+import 'package:balloon_pop_game/game_engine/legendary/legendary_skin_definition.dart';
+import 'package:balloon_pop_game/game_engine/legendary/legendary_sprite_cache.dart';
 import 'package:balloon_pop_game/game_engine/poppop_engine_mode.dart';
 import 'package:balloon_pop_game/game_engine/poppop_game.dart';
 import 'package:balloon_pop_game/game_engine/rendering/basic_balloon_sprite_cache.dart';
@@ -42,6 +48,81 @@ void main() {
     expect(flamePreviewStageFromUri(Uri.parse('https://x.test/?stage=31')), 1);
     expect(
         flamePreviewStageFromUri(Uri.parse('https://x.test/?stage=nope')), 1);
+    expect(flamePreviewSkinFromUri(Uri.parse('https://x.test/')),
+        FlamePreviewSkin.basic);
+    expect(
+        flamePreviewSkinFromUri(
+            Uri.parse('https://x.test/?skin=balloon-lumen')),
+        FlamePreviewSkin.gemi);
+    expect(flamePreviewSkinFromUri(Uri.parse('https://x.test/?skin=gemi')),
+        FlamePreviewSkin.gemi);
+    expect(flamePreviewSkinFromUri(Uri.parse('https://x.test/?skin=shushu')),
+        FlamePreviewSkin.shushu);
+    expect(flamePreviewSkinFromUri(Uri.parse('https://x.test/?skin=unknown')),
+        FlamePreviewSkin.basic);
+  });
+
+  test('legendary definitions reuse production catalog assets', () {
+    final gemi = legendaryDefinitionFor(FlamePreviewSkin.gemi);
+    final shushu = legendaryDefinitionFor(FlamePreviewSkin.shushu);
+    expect(gemi.catalog.id, 'balloon-lumen');
+    expect(gemi.catalog.rarity, BalloonRarity.legendary);
+    expect(gemi.catalog.runtimeColorAssetPaths, hasLength(4));
+    expect(gemi.catalog.runtimeFakeColorAssetPaths, hasLength(4));
+    expect(gemi.catalog.runtimeShardAssetPaths, hasLength(4));
+    expect(gemi.backgroundAsset, 'assets/images/gemi_background_mobile.png');
+    expect(shushu.catalog.id, 'balloon-chouchou');
+    expect(shushu.catalog.rarity, BalloonRarity.legendary);
+    expect(shushu.catalog.assetPath, 'assets/images/balloon_shushu_asset.png');
+    expect(shushu.cleansTransparentMatte, isTrue);
+    expect(shushu.idleStyle, LegendaryIdleStyle.breathe);
+  });
+
+  testWidgets('SHUSHU production asset decodes with transparent matte cleanup',
+      (tester) async {
+    final cache = LegendarySpriteCache(
+      legendaryDefinitionFor(FlamePreviewSkin.shushu),
+    );
+    addTearDown(cache.dispose);
+    await tester.runAsync(() => cache.prepareForStage(boss: false));
+    final image = cache.bodyImage(const Color(0xFFD99542), fake: false);
+    final data = await tester.runAsync(
+      () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+    );
+    expect(data, isNotNull);
+    final pixels = data!.buffer.asUint8List();
+    var transparentRgbViolations = 0;
+    for (var offset = 0; offset < pixels.length; offset += 4) {
+      if (pixels[offset + 3] == 0 &&
+          (pixels[offset] != 0 ||
+              pixels[offset + 1] != 0 ||
+              pixels[offset + 2] != 0)) {
+        transparentRgbViolations++;
+      }
+    }
+    expect(transparentRgbViolations, 0);
+    expect(cache.matteCleanupCount, 1);
+    expect(cache.imageCount, 6);
+    expect(cache.estimatedRgbaBytes, lessThan(8 * 1024 * 1024));
+  });
+
+  testWidgets('GEMI production assets stay inside the selected profile budget',
+      (tester) async {
+    final cache = LegendarySpriteCache(
+      legendaryDefinitionFor(FlamePreviewSkin.gemi),
+    );
+    addTearDown(cache.dispose);
+    await tester.runAsync(() => cache.prepareForStage(boss: false));
+    expect(cache.bodyImageCount, 8);
+    expect(cache.staticImageCount, 8);
+    expect(cache.imageCount, 16);
+    expect(cache.estimatedRgbaBytes, lessThan(20 * 1024 * 1024));
+    final normalBytes = cache.estimatedRgbaBytes;
+    await tester.runAsync(() => cache.prepareForStage(boss: true));
+    expect(cache.bodyImageCount, 8);
+    expect(cache.imageCount, 16);
+    expect(cache.estimatedRgbaBytes, lessThan(24 * 1024 * 1024));
+    expect(cache.estimatedRgbaBytes, greaterThanOrEqualTo(normalBytes));
   });
 
   test('Flame Stage 1-30 definitions match production', () {
@@ -353,6 +434,189 @@ void main() {
     expect(harness.session.score, 0);
   });
 
+  testWidgets('GEMI Stage 1 has two bodies background and synchronized ids',
+      (tester) async {
+    final harness = await _pumpPreview(
+      tester,
+      skin: FlamePreviewSkin.gemi,
+    );
+    expect(harness.game.selectedSkin, FlamePreviewSkin.gemi);
+    expect(harness.game.activeBalloonCount, 2);
+    expect(harness.session.remainingBalloons, 2);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+    expect(harness.game.hasLegendaryBackground, isTrue);
+    expect(harness.game.skinRuntime.legendaryCache!.bodyImageCount, 8);
+    expect(harness.game.activeCacheImageCount, lessThanOrEqualTo(16));
+  });
+
+  testWidgets('GEMI two-hit shards are bounded and become fully idle',
+      (tester) async {
+    final harness = await _pumpPreview(
+      tester,
+      initialStage: 11,
+      skin: FlamePreviewSkin.gemi,
+    );
+    final balloon = harness.game.balloonComponents.first;
+    expect(balloon.requestHit(), isTrue);
+    expect(balloon.visualHp, 1);
+    expect(harness.session.remainingBalloons, 2);
+    expect(harness.game.activeEffectCount, 1);
+    expect(harness.game.activeParticleCount, lessThanOrEqualTo(16));
+    expect(harness.game.isBackgroundEffectActive, isTrue);
+    for (var frame = 0; frame < 28; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(harness.game.activeEffectCount, 0);
+    expect(harness.game.activeParticleCount, 0);
+    expect(harness.game.isBackgroundEffectActive, isFalse);
+  });
+
+  testWidgets('SHUSHU uses cleaned cached body and breathe for normal and fake',
+      (tester) async {
+    final harness = await _pumpPreview(
+      tester,
+      initialStage: 21,
+      skin: FlamePreviewSkin.shushu,
+    );
+    expect(harness.game.selectedSkin, FlamePreviewSkin.shushu);
+    expect(harness.game.activeBalloonCount, 4);
+    expect(harness.session.remainingBalloons, 2);
+    expect(harness.session.fakeCount, 2);
+    expect(harness.game.balloonComponents.every((b) => b.breatheIdle), isTrue);
+    final body = harness.game.balloonComponents.first;
+    expect(body.containsLocalPoint(body.size / 2), isTrue);
+    expect(body.containsLocalPoint(Vector2.zero()), isFalse);
+    expect(harness.game.skinRuntime.legendaryCache!.bodyImageCount, 1);
+    final cache = harness.game.skinRuntime.legendaryCache!;
+    expect(cache.matteCleanupCount, 1);
+    expect(cache.loadedAssetPaths,
+        contains('assets/images/balloon_shushu_asset.png'));
+  });
+
+  testWidgets('legendary Boss and Stage 30 retain shared gameplay rules',
+      (tester) async {
+    final gemi = await _pumpPreview(
+      tester,
+      initialStage: 20,
+      skin: FlamePreviewSkin.gemi,
+    );
+    expect(gemi.game.activeBossCount, 2);
+    expect(gemi.game.bossComponents.every((b) => b.drawHealthBarSeparately),
+        isTrue);
+    gemi.game.startBossStage();
+    expect(gemi.game.bossComponents.first.requestHit(), isTrue);
+    expect(gemi.session.bossHp, 29);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    final shushu = await _pumpPreview(
+      tester,
+      initialStage: 30,
+      skin: FlamePreviewSkin.shushu,
+      swapRoll: () => 0,
+    );
+    shushu.game.startBossStage();
+    final real = shushu.game.bossComponents.singleWhere((b) => !b.isFake);
+    expect(real.breatheIdle, isTrue);
+    expect(real.containsLocalPoint(real.size / 2), isTrue);
+    expect(real.containsLocalPoint(Vector2.zero()), isFalse);
+    expect(real.requestHit(), isTrue);
+    expect(shushu.session.bossHp, 11);
+    expect(shushu.game.activeBossCount, 2);
+  });
+
+  testWidgets(
+      'preview skin selector releases old cache and restarts same stage',
+      (tester) async {
+    ProgressStorage.setEquippedProductId('balloon', 'balloon-wari');
+    final harness = await _pumpPreview(
+      tester,
+      initialStage: 11,
+      skin: FlamePreviewSkin.gemi,
+    );
+    final stale = harness.game.balloonComponents.first;
+    final oldCache = harness.game.skinRuntime.legendaryCache!;
+    await tester.tap(find.byKey(const ValueKey('flame-preview-skin-selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SHUSHU').last);
+    await tester.pump();
+    for (var frame = 0;
+        frame < 10 &&
+            (harness.game.selectedSkin != FlamePreviewSkin.shushu ||
+                harness.session.phase == GameSessionPhase.loading);
+        frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(oldCache.isDisposed, isTrue);
+    expect(harness.game.selectedSkin, FlamePreviewSkin.shushu);
+    expect(harness.session.stage, 11);
+    expect(harness.session.score, 0);
+    expect(harness.session.remainingBalloons, 2);
+    expect(harness.game.activeBalloonCount, 2);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+    expect(stale.requestHit(), isFalse);
+    expect(ProgressStorage.equippedProductId('balloon'), 'balloon-wari');
+    expect(find.byKey(const ValueKey('flame-preview-skin-selector')),
+        findsOneWidget);
+  });
+
+  testWidgets('legendary body profiles replace rather than accumulate',
+      (tester) async {
+    final harness = await _pumpPreview(
+      tester,
+      initialStage: 19,
+      skin: FlamePreviewSkin.gemi,
+    );
+    final cache = harness.game.skinRuntime.legendaryCache!;
+    expect(cache.bodyProfile, LegendaryBodyProfile.normal);
+    expect(cache.imageCount, 16);
+    await harness.game.jumpToStage(20);
+    await tester.pump();
+    expect(identical(cache, harness.game.skinRuntime.legendaryCache), isTrue);
+    expect(cache.bodyProfile, LegendaryBodyProfile.boss);
+    expect(cache.bodyImageCount, 8);
+    expect(cache.imageCount, 16);
+    await harness.game.jumpToStage(21);
+    await tester.pump();
+    expect(cache.bodyProfile, LegendaryBodyProfile.normal);
+    expect(cache.imageCount, 16);
+  });
+
+  testWidgets('legendary effects stay globally bounded under rapid Boss hits',
+      (tester) async {
+    final harness = await _pumpPreview(
+      tester,
+      initialStage: 20,
+      skin: FlamePreviewSkin.shushu,
+    );
+    harness.game.startBossStage();
+    final bosses = harness.game.bossComponents.toList();
+    for (var hit = 0; hit < 14; hit++) {
+      expect(bosses[0].requestHit(), isTrue);
+      expect(bosses[1].requestHit(), isTrue);
+    }
+    expect(harness.game.activeEffectCount, lessThanOrEqualTo(12));
+    expect(harness.game.activeParticleCount, lessThanOrEqualTo(192));
+    expect(harness.session.bossHp, 2);
+  });
+
+  testWidgets('GEMI Stage Clear preserves background and advances exactly once',
+      (tester) async {
+    final harness = await _pumpPreview(
+      tester,
+      skin: FlamePreviewSkin.gemi,
+    );
+    await _hitEveryBalloon(harness.game);
+    expect(harness.session.phase, GameSessionPhase.stageClear);
+    expect(harness.session.remainingBalloons, 0);
+    await _pumpTransition(tester, .5);
+    expect(harness.session.stage, 2);
+    expect(harness.session.remainingBalloons, 3);
+    expect(harness.game.activeBalloonCount, 3);
+    expect(harness.game.hasLegendaryBackground, isTrue);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+  });
+
   testWidgets('Boss Ready freezes time movement and input until START',
       (tester) async {
     final harness = await _pumpPreview(tester, initialStage: 10);
@@ -577,23 +841,30 @@ Future<_Harness> _pumpPreview(
   int initialStage = 1,
   VoidCallback? onHudBuild,
   double Function()? swapRoll,
+  FlamePreviewSkin skin = FlamePreviewSkin.basic,
 }) async {
   late PoppopGame game;
   late GameSessionState session;
   await tester.pumpWidget(MaterialApp(
     home: FlameGamePage(
       initialStage: initialStage,
+      initialSkin: skin,
       onExit: () {},
       onHudBuild: onHudBuild,
       gameFactory: (created) {
         session = created;
         return game = PoppopGame(created,
-            initialStage: initialStage, stage30SwapRoll: swapRoll);
+            initialStage: initialStage,
+            initialSkin: skin,
+            legendaryImageLoader: _testLegendaryImageLoader,
+            stage30SwapRoll: swapRoll);
       },
     ),
   ));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 100));
+  await game.loaded;
+  await tester.pump();
   return _Harness(game, session);
 }
 
@@ -615,4 +886,22 @@ Future<void> _pumpTransition(WidgetTester tester, double seconds) async {
   for (var i = 0; i < frames; i++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
+}
+
+Future<ui.Image> _testLegendaryImageLoader(
+  String path,
+  int targetWidth,
+  bool cleanTransparentMatte,
+) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  final height = (targetWidth * 1.4).round();
+  canvas.drawRect(
+    ui.Rect.fromLTWH(0, 0, targetWidth.toDouble(), height.toDouble()),
+    Paint()..color = const Color(0xFFFFFFFF),
+  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(targetWidth, height);
+  picture.dispose();
+  return image;
 }

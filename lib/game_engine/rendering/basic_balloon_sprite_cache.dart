@@ -163,6 +163,21 @@ class BasicBalloonSpriteCache {
     return image;
   }
 
+  /// Releases the active profile while keeping this cache reusable when the
+  /// preview switches back from a legendary skin.
+  void releaseImages() {
+    if (_disposed) return;
+    for (final image in <ui.Image>{..._images.values, ..._bossImages.values}) {
+      image.dispose();
+    }
+    _images.clear();
+    _bossImages.clear();
+    _preloadFuture = null;
+    _bossPreloadFuture = null;
+    _bossInitialSize = null;
+    _bossStage = null;
+  }
+
   static String _normalKey(ui.Color color, int hp, int maxHp, bool fake) =>
       hp == maxHp && !fake
           ? '${color.toARGB32()}:1:1:false'
@@ -179,14 +194,7 @@ class BasicBalloonSpriteCache {
 
   void dispose() {
     if (_disposed) return;
+    releaseImages();
     _disposed = true;
-    for (final image in _images.values) {
-      image.dispose();
-    }
-    for (final image in _bossImages.values) {
-      image.dispose();
-    }
-    _images.clear();
-    _bossImages.clear();
   }
 }

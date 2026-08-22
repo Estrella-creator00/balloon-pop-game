@@ -9,7 +9,12 @@ import 'components/balloon_component.dart';
 import 'components/basic_pop_effect.dart';
 import 'components/boss_balloon_component.dart';
 import 'components/game_diagnostics_component.dart';
+import 'components/legendary_background_component.dart';
+import 'components/legendary_burst_effect.dart';
 import 'game_session_state.dart';
+import 'legendary/flame_preview_skin.dart';
+import 'legendary/flame_skin_runtime.dart';
+import 'legendary/legendary_sprite_cache.dart';
 import 'rendering/basic_balloon_sprite_cache.dart';
 import 'session/game_session_snapshot.dart';
 import 'stages/flame_stage_definition.dart';
@@ -21,9 +26,11 @@ class PoppopGame extends FlameGame {
     this.sessionState, {
     List<FlameStageDefinition>? stageDefinitions,
     this.initialStage = 1,
+    this.initialSkin = FlamePreviewSkin.basic,
     this.stageSpawner = const StageBalloonSpawner(),
     this.stageBossSpawner = const StageBossSpawner(),
     this.stage30SwapRoll,
+    this.legendaryImageLoader,
     BasicBalloonSpriteCache? spriteCache,
   })  : stageDefinitions = stageDefinitions ?? flamePreviewStages,
         spriteCache = spriteCache ?? BasicBalloonSpriteCache(),
@@ -37,14 +44,27 @@ class PoppopGame extends FlameGame {
   final GameSessionState sessionState;
   final List<FlameStageDefinition> stageDefinitions;
   final int initialStage;
+  final FlamePreviewSkin initialSkin;
   final StageBalloonSpawner stageSpawner;
   final StageBossSpawner stageBossSpawner;
   final double Function()? stage30SwapRoll;
+  final LegendaryImageLoader? legendaryImageLoader;
   final BasicBalloonSpriteCache spriteCache;
   final Map<int, BalloonComponent> _balloons = <int, BalloonComponent>{};
   final Map<int, BossBalloonComponent> _bosses = <int, BossBalloonComponent>{};
   final Set<BasicPopEffect> _popEffects = <BasicPopEffect>{};
+  final Set<LegendaryBurstEffect> _legendaryEffects = <LegendaryBurstEffect>{};
+  final Set<LegendaryBackgroundPulseComponent> _backgroundPulses =
+      <LegendaryBackgroundPulseComponent>{};
   final Random _random = Random(30130);
+  late final LegendaryEffectFactory _legendaryEffectFactory =
+      LegendaryEffectFactory(random: _random);
+  late final FlameSkinRuntime skinRuntime = FlameSkinRuntime(
+    basicCache: spriteCache,
+    initialSkin: initialSkin,
+    legendaryImageLoader: legendaryImageLoader,
+  );
+  LegendaryBackgroundComponent? _legendaryBackground;
   bool _shutdown = false;
   bool _hostWantsRunning = true;
   bool _transitionInFlight = false;
@@ -59,9 +79,15 @@ class PoppopGame extends FlameGame {
   double get lastAppliedDelta => _lastAppliedDelta;
   int get activeBalloonCount => _balloons.length;
   int get activeBossCount => _bosses.length;
-  int get activeEffectCount => _popEffects.length;
+  int get activeEffectCount => _popEffects.length + _legendaryEffects.length;
   int get activeParticleCount =>
-      _popEffects.length * BasicPopEffect.particleCount;
+      _popEffects.length * BasicPopEffect.particleCount +
+      _legendaryEffects.fold(0, (sum, effect) => sum + effect.particleCount);
+  bool get isBackgroundEffectActive => _backgroundPulses.isNotEmpty;
+  bool get hasLegendaryBackground => _legendaryBackground != null;
+  int get activeCacheImageCount => skinRuntime.imageCount;
+  int get activeCacheRgbaBytes => skinRuntime.estimatedRgbaBytes;
+  FlamePreviewSkin get selectedSkin => skinRuntime.skin;
   int get componentGeneration => _componentGeneration;
   Iterable<BalloonComponent> get balloonComponents => _balloons.values;
   Iterable<BossBalloonComponent> get bossComponents => _bosses.values;
@@ -75,8 +101,6 @@ class PoppopGame extends FlameGame {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    if (_shutdown) return;
-    await spriteCache.preload();
     if (_shutdown) return;
     camera.viewfinder
       ..anchor = Anchor.topLeft
@@ -118,7 +142,9 @@ class PoppopGame extends FlameGame {
           }
         }
       case GameSessionPhase.coreClear:
-        if (_popEffects.isNotEmpty) {
+        if (_popEffects.isNotEmpty ||
+            _legendaryEffects.isNotEmpty ||
+            _backgroundPulses.isNotEmpty) {
           super.update(clamped);
         } else {
           super.update(0);
@@ -132,6 +158,7 @@ class PoppopGame extends FlameGame {
           pauseEngine();
         }
       case GameSessionPhase.ready:
+      case GameSessionPhase.loading:
       case GameSessionPhase.bossReady:
       case GameSessionPhase.paused:
       case GameSessionPhase.failed:
@@ -161,16 +188,28 @@ class PoppopGame extends FlameGame {
     required int operation,
     required bool resetSession,
   }) async {
+    pauseEngine();
+    sessionState.beginLoading();
     _removeGameplayComponents();
     _transitionElapsed = 0;
     final generation = ++_componentGeneration;
     final balloons = <BalloonComponent>[];
     final bosses = <BossBalloonComponent>[];
+    final bossRule = definition.bossRule;
+    final bossInitialSize =
+        bossRule == null ? 0.0 : bossRule.initialSizeFor(min(size.x, size.y));
+    try {
+      await skinRuntime.prepareForStage(
+        definition,
+        bossInitialSize: bossInitialSize,
+      );
+    } catch (_) {
+      if (_shutdown || operation != _operationEpoch) return;
+      rethrow;
+    }
+    if (_shutdown || operation != _operationEpoch) return;
+    _installLegendaryBackground();
     if (definition.isBoss) {
-      final rule = definition.bossRule!;
-      final initialSize = rule.initialSizeFor(min(size.x, size.y));
-      await spriteCache.prepareBoss(
-          stage: definition.stage, initialSize: initialSize, rule: rule);
       bosses.addAll(stageBossSpawner.create(
         definition: definition,
         generation: generation,
@@ -179,7 +218,12 @@ class PoppopGame extends FlameGame {
         readHp: sessionState.bossHpFor,
         readIsFake: sessionState.isFakeBoss,
         onHitRequested: _handleBossHitRequest,
-        spriteForHp: spriteCache.bossImageForHp,
+        spriteForHp: skinRuntime.bossImage,
+        palette: skinRuntime.palette,
+        preserveSpriteAspectRatio: skinRuntime.isLegendary,
+        breatheIdle: skinRuntime.breathes,
+        drawHealthBarSeparately: skinRuntime.usesSeparateBossHealthBar,
+        fakeSpriteOpacity: skinRuntime.fakeOpacity,
       ));
       await world.addAll(bosses);
     } else {
@@ -190,7 +234,11 @@ class PoppopGame extends FlameGame {
         idBase: generation * 1000,
         onHitRequested: _handleBalloonHitRequest,
         readHp: sessionState.balloonHpFor,
-        spriteResolver: spriteCache.imageForBalloon,
+        spriteResolver: skinRuntime.balloonImage,
+        palette: skinRuntime.palette,
+        preserveSpriteAspectRatio: skinRuntime.isLegendary,
+        breatheIdle: skinRuntime.breathes,
+        fakeSpriteOpacity: skinRuntime.fakeOpacity,
       ));
       await world.addAll(balloons);
     }
@@ -221,6 +269,14 @@ class PoppopGame extends FlameGame {
     }
   }
 
+  void _installLegendaryBackground() {
+    final cache = skinRuntime.legendaryCache;
+    if (cache == null) return;
+    final background = LegendaryBackgroundComponent(cache.backgroundImage);
+    _legendaryBackground = background;
+    world.add(background);
+  }
+
   bool _handleBalloonHitRequest(BalloonComponent balloon) {
     if (_shutdown ||
         !identical(_balloons[balloon.balloonId], balloon) ||
@@ -229,7 +285,19 @@ class PoppopGame extends FlameGame {
     }
     final result = sessionState.hitBalloon(balloon.balloonId);
     if (result == BalloonHitResult.ignored) return false;
-    _addEffect(balloon.position + balloon.size / 2, balloon.color);
+    final center = balloon.position + balloon.size / 2;
+    if (result != BalloonHitResult.fakeHit) {
+      _addHitEffect(
+        center,
+        balloon.color,
+        balloon.size.x,
+        result == BalloonHitResult.hit
+            ? LegendaryHitKind.firstHit
+            : LegendaryHitKind.finalPop,
+      );
+    } else {
+      _addEffect(center, balloon.color);
+    }
     if (result == BalloonHitResult.hit) {
       balloon.applyRegisteredHit(sessionState.balloonHpFor(balloon.balloonId));
       return true;
@@ -263,7 +331,19 @@ class PoppopGame extends FlameGame {
       swapRoll: stage30SwapRoll?.call() ?? _random.nextDouble(),
     );
     if (result == BossHitResult.ignored) return false;
-    _addEffect(boss.position + boss.size / 2, boss.displayColor);
+    final center = boss.position + boss.size / 2;
+    if (result != BossHitResult.fakeHit) {
+      _addHitEffect(
+        center,
+        boss.color,
+        boss.size.x,
+        result == BossHitResult.hit
+            ? LegendaryHitKind.firstHit
+            : LegendaryHitKind.bossPop,
+      );
+    } else {
+      _addEffect(center, boss.displayColor);
+    }
     if (result == BossHitResult.fakeHit) {
       if (sessionState.phase == GameSessionPhase.failed) {
         _removeGameplayComponents();
@@ -323,8 +403,71 @@ class PoppopGame extends FlameGame {
     world.add(effect);
   }
 
+  void _addHitEffect(
+    Vector2 center,
+    Color color,
+    double sourceSize,
+    LegendaryHitKind kind,
+  ) {
+    final definition = skinRuntime.legendaryDefinition;
+    final cache = skinRuntime.legendaryCache;
+    if (definition == null || cache == null) {
+      _addEffect(center, color);
+      return;
+    }
+    while (_legendaryEffects.length >= 12) {
+      final oldest = _legendaryEffects.first;
+      _legendaryEffects.remove(oldest);
+      oldest.removeFromParent();
+    }
+    final effect = _legendaryEffectFactory.create(
+      definition: definition,
+      cache: cache,
+      kind: kind,
+      center: center,
+      sourceSize: sourceSize,
+      color: color,
+      playfieldSize: size,
+      onFinished: _handleLegendaryEffectFinished,
+    );
+    _legendaryEffects.add(effect);
+    world.add(effect);
+    if (selectedSkin == FlamePreviewSkin.gemi) {
+      _addBackgroundPulse(kind == LegendaryHitKind.firstHit ? 0.55 : 1);
+    }
+  }
+
+  void _addBackgroundPulse(double strength) {
+    final definition = skinRuntime.legendaryDefinition;
+    final cache = skinRuntime.legendaryCache;
+    if (definition == null || cache == null) return;
+    final glowPath = definition.effectAssets.keys.where(
+      (path) => path.contains('crack_glow'),
+    );
+    if (glowPath.isEmpty) return;
+    for (final pulse in _backgroundPulses) {
+      pulse.removeFromParent();
+    }
+    _backgroundPulses.clear();
+    final pulse = LegendaryBackgroundPulseComponent(
+      image: cache.imageForAsset(glowPath.first),
+      strength: strength,
+      onFinished: _handleBackgroundPulseFinished,
+    );
+    _backgroundPulses.add(pulse);
+    world.add(pulse);
+  }
+
   void _handleEffectFinished(BasicPopEffect effect) =>
       _popEffects.remove(effect);
+
+  void _handleLegendaryEffectFinished(LegendaryBurstEffect effect) =>
+      _legendaryEffects.remove(effect);
+
+  void _handleBackgroundPulseFinished(
+    LegendaryBackgroundPulseComponent pulse,
+  ) =>
+      _backgroundPulses.remove(pulse);
 
   void _removeFakeBalloons() {
     final fakes = _balloons.values.where((b) => b.isFake).toList();
@@ -362,6 +505,34 @@ class PoppopGame extends FlameGame {
   Future<void> restartStageOne({bool resume = true}) =>
       restartGame(resume: resume);
 
+  Future<void> switchSkin(
+    FlamePreviewSkin skin, {
+    bool resume = true,
+  }) async {
+    if (_shutdown || _restartInFlight || selectedSkin == skin) return;
+    _restartInFlight = true;
+    _hostWantsRunning = resume;
+    pauseEngine();
+    final operation = ++_operationEpoch;
+    final stage = sessionState.stage.clamp(1, 30);
+    try {
+      _removeGameplayComponents();
+      await skinRuntime.switchSkin(skin);
+      final definition = stageDefinitions.firstWhere(
+        (candidate) => candidate.stage == stage,
+        orElse: () => stageDefinitions.first,
+      );
+      await _installStage(
+        definition,
+        operation: operation,
+        resetSession: true,
+      );
+      _applyHostRunIntent();
+    } finally {
+      if (operation == _operationEpoch) _restartInFlight = false;
+    }
+  }
+
   void _removeGameplayComponents() {
     for (final balloon in _balloons.values) {
       balloon.markRemoved();
@@ -374,9 +545,19 @@ class PoppopGame extends FlameGame {
     for (final effect in _popEffects) {
       effect.removeFromParent();
     }
+    for (final effect in _legendaryEffects) {
+      effect.removeFromParent();
+    }
+    for (final pulse in _backgroundPulses) {
+      pulse.removeFromParent();
+    }
+    _legendaryBackground?.removeFromParent();
+    _legendaryBackground = null;
     _balloons.clear();
     _bosses.clear();
     _popEffects.clear();
+    _legendaryEffects.clear();
+    _backgroundPulses.clear();
     processLifecycleEvents();
   }
 
@@ -396,7 +577,10 @@ class PoppopGame extends FlameGame {
       'FAKES ${sessionState.fakeCount}\n'
       'BOSSES $activeBossCount  HP ${sessionState.bossHp}/${sessionState.bossMaxHp}  '
       'REAL ${sessionState.stage30RealBossId ?? '-'}\n'
-      'EFFECTS $activeEffectCount  PHASE ${sessionState.phase.name}';
+      'SKIN ${selectedSkin.label}  EFFECTS $activeEffectCount/$activeParticleCount  '
+      'BG ${isBackgroundEffectActive ? 'ACTIVE' : 'IDLE'}\n'
+      'CACHE $activeCacheImageCount  ${(activeCacheRgbaBytes / 1048576).toStringAsFixed(1)}MB  '
+      'PHASE ${sessionState.phase.name}';
 
   void pausePreview() {
     if (_shutdown) return;
@@ -410,7 +594,8 @@ class PoppopGame extends FlameGame {
     _hostWantsRunning = true;
     if (sessionState.phase == GameSessionPhase.coreClear ||
         sessionState.phase == GameSessionPhase.failed ||
-        sessionState.phase == GameSessionPhase.bossReady) {
+        sessionState.phase == GameSessionPhase.bossReady ||
+        sessionState.phase == GameSessionPhase.loading) {
       return;
     }
     sessionState.resume();
@@ -429,7 +614,7 @@ class PoppopGame extends FlameGame {
     _restartInFlight = false;
     pauseEngine();
     _removeGameplayComponents();
-    spriteCache.dispose();
+    skinRuntime.dispose();
     sessionState.endSession();
   }
 

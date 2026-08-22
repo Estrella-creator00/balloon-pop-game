@@ -4,6 +4,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import 'game_session_state.dart';
+import 'legendary/flame_preview_skin.dart';
 import 'poppop_game.dart';
 import 'poppop_engine_mode.dart';
 import 'session/game_session_snapshot.dart';
@@ -19,11 +20,13 @@ class FlameGamePage extends StatefulWidget {
     this.gameFactory,
     this.onHudBuild,
     this.initialStage,
+    this.initialSkin,
   });
 
   final VoidCallback onExit;
   final PoppopGameFactory? gameFactory;
   final int? initialStage;
+  final FlamePreviewSkin? initialSkin;
 
   @visibleForTesting
   final VoidCallback? onHudBuild;
@@ -38,17 +41,20 @@ class _FlameGamePageState extends State<FlameGamePage>
   late final PoppopGame _game;
   bool _manuallyPaused = false;
   bool _lifecyclePaused = false;
+  late FlamePreviewSkin _selectedSkin;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _sessionState = GameSessionState();
+    _selectedSkin = widget.initialSkin ?? flamePreviewSkinFromUri(Uri.base);
     _game = widget.gameFactory?.call(_sessionState) ??
         PoppopGame(
           _sessionState,
           initialStage:
               widget.initialStage ?? flamePreviewStageFromUri(Uri.base),
+          initialSkin: _selectedSkin,
         );
     final lifecycleState = WidgetsBinding.instance.lifecycleState;
     if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
@@ -102,6 +108,15 @@ class _FlameGamePageState extends State<FlameGamePage>
     unawaited(_game.jumpToStage(stage, resume: !_lifecyclePaused));
   }
 
+  void _switchSkin(FlamePreviewSkin skin) {
+    if (_selectedSkin == skin) return;
+    setState(() {
+      _selectedSkin = skin;
+      _manuallyPaused = false;
+    });
+    unawaited(_game.switchSkin(skin, resume: !_lifecyclePaused));
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -122,6 +137,8 @@ class _FlameGamePageState extends State<FlameGamePage>
               manuallyPaused: _manuallyPaused,
               onBuild: widget.onHudBuild,
               onStartBoss: _startBoss,
+              selectedSkin: _selectedSkin,
+              onSkinChanged: _switchSkin,
             ),
             Expanded(
               child: Padding(
@@ -213,12 +230,16 @@ class _PreviewHud extends StatelessWidget {
     required this.manuallyPaused,
     this.onBuild,
     required this.onStartBoss,
+    required this.selectedSkin,
+    required this.onSkinChanged,
   });
 
   final GameSessionState sessionState;
   final bool manuallyPaused;
   final VoidCallback? onBuild;
   final VoidCallback onStartBoss;
+  final FlamePreviewSkin selectedSkin;
+  final ValueChanged<FlamePreviewSkin> onSkinChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -236,6 +257,37 @@ class _PreviewHud extends StatelessWidget {
               fontWeight: FontWeight.w800,
               letterSpacing: 1.2,
             ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Text(
+                'SKIN',
+                style: TextStyle(
+                  color: Color(0xFFB8E6FF),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<FlamePreviewSkin>(
+                key: const ValueKey('flame-preview-skin-selector'),
+                value: selectedSkin,
+                dropdownColor: const Color(0xFF172A42),
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                items: FlamePreviewSkin.values
+                    .map((skin) => DropdownMenuItem(
+                          value: skin,
+                          child: Text(skin.label),
+                        ))
+                    .toList(growable: false),
+                onChanged: (skin) {
+                  if (skin != null) onSkinChanged(skin);
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           AnimatedBuilder(
@@ -283,6 +335,7 @@ class _PreviewHud extends StatelessWidget {
     if (manuallyPaused || phase == GameSessionPhase.paused) return 'PAUSED';
     return switch (phase) {
       GameSessionPhase.ready => 'READY',
+      GameSessionPhase.loading => 'LOADING',
       GameSessionPhase.bossReady => 'BOSS READY',
       GameSessionPhase.playing => 'PLAYING',
       GameSessionPhase.stageClear => 'STAGE CLEAR',

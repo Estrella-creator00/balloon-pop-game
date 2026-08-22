@@ -25,6 +25,10 @@ class StageBalloonSpawner {
     required StageBalloonHitRequest onHitRequested,
     required int Function(int id) readHp,
     required BalloonSpriteResolver spriteResolver,
+    List<Color>? palette,
+    bool preserveSpriteAspectRatio = false,
+    bool breatheIdle = false,
+    double fakeSpriteOpacity = 0.35,
   }) {
     // Component ids change per generation, but a seeded stage keeps the same
     // initial layout and motion after restart.
@@ -32,7 +36,8 @@ class StageBalloonSpawner {
     final placedBounds = <Rect>[];
     final balloons = <BalloonComponent>[];
     final initialPlayfieldSize = playfieldSize();
-    final palette = BalloonSkinCatalog.defaultSkin.colorPalette;
+    final activePalette =
+        palette ?? BalloonSkinCatalog.defaultSkin.colorPalette;
 
     final totalCount =
         definition.balloonCount + definition.balloonRule.fakeCount;
@@ -53,7 +58,7 @@ class StageBalloonSpawner {
       );
       final speed = definition.speedRange.valueAt(random.nextDouble());
       final angle = random.nextDouble() * math.pi * 2;
-      final color = palette[random.nextInt(palette.length)];
+      final color = activePalette[random.nextInt(activePalette.length)];
       final balloon = BalloonComponent(
         balloonId: idBase + index,
         generation: generation,
@@ -76,6 +81,9 @@ class StageBalloonSpawner {
         floatPhase: random.nextDouble() * math.pi * 2,
         floatPower: 10 + random.nextDouble() * 10,
         firstHitSizeMultiplier: definition.balloonRule.firstHitSizeMultiplier,
+        preserveSpriteAspectRatio: preserveSpriteAspectRatio,
+        breatheIdle: breatheIdle,
+        spriteOpacity: isFake ? fakeSpriteOpacity : 1,
       );
       balloons.add(balloon);
       placedBounds.add(balloon.playfieldBounds.inflate(minimumGap / 2));

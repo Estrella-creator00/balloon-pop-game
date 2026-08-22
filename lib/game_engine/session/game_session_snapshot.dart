@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 enum GameSessionPhase {
   ready,
+  loading,
   bossReady,
   playing,
   paused,

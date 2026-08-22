@@ -20,11 +20,17 @@ class StageBossSpawner {
     required bool Function(int bossId) readIsFake,
     required BossHitRequest onHitRequested,
     required BossSpriteResolver spriteForHp,
+    List<Color>? palette,
+    bool preserveSpriteAspectRatio = false,
+    bool breatheIdle = false,
+    bool drawHealthBarSeparately = false,
+    double fakeSpriteOpacity = 0.35,
   }) {
     final rule = definition.bossRule;
     if (rule == null) return const <BossBalloonComponent>[];
 
     final random = math.Random(seed + definition.stage * 997);
+    final activePalette = palette ?? const <Color>[Color(0xFF7E57C2)];
     final bounds = playfieldSize();
     final initialSize = rule.initialSizeFor(math.min(bounds.x, bounds.y));
     final bosses = <BossBalloonComponent>[];
@@ -32,6 +38,7 @@ class StageBossSpawner {
     double? previousAngle;
     for (var index = 0; index < rule.bossCount; index++) {
       final initialIsFake = rule.sharedHp && index != 0;
+      final color = activePalette[random.nextInt(activePalette.length)];
       final maxX = math.max(0.0, bounds.x - initialSize);
       final maxY = math.max(0.0, bounds.y - initialSize - 26);
       var angle = random.nextDouble() * math.pi * 2;
@@ -70,13 +77,18 @@ class StageBossSpawner {
           playfieldSize: playfieldSize,
           rule: rule,
           initialSize: initialSize,
+          color: color,
           readHp: readHp,
           readIsFake: readIsFake,
           onHitRequested: onHitRequested,
           directionRoll: random.nextDouble,
           spriteResolver: spriteForHp,
-          initialSprite: spriteForHp(rule.maxHp, fake: initialIsFake),
+          initialSprite: spriteForHp(color, rule.maxHp, fake: initialIsFake),
           initialIsFake: initialIsFake,
+          preserveSpriteAspectRatio: preserveSpriteAspectRatio,
+          breatheIdle: breatheIdle,
+          drawHealthBarSeparately: drawHealthBarSeparately,
+          fakeSpriteOpacity: fakeSpriteOpacity,
           turnIntervalOffset: rule.sharedHp ? (index == 0 ? -0.055 : 0.055) : 0,
           initialTurnCooldown: rule.sharedHp
               ? 0.52 + index * 0.17 + random.nextDouble() * 0.08
