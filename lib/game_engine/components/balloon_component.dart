@@ -4,13 +4,17 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 
+import '../rendering/flame_sprite_frame.dart';
+
 typedef BalloonHitRequest = bool Function(BalloonComponent balloon);
-typedef BalloonSpriteResolver = Image Function(
+typedef BalloonSpriteResolver = FlameSpriteFrame Function(
   Color color,
   int hp,
   int maxHp,
   bool isFake,
+  int visualVariant,
 );
+typedef BalloonExitFinished = void Function(BalloonComponent balloon);
 
 class BalloonComponent extends PositionComponent with TapCallbacks {
   BalloonComponent({
@@ -25,22 +29,26 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     required this.color,
     required this.maxHp,
     required this.isFake,
-    required Image sprite,
+    required FlameSpriteFrame sprite,
     required this.spriteResolver,
+    required this.visualVariant,
     required this.floatPhase,
     required this.floatPower,
     required this.firstHitSizeMultiplier,
     this.preserveSpriteAspectRatio = false,
     this.breatheIdle = false,
+    this.ghostIdle = false,
+    this.baseSpriteOpacity = 1,
     double? spriteOpacity,
-  })  : _sprite = sprite,
+  })  : _sprite = sprite.image,
         _visualHp = maxHp,
-        _sourceRect = Rect.fromLTWH(
-            0, 0, sprite.width.toDouble(), sprite.height.toDouble()),
+        _sourceRect = Rect.fromLTWH(0, 0, sprite.image.width.toDouble(),
+            sprite.image.height.toDouble()),
         _destinationRect = Rect.fromLTWH(0, 0, balloonSize.x, balloonSize.y),
         super(position: position, size: balloonSize, priority: balloonId) {
-    final opacity = spriteOpacity ?? (isFake ? 0.35 : 1);
+    final opacity = (spriteOpacity ?? (isFake ? 0.35 : 1)) * baseSpriteOpacity;
     _spritePaint.color = Color.fromRGBO(255, 255, 255, opacity);
+    _spritePaint.colorFilter = sprite.colorFilter;
     _refreshDestinationRect();
   }
 
@@ -58,10 +66,13 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   final int maxHp;
   final bool isFake;
   final BalloonSpriteResolver spriteResolver;
+  final int visualVariant;
   final double floatPower;
   final double firstHitSizeMultiplier;
   final bool preserveSpriteAspectRatio;
   final bool breatheIdle;
+  final bool ghostIdle;
+  final double baseSpriteOpacity;
   final Paint _spritePaint = Paint()
     ..isAntiAlias = true
     ..filterQuality = FilterQuality.medium;
@@ -72,6 +83,10 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   int _visualHp;
   bool _hitInProgress = false;
   bool _removed = false;
+  bool _exiting = false;
+  double _exitElapsed = 0;
+  Vector2 _exitVelocity = Vector2.zero();
+  BalloonExitFinished? _onExitFinished;
   double floatPhase;
   double _lastAppliedDelta = 0;
 
@@ -80,11 +95,22 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     (index) => 1 + math.sin(index * math.pi * 2 / 256) * 0.018,
     growable: false,
   );
+  static final List<double> _sinLookup = List<double>.generate(
+    256,
+    (index) => math.sin(index * math.pi * 2 / 256),
+    growable: false,
+  );
+  static final List<double> _cosLookup = List<double>.generate(
+    256,
+    (index) => math.cos(index * math.pi * 2 / 256),
+    growable: false,
+  );
 
   int get currentHp => readHp(balloonId);
   int get visualHp => _visualHp;
   bool get isRemovedFromGame => _removed;
   bool get isPopRequested => _removed;
+  bool get isExiting => _exiting;
   double get lastAppliedDelta => _lastAppliedDelta;
   Rect get playfieldBounds =>
       Rect.fromLTWH(position.x, position.y, size.x, size.y);
@@ -95,6 +121,17 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     if (_removed) return;
     final clamped = dt.clamp(0.0, maxUpdateDelta).toDouble();
     _lastAppliedDelta = clamped;
+    if (_exiting) {
+      _exitElapsed += clamped;
+      position.addScaled(_exitVelocity, clamped);
+      if (_exitElapsed >= 0.24) {
+        _exiting = false;
+        final finished = _onExitFinished;
+        _onExitFinished = null;
+        finished?.call(this);
+      }
+      return;
+    }
     floatPhase += clamped * floatPhaseSpeed;
     position.x += velocity.x * clamped;
     position.y +=
@@ -117,7 +154,9 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   void applyRegisteredHit(int hp) {
     if (_removed || hp <= 0 || hp >= _visualHp) return;
     _visualHp = hp;
-    _sprite = spriteResolver(color, hp, maxHp, isFake);
+    final frame = spriteResolver(color, hp, maxHp, isFake, visualVariant);
+    _sprite = frame.image;
+    _spritePaint.colorFilter = frame.colorFilter;
     final width = size.x * firstHitSizeMultiplier;
     size.setValues(width, width + stringHeight);
     _sourceRect = Rect.fromLTWH(
@@ -143,20 +182,47 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     );
   }
 
-  void markRemoved() => _removed = true;
+  void markRemoved() {
+    _removed = true;
+    _exiting = false;
+    _onExitFinished = null;
+  }
+
+  bool beginKickExit({
+    required Vector2 velocity,
+    required BalloonExitFinished onFinished,
+  }) {
+    if (_removed || _exiting) return false;
+    _exiting = true;
+    _exitElapsed = 0;
+    _exitVelocity = velocity;
+    _onExitFinished = onFinished;
+    return true;
+  }
 
   @override
   void render(Canvas canvas) {
-    if (!breatheIdle) {
+    final phaseIndex = ((floatPhase / (math.pi * 2) * 256).floor()) & 255;
+    var scale = breatheIdle ? _breatheScale[phaseIndex] : 1.0;
+    var offset = Offset.zero;
+    var rotation = 0.0;
+    if (ghostIdle) {
+      offset =
+          Offset(_sinLookup[phaseIndex] * 1.4, _cosLookup[phaseIndex] * 2.2);
+      rotation = _sinLookup[(phaseIndex * 7 ~/ 10) & 255] * 0.018;
+    }
+    if (_exiting) {
+      scale *= (1 - (_exitElapsed / 0.24) * 0.42).clamp(0.58, 1.0);
+    }
+    if (scale == 1 && offset == Offset.zero && rotation == 0) {
       canvas.drawImageRect(
           _sprite, _sourceRect, _destinationRect, _spritePaint);
       return;
     }
-    final index = ((floatPhase / (math.pi * 2) * 256).floor()) & 255;
-    final scale = _breatheScale[index];
     canvas
       ..save()
-      ..translate(size.x / 2, size.y / 2)
+      ..translate(size.x / 2 + offset.dx, size.y / 2 + offset.dy)
+      ..rotate(rotation)
       ..scale(scale, scale)
       ..translate(-size.x / 2, -size.y / 2)
       ..drawImageRect(_sprite, _sourceRect, _destinationRect, _spritePaint)
@@ -168,15 +234,16 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
 
   @override
   bool containsLocalPoint(Vector2 point) {
+    if (_exiting) return false;
     if (!preserveSpriteAspectRatio) return super.containsLocalPoint(point);
-    final hitBounds = breatheIdle
+    final hitBounds = (breatheIdle || ghostIdle)
         ? _destinationRect.inflate(size.x * 0.02)
         : _destinationRect;
     return hitBounds.contains(Offset(point.x, point.y));
   }
 
   bool requestHit() {
-    if (_removed || _hitInProgress) return false;
+    if (_removed || _exiting || _hitInProgress) return false;
     _hitInProgress = true;
     final accepted = onHitRequested(this);
     _hitInProgress = false;

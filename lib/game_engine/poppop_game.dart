@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 
+import '../balloon_skin_catalog.dart';
 import 'components/balloon_component.dart';
 import 'components/basic_pop_effect.dart';
 import 'components/boss_balloon_component.dart';
@@ -81,7 +82,7 @@ class PoppopGame extends FlameGame {
   int get activeBossCount => _bosses.length;
   int get activeEffectCount => _popEffects.length + _legendaryEffects.length;
   int get activeParticleCount =>
-      _popEffects.length * BasicPopEffect.particleCount +
+      _popEffects.fold(0, (sum, effect) => sum + effect.activeParticleCount) +
       _legendaryEffects.fold(0, (sum, effect) => sum + effect.particleCount);
   bool get isBackgroundEffectActive => _backgroundPulses.isNotEmpty;
   bool get hasLegendaryBackground => _legendaryBackground != null;
@@ -91,6 +92,7 @@ class PoppopGame extends FlameGame {
   int get componentGeneration => _componentGeneration;
   Iterable<BalloonComponent> get balloonComponents => _balloons.values;
   Iterable<BossBalloonComponent> get bossComponents => _bosses.values;
+  Iterable<BasicPopEffect> get basicPopEffects => _popEffects;
   bool get isComponentStateSynchronized =>
       sessionState.matchesActiveComponentIds(_balloons.keys) &&
       sessionState.matchesActiveBossComponentIds(_bosses.keys);
@@ -218,12 +220,15 @@ class PoppopGame extends FlameGame {
         readHp: sessionState.bossHpFor,
         readIsFake: sessionState.isFakeBoss,
         onHitRequested: _handleBossHitRequest,
-        spriteForHp: skinRuntime.bossImage,
+        spriteForHp: skinRuntime.bossFrame,
         palette: skinRuntime.palette,
-        preserveSpriteAspectRatio: skinRuntime.isLegendary,
+        preserveSpriteAspectRatio: skinRuntime.preserveSpriteAspectRatio,
         breatheIdle: skinRuntime.breathes,
+        ghostIdle: skinRuntime.ghostIdle,
+        baseSpriteOpacity: skinRuntime.baseSpriteOpacity,
         drawHealthBarSeparately: skinRuntime.usesSeparateBossHealthBar,
         fakeSpriteOpacity: skinRuntime.fakeOpacity,
+        visualVariantCount: skinRuntime.visualVariantCount,
       ));
       await world.addAll(bosses);
     } else {
@@ -234,11 +239,14 @@ class PoppopGame extends FlameGame {
         idBase: generation * 1000,
         onHitRequested: _handleBalloonHitRequest,
         readHp: sessionState.balloonHpFor,
-        spriteResolver: skinRuntime.balloonImage,
+        spriteResolver: skinRuntime.balloonFrame,
         palette: skinRuntime.palette,
-        preserveSpriteAspectRatio: skinRuntime.isLegendary,
+        preserveSpriteAspectRatio: skinRuntime.preserveSpriteAspectRatio,
         breatheIdle: skinRuntime.breathes,
+        ghostIdle: skinRuntime.ghostIdle,
+        baseSpriteOpacity: skinRuntime.baseSpriteOpacity,
         fakeSpriteOpacity: skinRuntime.fakeOpacity,
+        visualVariantCount: skinRuntime.visualVariantCount,
       ));
       await world.addAll(balloons);
     }
@@ -283,6 +291,11 @@ class PoppopGame extends FlameGame {
         balloon.generation != sessionState.generation) {
       return false;
     }
+    if (!balloon.isFake &&
+        balloon.currentHp == 1 &&
+        skinRuntime.exitAnimation == BalloonExitAnimationType.kickAway) {
+      return _beginKickExit(balloon);
+    }
     final result = sessionState.hitBalloon(balloon.balloonId);
     if (result == BalloonHitResult.ignored) return false;
     final center = balloon.position + balloon.size / 2;
@@ -294,9 +307,10 @@ class PoppopGame extends FlameGame {
         result == BalloonHitResult.hit
             ? LegendaryHitKind.firstHit
             : LegendaryHitKind.finalPop,
+        boss: false,
       );
     } else {
-      _addEffect(center, balloon.color);
+      _addFakeEffect(center, balloon.color);
     }
     if (result == BalloonHitResult.hit) {
       balloon.applyRegisteredHit(sessionState.balloonHpFor(balloon.balloonId));
@@ -340,9 +354,10 @@ class PoppopGame extends FlameGame {
         result == BossHitResult.hit
             ? LegendaryHitKind.firstHit
             : LegendaryHitKind.bossPop,
+        boss: true,
       );
     } else {
-      _addEffect(center, boss.displayColor);
+      _addFakeEffect(center, boss.displayColor);
     }
     if (result == BossHitResult.fakeHit) {
       if (sessionState.phase == GameSessionPhase.failed) {
@@ -404,15 +419,23 @@ class PoppopGame extends FlameGame {
   }
 
   void _addHitEffect(
-    Vector2 center,
-    Color color,
-    double sourceSize,
-    LegendaryHitKind kind,
-  ) {
+      Vector2 center, Color color, double sourceSize, LegendaryHitKind kind,
+      {required bool boss}) {
     final definition = skinRuntime.legendaryDefinition;
     final cache = skinRuntime.legendaryCache;
     if (definition == null || cache == null) {
-      _addEffect(center, color);
+      if (selectedSkin.usesCatalogImage) {
+        final catalog = skinRuntime.catalogDefinition;
+        if (kind == LegendaryHitKind.firstHit && !boss) return;
+        _addCatalogEffect(
+          center,
+          color,
+          catalog.popEffectType,
+          big: boss && kind == LegendaryHitKind.bossPop,
+        );
+      } else {
+        _addEffect(center, color);
+      }
       return;
     }
     while (_legendaryEffects.length >= 12) {
@@ -435,6 +458,72 @@ class PoppopGame extends FlameGame {
     if (selectedSkin == FlamePreviewSkin.gemi) {
       _addBackgroundPulse(kind == LegendaryHitKind.firstHit ? 0.55 : 1);
     }
+  }
+
+  void _addCatalogEffect(
+    Vector2 center,
+    Color color,
+    BalloonPopEffectType type, {
+    required bool big,
+  }) {
+    while (_popEffects.length >= 12) {
+      final oldest = _popEffects.first;
+      _popEffects.remove(oldest);
+      oldest.removeFromParent();
+    }
+    final effect = BasicPopEffect(
+      center: center,
+      color: color,
+      onFinished: _handleEffectFinished,
+      effectType: type,
+      themed: true,
+      big: big,
+    );
+    _popEffects.add(effect);
+    world.add(effect);
+  }
+
+  void _addFakeEffect(Vector2 center, Color color) {
+    if (selectedSkin.usesCatalogImage) {
+      _addCatalogEffect(
+        center,
+        color,
+        skinRuntime.catalogDefinition.popEffectType,
+        big: false,
+      );
+    } else {
+      _addEffect(center, color);
+    }
+  }
+
+  bool _beginKickExit(BalloonComponent balloon) {
+    final center = balloon.position + balloon.size / 2;
+    final screenCenter = size / 2;
+    var direction = center - screenCenter;
+    if (direction.length2 < 0.001) direction = Vector2(1, -0.4);
+    direction.normalize();
+    final distance = size.length + balloon.size.length * 2;
+    return balloon.beginKickExit(
+      velocity: direction * (distance / 0.24),
+      onFinished: _completeKickExit,
+    );
+  }
+
+  void _completeKickExit(BalloonComponent balloon) {
+    if (_shutdown ||
+        !identical(_balloons[balloon.balloonId], balloon) ||
+        balloon.generation != sessionState.generation) {
+      return;
+    }
+    final result = sessionState.hitBalloon(balloon.balloonId);
+    if (result != BalloonHitResult.popped &&
+        result != BalloonHitResult.stageCleared) {
+      return;
+    }
+    _balloons.remove(balloon.balloonId);
+    balloon.markRemoved();
+    balloon.removeFromParent();
+    if (result == BalloonHitResult.stageCleared) _removeFakeBalloons();
   }
 
   void _addBackgroundPulse(double strength) {

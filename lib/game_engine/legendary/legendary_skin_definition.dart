@@ -68,6 +68,6 @@ LegendarySkinDefinition legendaryDefinitionFor(FlamePreviewSkin skin) {
           catalog.screenSplatAssetPath!: 320,
         },
       ),
-    FlamePreviewSkin.basic => throw ArgumentError.value(skin, 'skin'),
+    _ => throw ArgumentError.value(skin, 'skin'),
   };
 }

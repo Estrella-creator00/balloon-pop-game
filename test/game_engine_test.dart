@@ -11,7 +11,9 @@ import 'package:balloon_pop_game/game_engine/legendary/legendary_sprite_cache.da
 import 'package:balloon_pop_game/game_engine/poppop_engine_mode.dart';
 import 'package:balloon_pop_game/game_engine/poppop_game.dart';
 import 'package:balloon_pop_game/game_engine/rendering/basic_balloon_sprite_cache.dart';
+import 'package:balloon_pop_game/game_engine/rendering/flame_sprite_frame.dart';
 import 'package:balloon_pop_game/game_engine/session/game_session_snapshot.dart';
+import 'package:balloon_pop_game/game_engine/skins/catalog_sprite_cache.dart';
 import 'package:balloon_pop_game/game_engine/stages/flame_stage_definition.dart';
 import 'package:balloon_pop_game/game_engine/stages/stage_balloon_spawner.dart';
 import 'package:balloon_pop_game/gameplay/game_canvas.dart';
@@ -60,6 +62,25 @@ void main() {
         FlamePreviewSkin.shushu);
     expect(flamePreviewSkinFromUri(Uri.parse('https://x.test/?skin=unknown')),
         FlamePreviewSkin.basic);
+  });
+
+  test('every production catalog skin has an exact Flame preview mapping', () {
+    expect(FlamePreviewSkin.values,
+        hasLength(BalloonSkinCatalog.definitions.length));
+    expect(
+      FlamePreviewSkin.values.map((skin) => skin.catalogDefinition.id).toSet(),
+      BalloonSkinCatalog.definitions.map((skin) => skin.id).toSet(),
+    );
+    for (final skin in FlamePreviewSkin.values) {
+      expect(flamePreviewSkinFromValue(skin.queryValue), skin);
+      expect(
+        flamePreviewSkinFromUri(
+          Uri.parse(
+              'https://x.test/?engine=flame-preview&skin=${skin.queryValue}'),
+        ),
+        skin,
+      );
+    }
   });
 
   test('legendary definitions reuse production catalog assets', () {
@@ -123,6 +144,27 @@ void main() {
     expect(cache.imageCount, 16);
     expect(cache.estimatedRgbaBytes, lessThan(24 * 1024 * 1024));
     expect(cache.estimatedRgbaBytes, greaterThanOrEqualTo(normalBytes));
+  });
+
+  testWidgets('every catalog image asset decodes into a reusable normal profile',
+      (tester) async {
+    for (final skin in FlamePreviewSkin.values.where(
+      (skin) => skin.usesCatalogImage,
+    )) {
+      final definition = skin.catalogDefinition;
+      final cache = CatalogSpriteCache(definition);
+      await tester.runAsync(() => cache.prepareForStage(flamePreviewStage(1)));
+      expect(cache.profile, CatalogBodyProfile.normal);
+      expect(cache.loadCount,
+          definition.variantAssetPaths.isEmpty ? 1 : definition.variantAssetPaths.length);
+      expect(cache.imageCount, greaterThan(0));
+      expect(
+        cache.frame(definition.colorPalette.first, fake: false, variant: 0).image,
+        isNotNull,
+      );
+      cache.dispose();
+      expect(cache.isDisposed, isTrue);
+    }
   });
 
   test('Flame Stage 1-30 definitions match production', () {
@@ -330,7 +372,9 @@ void main() {
       idBase: 1000,
       onHitRequested: (_) => true,
       readHp: (id) => hp[id] ?? 1,
-      spriteResolver: cache.imageForBalloon,
+      spriteResolver: (color, hp, maxHp, fake, _) => FlameSpriteFrame(
+        cache.imageForBalloon(color, hp, maxHp, fake),
+      ),
     );
     expect(balloons, hasLength(12));
     expect(balloons.where((b) => !b.isFake), hasLength(10));
@@ -614,6 +658,152 @@ void main() {
     expect(harness.session.remainingBalloons, 3);
     expect(harness.game.activeBalloonCount, 3);
     expect(harness.game.hasLegendaryBackground, isTrue);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+  });
+
+  for (final skin in FlamePreviewSkin.values.where(
+    (skin) => skin.usesCatalogImage,
+  )) {
+    testWidgets('${skin.label} uses common runtime across every stage type',
+        (tester) async {
+      final harness = await _pumpPreview(tester, skin: skin);
+      expect(harness.game.selectedSkin, skin);
+      expect(harness.game.activeBalloonCount, 2);
+      expect(harness.game.isComponentStateSynchronized, isTrue);
+      expect(harness.game.hasLegendaryBackground, isFalse);
+      expect(harness.game.skinRuntime.catalogCache, isNotNull);
+      expect(harness.game.activeCacheImageCount, greaterThan(0));
+
+      await harness.game.jumpToStage(11);
+      await tester.pump();
+      final twoHit = harness.game.balloonComponents.first;
+      expect(twoHit.requestHit(), isTrue);
+      expect(twoHit.visualHp, 1);
+      expect(harness.session.remainingBalloons, 2);
+      expect(harness.game.isComponentStateSynchronized, isTrue);
+
+      await harness.game.jumpToStage(20);
+      await tester.pump();
+      expect(harness.game.activeBossCount, 2);
+      expect(
+        harness.game.bossComponents
+            .every((boss) => boss.drawHealthBarSeparately),
+        isTrue,
+      );
+
+      await harness.game.jumpToStage(21);
+      await tester.pump();
+      expect(harness.game.activeBalloonCount, 4);
+      expect(harness.game.balloonComponents.where((body) => body.isFake),
+          hasLength(2));
+
+      await harness.game.jumpToStage(30);
+      await tester.pump();
+      expect(harness.game.activeBossCount, 2);
+      expect(harness.game.bossComponents.where((boss) => boss.isFake),
+          hasLength(1));
+      expect(harness.game.isComponentStateSynchronized, isTrue);
+      final expectedImageCap = switch (skin) {
+        FlamePreviewSkin.mochi => 25,
+        FlamePreviewSkin.wari => 3,
+        _ => 1,
+      };
+      expect(harness.game.activeCacheImageCount, lessThanOrEqualTo(expectedImageCap));
+      expect(harness.game.activeCacheRgbaBytes, lessThan(40 * 1024 * 1024));
+    });
+  }
+
+  testWidgets('catalog effects are bounded and return to idle', (tester) async {
+    final harness = await _pumpPreview(
+      tester,
+      initialStage: 21,
+      skin: FlamePreviewSkin.heart,
+    );
+    for (final balloon in harness.game.balloonComponents.toList()) {
+      balloon.requestHit();
+    }
+    expect(
+      harness.game.basicPopEffects.every(
+        (effect) => effect.effectType == BalloonPopEffectType.hearts,
+      ),
+      isTrue,
+    );
+    expect(harness.game.activeEffectCount, lessThanOrEqualTo(12));
+    expect(harness.game.activeParticleCount, lessThanOrEqualTo(84));
+    for (var frame = 0; frame < 30; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(harness.game.activeEffectCount, 0);
+    expect(harness.game.activeParticleCount, 0);
+  });
+
+  testWidgets('WARI variants and BOO mist remain catalog-defined',
+      (tester) async {
+    final wari = await _pumpPreview(
+      tester,
+      initialStage: 29,
+      skin: FlamePreviewSkin.wari,
+    );
+    expect(
+      wari.game.balloonComponents.map((body) => body.visualVariant).toSet(),
+      containsAll(<int>[0, 1, 2]),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    final boo = await _pumpPreview(tester, skin: FlamePreviewSkin.boo);
+    expect(boo.game.balloonComponents.first.requestHit(), isTrue);
+    expect(
+        boo.game.basicPopEffects.single.effectType, BalloonPopEffectType.mist);
+  });
+
+  testWidgets('KICKS exit completes once through the shared session',
+      (tester) async {
+    final harness = await _pumpPreview(tester, skin: FlamePreviewSkin.kicks);
+    final balloon = harness.game.balloonComponents.first;
+    expect(balloon.requestHit(), isTrue);
+    expect(balloon.isExiting, isTrue);
+    expect(harness.session.remainingBalloons, 2);
+    expect(balloon.requestHit(), isFalse);
+    for (var frame = 0; frame < 6; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(balloon.isRemovedFromGame, isTrue);
+    expect(harness.session.remainingBalloons, 1);
+    expect(harness.game.activeBalloonCount, 1);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+  });
+
+  testWidgets('BOO retains ghost idle while static skins stay on fast path',
+      (tester) async {
+    final boo = await _pumpPreview(tester, skin: FlamePreviewSkin.boo);
+    expect(boo.game.balloonComponents.every((body) => body.ghostIdle), isTrue);
+    expect(
+        boo.game.balloonComponents
+            .every((body) => body.baseSpriteOpacity == .86),
+        isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    final mugi = await _pumpPreview(tester, skin: FlamePreviewSkin.mugi);
+    expect(
+        mugi.game.balloonComponents.every((body) => !body.ghostIdle), isTrue);
+    expect(
+        mugi.game.balloonComponents
+            .every((body) => body.baseSpriteOpacity == 1),
+        isTrue);
+  });
+
+  testWidgets('skin switch disposes catalog profile and rejects stale input',
+      (tester) async {
+    final harness = await _pumpPreview(tester, skin: FlamePreviewSkin.mochi);
+    final oldCache = harness.game.skinRuntime.catalogCache!;
+    final stale = harness.game.balloonComponents.first;
+    await harness.game.switchSkin(FlamePreviewSkin.wari);
+    await tester.pump();
+    expect(oldCache.isDisposed, isTrue);
+    expect(stale.requestHit(), isFalse);
+    expect(harness.game.selectedSkin, FlamePreviewSkin.wari);
+    expect(
+        harness.game.skinRuntime.catalogCache!.definition.id, 'balloon-wari');
     expect(harness.game.isComponentStateSynchronized, isTrue);
   });
 

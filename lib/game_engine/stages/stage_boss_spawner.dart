@@ -23,8 +23,11 @@ class StageBossSpawner {
     List<Color>? palette,
     bool preserveSpriteAspectRatio = false,
     bool breatheIdle = false,
+    bool ghostIdle = false,
+    double baseSpriteOpacity = 1,
     bool drawHealthBarSeparately = false,
     double fakeSpriteOpacity = 0.35,
+    int visualVariantCount = 1,
   }) {
     final rule = definition.bossRule;
     if (rule == null) return const <BossBalloonComponent>[];
@@ -39,6 +42,9 @@ class StageBossSpawner {
     for (var index = 0; index < rule.bossCount; index++) {
       final initialIsFake = rule.sharedHp && index != 0;
       final color = activePalette[random.nextInt(activePalette.length)];
+      final visualVariant = visualVariantCount <= 1
+          ? 0
+          : (random.nextDouble() * visualVariantCount).floor();
       final maxX = math.max(0.0, bounds.x - initialSize);
       final maxY = math.max(0.0, bounds.y - initialSize - 26);
       var angle = random.nextDouble() * math.pi * 2;
@@ -83,10 +89,18 @@ class StageBossSpawner {
           onHitRequested: onHitRequested,
           directionRoll: random.nextDouble,
           spriteResolver: spriteForHp,
-          initialSprite: spriteForHp(color, rule.maxHp, fake: initialIsFake),
+          initialSprite: spriteForHp(
+            color,
+            rule.maxHp,
+            fake: initialIsFake,
+            visualVariant: visualVariant,
+          ),
           initialIsFake: initialIsFake,
+          visualVariant: visualVariant,
           preserveSpriteAspectRatio: preserveSpriteAspectRatio,
           breatheIdle: breatheIdle,
+          ghostIdle: ghostIdle,
+          baseSpriteOpacity: baseSpriteOpacity,
           drawHealthBarSeparately: drawHealthBarSeparately,
           fakeSpriteOpacity: fakeSpriteOpacity,
           turnIntervalOffset: rule.sharedHp ? (index == 0 ? -0.055 : 0.055) : 0,

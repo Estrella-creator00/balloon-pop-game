@@ -28,7 +28,10 @@ class StageBalloonSpawner {
     List<Color>? palette,
     bool preserveSpriteAspectRatio = false,
     bool breatheIdle = false,
+    bool ghostIdle = false,
+    double baseSpriteOpacity = 1,
     double fakeSpriteOpacity = 0.35,
+    int visualVariantCount = 1,
   }) {
     // Component ids change per generation, but a seeded stage keeps the same
     // initial layout and motion after restart.
@@ -59,6 +62,9 @@ class StageBalloonSpawner {
       final speed = definition.speedRange.valueAt(random.nextDouble());
       final angle = random.nextDouble() * math.pi * 2;
       final color = activePalette[random.nextInt(activePalette.length)];
+      final visualVariant = visualVariantCount <= 1
+          ? 0
+          : (random.nextDouble() * visualVariantCount).floor();
       final balloon = BalloonComponent(
         balloonId: idBase + index,
         generation: generation,
@@ -76,13 +82,17 @@ class StageBalloonSpawner {
           isFake ? 1 : definition.balloonRule.requiredHits,
           isFake ? 1 : definition.balloonRule.requiredHits,
           isFake,
+          visualVariant,
         ),
         spriteResolver: spriteResolver,
+        visualVariant: visualVariant,
         floatPhase: random.nextDouble() * math.pi * 2,
         floatPower: 10 + random.nextDouble() * 10,
         firstHitSizeMultiplier: definition.balloonRule.firstHitSizeMultiplier,
         preserveSpriteAspectRatio: preserveSpriteAspectRatio,
         breatheIdle: breatheIdle,
+        ghostIdle: ghostIdle,
+        baseSpriteOpacity: baseSpriteOpacity,
         spriteOpacity: isFake ? fakeSpriteOpacity : 1,
       );
       balloons.add(balloon);

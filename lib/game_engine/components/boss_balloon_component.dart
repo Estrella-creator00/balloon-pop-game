@@ -5,13 +5,19 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 
 import '../stages/flame_stage_definition.dart';
+import '../rendering/flame_sprite_frame.dart';
 import 'balloon_component.dart';
 
 typedef BossHitRequest = bool Function(
   BossBalloonComponent boss,
   Vector2? worldPoint,
 );
-typedef BossSpriteResolver = Image Function(Color color, int hp, {bool fake});
+typedef BossSpriteResolver = FlameSpriteFrame Function(
+  Color color,
+  int hp, {
+  required bool fake,
+  required int visualVariant,
+});
 
 class BossBalloonComponent extends PositionComponent with TapCallbacks {
   BossBalloonComponent({
@@ -28,22 +34,25 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
     required this.onHitRequested,
     required this.directionRoll,
     required this.spriteResolver,
-    required Image initialSprite,
+    required FlameSpriteFrame initialSprite,
     required bool initialIsFake,
+    required this.visualVariant,
     this.preserveSpriteAspectRatio = false,
     this.breatheIdle = false,
+    this.ghostIdle = false,
+    this.baseSpriteOpacity = 1,
     this.drawHealthBarSeparately = false,
     this.fakeSpriteOpacity = 0.35,
     this.turnIntervalOffset = 0,
     double? initialTurnCooldown,
-  })  : _sprite = initialSprite,
+  })  : _sprite = initialSprite.image,
         _visualHp = rule.maxHp,
         turnCooldown = initialTurnCooldown ?? rule.initialTurnCooldown,
         _sourceRect = Rect.fromLTWH(
           0,
           0,
-          initialSprite.width.toDouble(),
-          initialSprite.height.toDouble(),
+          initialSprite.image.width.toDouble(),
+          initialSprite.image.height.toDouble(),
         ),
         _destinationRect = Rect.fromLTWH(0, 0, initialSize, initialSize + 32),
         super(
@@ -51,9 +60,13 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
           size: Vector2(initialSize, initialSize + 32),
           priority: 100,
         ) {
-    if (initialIsFake) {
-      _spritePaint.color = Color.fromRGBO(255, 255, 255, fakeSpriteOpacity);
-    }
+    _spritePaint.color = Color.fromRGBO(
+      255,
+      255,
+      255,
+      baseSpriteOpacity * (initialIsFake ? fakeSpriteOpacity : 1),
+    );
+    _spritePaint.colorFilter = initialSprite.colorFilter;
     _refreshDestinationRect();
     _refreshHealthBarGeometry();
   }
@@ -70,9 +83,12 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   final BossHitRequest onHitRequested;
   final double Function() directionRoll;
   final BossSpriteResolver spriteResolver;
+  final int visualVariant;
   final double turnIntervalOffset;
   final bool preserveSpriteAspectRatio;
   final bool breatheIdle;
+  final bool ghostIdle;
+  final double baseSpriteOpacity;
   final bool drawHealthBarSeparately;
   final double fakeSpriteOpacity;
   final Paint _spritePaint = Paint()
@@ -98,6 +114,16 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   static final List<double> _breatheScale = List<double>.generate(
     256,
     (index) => 1 + math.sin(index * math.pi * 2 / 256) * 0.018,
+    growable: false,
+  );
+  static final List<double> _sinLookup = List<double>.generate(
+    256,
+    (index) => math.sin(index * math.pi * 2 / 256),
+    growable: false,
+  );
+  static final List<double> _cosLookup = List<double>.generate(
+    256,
+    (index) => math.cos(index * math.pi * 2 / 256),
     growable: false,
   );
 
@@ -154,7 +180,14 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   void applyRegisteredHit({required int hp}) {
     if (_defeated || hp <= 0 || hp >= _visualHp) return;
     _visualHp = hp;
-    _sprite = spriteResolver(color, hp, fake: isFake);
+    final frame = spriteResolver(
+      color,
+      hp,
+      fake: isFake,
+      visualVariant: visualVariant,
+    );
+    _sprite = frame.image;
+    _spritePaint.colorFilter = frame.colorFilter;
     final nextDiameter = rule.sizeForHp(initialSize, hp);
     size.setValues(nextDiameter, nextDiameter + 32);
     _sourceRect = Rect.fromLTWH(
@@ -180,16 +213,26 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
 
   void refreshRole() {
     if (_defeated || currentHp <= 0) return;
-    _sprite = spriteResolver(color, currentHp, fake: isFake);
+    final frame = spriteResolver(
+      color,
+      currentHp,
+      fake: isFake,
+      visualVariant: visualVariant,
+    );
+    _sprite = frame.image;
+    _spritePaint.colorFilter = frame.colorFilter;
     _sourceRect = Rect.fromLTWH(
       0,
       0,
       _sprite.width.toDouble(),
       _sprite.height.toDouble(),
     );
-    _spritePaint.color = isFake
-        ? Color.fromRGBO(255, 255, 255, fakeSpriteOpacity)
-        : const Color(0xFFFFFFFF);
+    _spritePaint.color = Color.fromRGBO(
+      255,
+      255,
+      255,
+      baseSpriteOpacity * (isFake ? fakeSpriteOpacity : 1),
+    );
   }
 
   void _refreshDestinationRect() {
@@ -235,12 +278,18 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
 
   @override
   void render(Canvas canvas) {
-    if (breatheIdle) {
-      final index = ((_visualPhase / (math.pi * 2) * 256).floor()) & 255;
-      final scale = _breatheScale[index];
+    final index = ((_visualPhase / (math.pi * 2) * 256).floor()) & 255;
+    final scale = breatheIdle ? _breatheScale[index] : 1.0;
+    final offset = ghostIdle
+        ? Offset(_sinLookup[index] * 1.4, _cosLookup[index] * 2.2)
+        : Offset.zero;
+    final rotation =
+        ghostIdle ? _sinLookup[(index * 7 ~/ 10) & 255] * 0.018 : 0.0;
+    if (scale != 1 || offset != Offset.zero || rotation != 0) {
       canvas
         ..save()
-        ..translate(size.x / 2, size.x / 2)
+        ..translate(size.x / 2 + offset.dx, size.x / 2 + offset.dy)
+        ..rotate(rotation)
         ..scale(scale, scale)
         ..translate(-size.x / 2, -size.x / 2)
         ..drawImageRect(_sprite, _sourceRect, _destinationRect, _spritePaint)
@@ -264,7 +313,7 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   @override
   bool containsLocalPoint(Vector2 point) {
     if (!preserveSpriteAspectRatio) return super.containsLocalPoint(point);
-    final hitBounds = breatheIdle
+    final hitBounds = (breatheIdle || ghostIdle)
         ? _destinationRect.inflate(size.x * 0.02)
         : _destinationRect;
     return hitBounds.contains(Offset(point.x, point.y));
