@@ -79,6 +79,7 @@ class PoppopGame extends FlameGame {
   double _lastAppliedDelta = 0;
   int _operationEpoch = 0;
   int _componentGeneration = 0;
+  Vector2? _lastEffectOrigin;
 
   bool get isShutdown => _shutdown;
   bool get isStageTransitionInFlight => _transitionInFlight;
@@ -98,6 +99,7 @@ class PoppopGame extends FlameGame {
   Iterable<BalloonComponent> get balloonComponents => _balloons.values;
   Iterable<BossBalloonComponent> get bossComponents => _bosses.values;
   Iterable<BasicPopEffect> get basicPopEffects => _popEffects;
+  Vector2? get lastEffectOrigin => _lastEffectOrigin?.clone();
   bool get isComponentStateSynchronized =>
       sessionState.matchesActiveComponentIds(_balloons.keys) &&
       sessionState.matchesActiveBossComponentIds(_bosses.keys);
@@ -230,6 +232,7 @@ class PoppopGame extends FlameGame {
         spriteForHp: skinRuntime.bossFrame,
         palette: skinRuntime.palette,
         preserveSpriteAspectRatio: skinRuntime.preserveSpriteAspectRatio,
+        useSourceAspectGeometry: skinRuntime.usesSourceAspectGeometry,
         breatheIdle: skinRuntime.breathes,
         ghostIdle: skinRuntime.ghostIdle,
         baseSpriteOpacity: skinRuntime.baseSpriteOpacity,
@@ -249,6 +252,7 @@ class PoppopGame extends FlameGame {
         spriteResolver: skinRuntime.balloonFrame,
         palette: skinRuntime.palette,
         preserveSpriteAspectRatio: skinRuntime.preserveSpriteAspectRatio,
+        useSourceAspectGeometry: skinRuntime.usesSourceAspectGeometry,
         breatheIdle: skinRuntime.breathes,
         ghostIdle: skinRuntime.ghostIdle,
         baseSpriteOpacity: skinRuntime.baseSpriteOpacity,
@@ -312,7 +316,12 @@ class PoppopGame extends FlameGame {
     final result = sessionState.hitBalloon(balloon.balloonId);
     if (result == BalloonHitResult.ignored) return false;
     _reportBalloonFeedback(result);
-    final center = balloon.position + balloon.size / 2;
+    final center = skinRuntime.usesSourceAspectGeometry
+        ? Vector2(
+            balloon.visualCenterInParent.dx,
+            balloon.visualCenterInParent.dy,
+          )
+        : balloon.position + balloon.size / 2;
     if (result != BalloonHitResult.fakeHit) {
       _addHitEffect(
         center,
@@ -360,7 +369,12 @@ class PoppopGame extends FlameGame {
     );
     if (result == BossHitResult.ignored) return false;
     _reportBossFeedback(result);
-    final center = boss.position + boss.size / 2;
+    final center = skinRuntime.usesSourceAspectGeometry
+        ? Vector2(
+            boss.visualCenterInParent.dx,
+            boss.visualCenterInParent.dy,
+          )
+        : boss.position + boss.size / 2;
     if (result != BossHitResult.fakeHit) {
       _addHitEffect(
         center,
@@ -445,11 +459,20 @@ class PoppopGame extends FlameGame {
     BossBalloonComponent? closest;
     var closestDistance = double.infinity;
     for (final candidate in _bosses.values) {
-      if (!candidate.playfieldBounds.contains(Offset(point.x, point.y))) {
+      final hitBounds = skinRuntime.usesSourceAspectGeometry
+          ? candidate.visualBoundsInParent
+          : candidate.playfieldBounds;
+      if (!hitBounds.contains(Offset(point.x, point.y))) {
         continue;
       }
-      final dx = point.x - (candidate.position.x + candidate.size.x / 2);
-      final dy = point.y - (candidate.position.y + candidate.size.x / 2);
+      final center = skinRuntime.usesSourceAspectGeometry
+          ? candidate.visualCenterInParent
+          : Offset(
+              candidate.position.x + candidate.size.x / 2,
+              candidate.position.y + candidate.size.x / 2,
+            );
+      final dx = point.x - center.dx;
+      final dy = point.y - center.dy;
       final distance = dx * dx + dy * dy;
       if (distance <= closestDistance) {
         closest = candidate;
@@ -469,6 +492,7 @@ class PoppopGame extends FlameGame {
   void _addHitEffect(
       Vector2 center, Color color, double sourceSize, LegendaryHitKind kind,
       {required bool boss}) {
+    _lastEffectOrigin = center.clone();
     final definition = skinRuntime.legendaryDefinition;
     final cache = skinRuntime.legendaryCache;
     if (definition == null || cache == null) {

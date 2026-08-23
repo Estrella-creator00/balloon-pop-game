@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 
 import '../../balloon_skin_catalog.dart';
 import '../components/balloon_component.dart';
+import '../rendering/flame_sprite_frame.dart';
 import 'flame_stage_definition.dart';
 
 typedef StageBalloonHitRequest = bool Function(BalloonComponent balloon);
@@ -27,6 +28,7 @@ class StageBalloonSpawner {
     required BalloonSpriteResolver spriteResolver,
     List<Color>? palette,
     bool preserveSpriteAspectRatio = false,
+    bool useSourceAspectGeometry = false,
     bool breatheIdle = false,
     bool ghostIdle = false,
     double baseSpriteOpacity = 1,
@@ -47,10 +49,18 @@ class StageBalloonSpawner {
     for (var index = 0; index < totalCount; index++) {
       final isFake = index >= definition.balloonCount;
       final width = definition.sizeRange.valueAt(random.nextDouble());
-      final balloonSize = Vector2(
-        width,
-        width + BalloonComponent.stringHeight,
-      );
+      final geometryFrame = useSourceAspectGeometry
+          ? spriteResolver(
+              activePalette.first,
+              isFake ? 1 : definition.balloonRule.requiredHits,
+              isFake ? 1 : definition.balloonRule.requiredHits,
+              isFake,
+              0,
+            )
+          : null;
+      final balloonSize = useSourceAspectGeometry
+          ? sourceAspectComponentSize(geometryFrame!.image, width)
+          : Vector2(width, width + BalloonComponent.stringHeight);
       final position = _findPosition(
         index: index,
         totalCount: totalCount,
@@ -65,6 +75,13 @@ class StageBalloonSpawner {
       final visualVariant = visualVariantCount <= 1
           ? 0
           : (random.nextDouble() * visualVariantCount).floor();
+      final sprite = spriteResolver(
+        color,
+        isFake ? 1 : definition.balloonRule.requiredHits,
+        isFake ? 1 : definition.balloonRule.requiredHits,
+        isFake,
+        visualVariant,
+      );
       final balloon = BalloonComponent(
         balloonId: idBase + index,
         generation: generation,
@@ -77,19 +94,14 @@ class StageBalloonSpawner {
         color: color,
         maxHp: isFake ? 1 : definition.balloonRule.requiredHits,
         isFake: isFake,
-        sprite: spriteResolver(
-          color,
-          isFake ? 1 : definition.balloonRule.requiredHits,
-          isFake ? 1 : definition.balloonRule.requiredHits,
-          isFake,
-          visualVariant,
-        ),
+        sprite: sprite,
         spriteResolver: spriteResolver,
         visualVariant: visualVariant,
         floatPhase: random.nextDouble() * math.pi * 2,
         floatPower: 10 + random.nextDouble() * 10,
         firstHitSizeMultiplier: definition.balloonRule.firstHitSizeMultiplier,
         preserveSpriteAspectRatio: preserveSpriteAspectRatio,
+        useSourceAspectGeometry: useSourceAspectGeometry,
         breatheIdle: breatheIdle,
         ghostIdle: ghostIdle,
         baseSpriteOpacity: baseSpriteOpacity,

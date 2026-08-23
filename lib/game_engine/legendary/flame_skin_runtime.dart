@@ -44,6 +44,7 @@ class FlameSkinRuntime {
       : 0.35;
   bool get usesSeparateBossHealthBar => isLegendary || _skin.usesCatalogImage;
   bool get preserveSpriteAspectRatio => isLegendary || _skin.usesCatalogImage;
+  bool get usesSourceAspectGeometry => _skin == FlamePreviewSkin.shushu;
   LegendaryIdleStyle get idleStyle =>
       legendaryDefinition?.idleStyle ?? LegendaryIdleStyle.none;
   bool get breathes => idleStyle == LegendaryIdleStyle.breathe;

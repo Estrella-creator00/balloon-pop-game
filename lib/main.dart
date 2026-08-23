@@ -2057,6 +2057,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   StageConfig get _stageConfig => StageConfig.forStage(_stage);
 
+  @visibleForTesting
+  int get debugProductionGameplaySpriteCount =>
+      _gameSpriteCache.resolvedCount + _gameSpriteCache.pendingCount;
+
   @override
   void initState() {
     super.initState();
@@ -2104,6 +2108,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     super.didChangeDependencies();
     if (_initialAssetsPrecached) return;
     _initialAssetsPrecached = true;
+    // Flame owns its gameplay images in integration mode. Preparing the
+    // production Canvas cache as well keeps duplicate decoded textures alive.
+    if (widget.useFlameGameplay) return;
     _precacheSkinAssets(_equippedBalloonSkin);
   }
 
@@ -2276,13 +2283,20 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
-    _flameRouteActive = true;
+    setState(() => _flameRouteActive = true);
     final sessionId = ++_flameSessionId;
     _persistedFlameClears.clear();
     _coinRewardSession.reset();
     _resultSaved = false;
     _earnedCoins = 0;
     final skin = flamePreviewSkinFromValue(_equippedBalloonSkin.id);
+    final soundDefinition = skin.catalogDefinition;
+    for (final path in <String?>[
+      soundDefinition.hitSoundAssetPath,
+      soundDefinition.popSoundAssetPath,
+    ]) {
+      if (path != null) PopSound.prepareGameplayAsset(path);
+    }
     final result = await Navigator.of(context).push<FlameIntegrationResult>(
       MaterialPageRoute(
         builder: (context) => FlameIntegrationGamePage(
@@ -2304,8 +2318,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       ),
     );
     if (!mounted || sessionId != _flameSessionId) return;
-    _flameRouteActive = false;
     if (result == null || !result.recordsResult) {
+      _flameRouteActive = false;
       _returnToMenu();
       return;
     }
@@ -2314,6 +2328,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _secondsLeft = 0;
     _recordResult();
     setState(() {
+      _flameRouteActive = false;
       _phase = result.outcome == FlameIntegrationOutcome.completed
           ? GamePhase.completed
           : GamePhase.gameOver;
@@ -5074,18 +5089,21 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   @override
   Widget build(BuildContext context) {
     if (_phase == GamePhase.menu) {
-      return switch (_mainTab) {
-        MainTab.home => _buildStartScreen(),
-        MainTab.store => _buildShopScreen(),
-        MainTab.event => _buildMainPlaceholder(
-            tab: MainTab.event,
-            message: '이벤트 준비 중',
-          ),
-        MainTab.ranking => _buildMainPlaceholder(
-            tab: MainTab.ranking,
-            message: '랭킹 준비 중',
-          ),
-      };
+      return TickerMode(
+        enabled: !_flameRouteActive,
+        child: switch (_mainTab) {
+          MainTab.home => _buildStartScreen(),
+          MainTab.store => _buildShopScreen(),
+          MainTab.event => _buildMainPlaceholder(
+              tab: MainTab.event,
+              message: '이벤트 준비 중',
+            ),
+          MainTab.ranking => _buildMainPlaceholder(
+              tab: MainTab.ranking,
+              message: '랭킹 준비 중',
+            ),
+        },
+      );
     }
     // G-01 게임 플레이 화면
     final equippedSkin = _equippedBalloonSkin;

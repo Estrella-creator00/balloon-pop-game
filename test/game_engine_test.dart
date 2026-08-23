@@ -467,6 +467,20 @@ void main() {
     expect(find.byType(GameWidget<PoppopGame>), findsNothing);
   });
 
+  test('session does not repeat notifications inside one displayed second', () {
+    final session = GameSessionState();
+    var notifications = 0;
+    session.addListener(() => notifications++);
+    session.startNewGame(flamePreviewStage(1), <int, int>{1: 1, 2: 1});
+    notifications = 0;
+    session.recordUpdate(.01);
+    session.recordUpdate(.01);
+    expect(notifications, 0);
+    session.recordUpdate(1);
+    expect(notifications, 1);
+    session.dispose();
+  });
+
   testWidgets(
       'integration mode reuses production home and starts one Flame game',
       (tester) async {
@@ -493,6 +507,9 @@ void main() {
     expect(find.byType(GameWidget<PoppopGame>), findsNothing);
     expect(find.byKey(const ValueKey('flame-preview-skin-selector')),
         findsNothing);
+    final dynamic productionState =
+        tester.state(find.byType(BalloonGamePage));
+    expect(productionState.debugProductionGameplaySpriteCount, 0);
 
     await tester.tap(find.byKey(const ValueKey('start-section-1')));
     await tester.pump();
@@ -507,6 +524,8 @@ void main() {
     expect(find.byType(GameWidget<PoppopGame>), findsOneWidget);
     expect(find.byKey(const ValueKey('flame-preview-skin-selector')),
         findsNothing);
+    expect(find.byKey(const ValueKey('pause-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('end-button')), findsOneWidget);
     final headerBefore = tester.widget<GameHeader>(find.byType(GameHeader));
     final positionBefore = game.balloonComponents.first.position.clone();
     await tester.pump(const Duration(milliseconds: 100));
@@ -553,6 +572,133 @@ void main() {
     expect(selectedSkin, FlamePreviewSkin.heart);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+  });
+
+  for (final skin in <FlamePreviewSkin>[
+    FlamePreviewSkin.gemi,
+    FlamePreviewSkin.shushu,
+  ]) {
+    testWidgets(
+        '${skin.label} integration keeps HUD above one persistent GameWidget',
+        (tester) async {
+      final definition = skin.catalogDefinition;
+      ProgressStorage.addCoins(definition.price);
+      expect(
+        ProgressStorage.tryPurchaseProduct(definition.id, definition.price),
+        isTrue,
+      );
+      ProgressStorage.setEquippedProductId('balloon', definition.id);
+      late PoppopGame game;
+      late GameSessionState session;
+      var createCount = 0;
+      await tester.pumpWidget(PoppopAppEntry(
+        engineMode: PoppopEngineMode.flameIntegration,
+        integrationGameFactory: (created, selected, stage, onFeedback) {
+          createCount++;
+          session = created;
+          return game = PoppopGame(
+            created,
+            initialStage: stage,
+            initialSkin: selected,
+            legendaryImageLoader: _testLegendaryImageLoader,
+            onGameplayFeedback: onFeedback,
+            showDiagnostics: false,
+          );
+        },
+      ));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('start-section-1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await game.loaded;
+      await tester.pump();
+
+      expect(createCount, 1);
+      expect(find.byKey(const ValueKey('pause-button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('end-button')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('flame-integration-playfield-clip')),
+        findsOneWidget,
+      );
+      final gameWidget = tester.widget<GameWidget<PoppopGame>>(
+        find.byKey(const ValueKey('flame-integration-game-widget')),
+      );
+      final header = tester.widget<GameHeader>(find.byType(GameHeader));
+      final hiddenHome = find.byType(
+        HomeFloatingBalloons,
+        skipOffstage: false,
+      );
+      expect(hiddenHome, findsOneWidget);
+      expect(TickerMode.valuesOf(tester.element(hiddenHome)).enabled, isFalse);
+
+      expect(game.balloonComponents.first.requestHit(), isTrue);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        tester.widget<GameWidget<PoppopGame>>(
+          find.byKey(const ValueKey('flame-integration-game-widget')),
+        ),
+        same(gameWidget),
+      );
+      expect(tester.widget<GameHeader>(find.byType(GameHeader)), same(header));
+      expect(createCount, 1);
+
+      final remaining = session.remainingBalloons;
+      await tester.tap(find.byKey(const ValueKey('pause-button')));
+      await tester.pump();
+      expect(session.phase, GameSessionPhase.paused);
+      expect(session.remainingBalloons, remaining);
+      await tester.tap(find.byKey(const ValueKey('flame-integration-resume')));
+      await tester.pump();
+      expect(session.phase, GameSessionPhase.playing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(game.isShutdown, isTrue);
+    });
+  }
+
+  testWidgets('WARI integration prepares sound before the first accepted pop',
+      (tester) async {
+    final definition = FlamePreviewSkin.wari.catalogDefinition;
+    ProgressStorage.addCoins(definition.price);
+    expect(
+      ProgressStorage.tryPurchaseProduct(definition.id, definition.price),
+      isTrue,
+    );
+    ProgressStorage.setEquippedProductId('balloon', definition.id);
+    PopSound.resetDebug();
+    late PoppopGame game;
+    await tester.pumpWidget(PoppopAppEntry(
+      engineMode: PoppopEngineMode.flameIntegration,
+      integrationGameFactory: (session, skin, stage, onFeedback) {
+        return game = PoppopGame(
+          session,
+          initialStage: stage,
+          initialSkin: skin,
+          legendaryImageLoader: _testLegendaryImageLoader,
+          onGameplayFeedback: onFeedback,
+          showDiagnostics: false,
+        );
+      },
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('start-section-1')));
+    await tester.pump();
+    expect(PopSound.gameplayAssetPrepareCount, 1);
+    expect(PopSound.lastPreparedAssetPath, definition.popSoundAssetPath);
+    await tester.pump(const Duration(milliseconds: 100));
+    await game.loaded;
+    final prepared = PopSound.gameplayAssetPrepareCount;
+    final playsBeforePop = PopSound.assetPlayCount;
+    final balloon = game.balloonComponents.first;
+    expect(balloon.requestHit(), isTrue);
+    expect(PopSound.assetPlayCount, playsBeforePop + 1);
+    expect(PopSound.lastAssetPath, definition.popSoundAssetPath);
+    expect(PopSound.gameplayAssetPrepareCount, prepared);
+    expect(balloon.requestHit(), isFalse);
+    expect(PopSound.assetPlayCount, playsBeforePop + 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    expect(game.isShutdown, isTrue);
   });
 
   testWidgets('integration persists each stage clear once', (tester) async {
@@ -870,6 +1016,127 @@ void main() {
     expect(cache.matteCleanupCount, 1);
     expect(cache.loadedAssetPaths,
         contains('assets/images/balloon_shushu_asset.png'));
+  });
+
+  testWidgets(
+      'SHUSHU source aspect geometry drives body hit bounds and effect origin',
+      (tester) async {
+    final harness = await _pumpPreview(
+      tester,
+      initialStage: 11,
+      skin: FlamePreviewSkin.shushu,
+    );
+    final balloon = harness.game.balloonComponents.first;
+    expect(balloon.useSourceAspectGeometry, isTrue);
+    expect(
+      balloon.destinationRect.width / balloon.destinationRect.height,
+      closeTo(balloon.spriteAspectRatio, .0001),
+    );
+    expect(
+      balloon.visualBoundsInParent.width / balloon.visualBoundsInParent.height,
+      closeTo(balloon.spriteAspectRatio, .0001),
+    );
+    expect(balloon.currentVisualScale, inInclusiveRange(.982, 1.018));
+    expect(
+      balloon.containsLocalPoint(Vector2(
+        balloon.destinationRect.center.dx,
+        balloon.destinationRect.center.dy,
+      )),
+      isTrue,
+    );
+    expect(
+      balloon.containsLocalPoint(
+        Vector2(balloon.destinationRect.right + 2, 0),
+      ),
+      isFalse,
+    );
+    final firstOrigin = balloon.visualCenterInParent;
+    expect(balloon.requestHit(), isTrue);
+    expect(
+      harness.game.lastEffectOrigin,
+      isNotNull,
+    );
+    expect(harness.game.lastEffectOrigin!.x, closeTo(firstOrigin.dx, .0001));
+    expect(harness.game.lastEffectOrigin!.y, closeTo(firstOrigin.dy, .0001));
+    expect(
+      balloon.destinationRect.width / balloon.destinationRect.height,
+      closeTo(balloon.spriteAspectRatio, .0001),
+    );
+    expect(
+      balloon.containsLocalPoint(Vector2(
+        balloon.destinationRect.center.dx,
+        balloon.destinationRect.center.dy,
+      )),
+      isTrue,
+    );
+  });
+
+  testWidgets(
+      'SHUSHU Boss and Stage 30 share source aspect body and touch geometry',
+      (tester) async {
+    for (final stage in <int>[20, 30]) {
+      final harness = await _pumpPreview(
+        tester,
+        initialStage: stage,
+        skin: FlamePreviewSkin.shushu,
+        swapRoll: () => 1,
+      );
+      expect(harness.game.startBossStage(), isTrue);
+      final boss =
+          harness.game.bossComponents.firstWhere((item) => !item.isFake);
+      expect(boss.useSourceAspectGeometry, isTrue);
+      expect(
+        boss.destinationRect.width / boss.destinationRect.height,
+        closeTo(boss.spriteAspectRatio, .0001),
+      );
+      expect(
+        boss.visualBoundsInParent.width / boss.visualBoundsInParent.height,
+        closeTo(boss.spriteAspectRatio, .0001),
+      );
+      final localCenter = boss.destinationRect.center;
+      expect(
+        boss.containsLocalPoint(Vector2(localCenter.dx, localCenter.dy)),
+        isTrue,
+      );
+      expect(
+        boss.containsLocalPoint(Vector2(boss.destinationRect.right + 2, 0)),
+        isFalse,
+      );
+      final effectCenter = boss.visualCenterInParent;
+      expect(
+        boss.requestHit(
+          worldPoint: Vector2(effectCenter.dx, effectCenter.dy),
+        ),
+        isTrue,
+      );
+      expect(harness.game.lastEffectOrigin!.x, closeTo(effectCenter.dx, .0001));
+      expect(harness.game.lastEffectOrigin!.y, closeTo(effectCenter.dy, .0001));
+      expect(
+        boss.destinationRect.width / boss.destinationRect.height,
+        closeTo(boss.spriteAspectRatio, .0001),
+      );
+      expect(
+        harness.game.activeCacheImageCount,
+        lessThanOrEqualTo(6),
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
+  });
+
+  testWidgets('GEMI keeps its existing non-source-aspect geometry',
+      (tester) async {
+    final harness = await _pumpPreview(
+      tester,
+      initialStage: 30,
+      skin: FlamePreviewSkin.gemi,
+    );
+    expect(
+      harness.game.bossComponents.every(
+        (boss) => !boss.useSourceAspectGeometry,
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('legendary Boss and Stage 30 retain shared gameplay rules',
@@ -1421,7 +1688,9 @@ Future<ui.Image> _testLegendaryImageLoader(
 ) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
-  final height = (targetWidth * 1.4).round();
+  final height = path.contains('balloon_shushu_asset')
+      ? (targetWidth * 512 / 361).round()
+      : (targetWidth * 1.4).round();
   canvas.drawRect(
     ui.Rect.fromLTWH(0, 0, targetWidth.toDouble(), height.toDouble()),
     Paint()..color = const Color(0xFFFFFFFF),

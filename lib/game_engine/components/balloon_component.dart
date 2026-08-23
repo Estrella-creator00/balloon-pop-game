@@ -36,6 +36,7 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     required this.floatPower,
     required this.firstHitSizeMultiplier,
     this.preserveSpriteAspectRatio = false,
+    this.useSourceAspectGeometry = false,
     this.breatheIdle = false,
     this.ghostIdle = false,
     this.baseSpriteOpacity = 1,
@@ -44,7 +45,9 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
         _visualHp = maxHp,
         _sourceRect = Rect.fromLTWH(0, 0, sprite.image.width.toDouble(),
             sprite.image.height.toDouble()),
-        _destinationRect = Rect.fromLTWH(0, 0, balloonSize.x, balloonSize.y),
+        _destinationRect = useSourceAspectGeometry
+            ? sourceAspectDestinationRect(sprite.image, balloonSize.x)
+            : Rect.fromLTWH(0, 0, balloonSize.x, balloonSize.y),
         super(position: position, size: balloonSize, priority: balloonId) {
     final opacity = (spriteOpacity ?? (isFake ? 0.35 : 1)) * baseSpriteOpacity;
     _spritePaint.color = Color.fromRGBO(255, 255, 255, opacity);
@@ -70,6 +73,7 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   final double floatPower;
   final double firstHitSizeMultiplier;
   final bool preserveSpriteAspectRatio;
+  final bool useSourceAspectGeometry;
   final bool breatheIdle;
   final bool ghostIdle;
   final double baseSpriteOpacity;
@@ -114,6 +118,27 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   double get lastAppliedDelta => _lastAppliedDelta;
   Rect get playfieldBounds =>
       Rect.fromLTWH(position.x, position.y, size.x, size.y);
+  Rect get destinationRect => _destinationRect;
+  double get spriteAspectRatio => _sprite.width / _sprite.height;
+  double get currentVisualScale =>
+      breatheIdle ? _breatheScale[_visualPhaseIndex] : 1;
+  Offset get visualCenterInParent => Offset(
+        position.x + _destinationRect.center.dx,
+        position.y + _destinationRect.center.dy,
+      );
+  Rect get visualBoundsInParent {
+    final local = useSourceAspectGeometry
+        ? Rect.fromCenter(
+            center: _destinationRect.center,
+            width: _destinationRect.width * currentVisualScale,
+            height: _destinationRect.height * currentVisualScale,
+          )
+        : _destinationRect;
+    return local.shift(Offset(position.x, position.y));
+  }
+
+  int get _visualPhaseIndex =>
+      ((floatPhase / (math.pi * 2) * 256).floor()) & 255;
 
   @override
   void update(double dt) {
@@ -158,7 +183,11 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     _sprite = frame.image;
     _spritePaint.colorFilter = frame.colorFilter;
     final width = size.x * firstHitSizeMultiplier;
-    size.setValues(width, width + stringHeight);
+    if (useSourceAspectGeometry) {
+      size.setFrom(sourceAspectComponentSize(_sprite, width));
+    } else {
+      size.setValues(width, width + stringHeight);
+    }
     _sourceRect = Rect.fromLTWH(
         0, 0, _sprite.width.toDouble(), _sprite.height.toDouble());
     _refreshDestinationRect();
@@ -166,6 +195,10 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   }
 
   void _refreshDestinationRect() {
+    if (useSourceAspectGeometry) {
+      _destinationRect = sourceAspectDestinationRect(_sprite, size.x);
+      return;
+    }
     if (!preserveSpriteAspectRatio) {
       _destinationRect = Rect.fromLTWH(0, 0, size.x, size.y);
       return;
@@ -202,7 +235,7 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
 
   @override
   void render(Canvas canvas) {
-    final phaseIndex = ((floatPhase / (math.pi * 2) * 256).floor()) & 255;
+    final phaseIndex = _visualPhaseIndex;
     var scale = breatheIdle ? _breatheScale[phaseIndex] : 1.0;
     var offset = Offset.zero;
     var rotation = 0.0;
@@ -219,12 +252,15 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
           _sprite, _sourceRect, _destinationRect, _spritePaint);
       return;
     }
+    final pivot = useSourceAspectGeometry
+        ? _destinationRect.center
+        : Offset(size.x / 2, size.y / 2);
     canvas
       ..save()
-      ..translate(size.x / 2 + offset.dx, size.y / 2 + offset.dy)
+      ..translate(pivot.dx + offset.dx, pivot.dy + offset.dy)
       ..rotate(rotation)
       ..scale(scale, scale)
-      ..translate(-size.x / 2, -size.y / 2)
+      ..translate(-pivot.dx, -pivot.dy)
       ..drawImageRect(_sprite, _sourceRect, _destinationRect, _spritePaint)
       ..restore();
   }
@@ -235,6 +271,17 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   @override
   bool containsLocalPoint(Vector2 point) {
     if (_exiting) return false;
+    if (useSourceAspectGeometry) {
+      final hitBounds = Rect.fromCenter(
+        center: _destinationRect.center,
+        width: _destinationRect.width * currentVisualScale,
+        height: _destinationRect.height * currentVisualScale,
+      );
+      return point.x > hitBounds.left &&
+          point.x < hitBounds.right &&
+          point.y > hitBounds.top &&
+          point.y < hitBounds.bottom;
+    }
     if (!preserveSpriteAspectRatio) return super.containsLocalPoint(point);
     final hitBounds = (breatheIdle || ghostIdle)
         ? _destinationRect.inflate(size.x * 0.02)

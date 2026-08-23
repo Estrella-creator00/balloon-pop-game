@@ -220,34 +220,38 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
         child: Column(
           children: [
             GameHeader(
+              key: const ValueKey('flame-integration-hud-layer'),
               data: _header,
               onPause: _pause,
               onEnd: _confirmExit,
             ),
             Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: GameWidget<PoppopGame>(
-                      key: const ValueKey('flame-integration-game-widget'),
-                      game: _game,
+              child: ClipRect(
+                key: const ValueKey('flame-integration-playfield-clip'),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GameWidget<PoppopGame>(
+                        key: const ValueKey('flame-integration-game-widget'),
+                        game: _game,
+                      ),
                     ),
-                  ),
-                  if (phase == GameSessionPhase.loading)
-                    const _StatusOverlay(title: '준비 중...'),
-                  if (phase == GameSessionPhase.bossReady)
-                    _BossReadyOverlay(
-                      stage: _session.stage,
-                      onStart: _game.startBossStage,
-                    ),
-                  if (_sectionIntroVisible)
-                    _SectionIntroOverlay(
-                      definition: stageIntroDefinitions[_session.stage]!,
-                      onStart: _dismissSectionIntro,
-                    ),
-                  if (_manualPause)
-                    _PauseOverlay(onResume: _resume, onExit: _confirmExit),
-                ],
+                    if (phase == GameSessionPhase.loading)
+                      const _StatusOverlay(title: '준비 중...'),
+                    if (phase == GameSessionPhase.bossReady)
+                      _BossReadyOverlay(
+                        stage: _session.stage,
+                        onStart: _game.startBossStage,
+                      ),
+                    if (_sectionIntroVisible)
+                      _SectionIntroOverlay(
+                        definition: stageIntroDefinitions[_session.stage]!,
+                        onStart: _dismissSectionIntro,
+                      ),
+                    if (_manualPause)
+                      _PauseOverlay(onResume: _resume, onExit: _confirmExit),
+                  ],
+                ),
               ),
             ),
           ],

@@ -36,9 +36,11 @@ extension type _AudioElement._(JSObject _) implements JSObject {
   external factory _AudioElement([String source]);
 
   external JSPromise<JSAny?> play();
+  external void load();
   external void pause();
   external set currentTime(num value);
   external set preload(String value);
+  external int get readyState;
 }
 
 abstract final class PopSound {
@@ -255,6 +257,18 @@ abstract final class PopSound {
       });
     } catch (_) {
       // Asset preload support must never affect startup.
+    }
+  }
+
+  /// Requests media loading while the integration game is entered from a
+  /// user gesture, so the first accepted hit only resets and plays the player.
+  static void prepareGameplayAsset(String assetPath) {
+    try {
+      preloadAsset(assetPath);
+      final player = _assetPlayers[assetPath];
+      if (player != null && player.readyState < 2) player.load();
+    } catch (_) {
+      // Media readiness must never block gameplay navigation.
     }
   }
 

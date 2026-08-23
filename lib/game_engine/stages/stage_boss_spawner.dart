@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../components/boss_balloon_component.dart';
+import '../rendering/flame_sprite_frame.dart';
 import 'flame_stage_definition.dart';
 
 class StageBossSpawner {
@@ -22,6 +23,7 @@ class StageBossSpawner {
     required BossSpriteResolver spriteForHp,
     List<Color>? palette,
     bool preserveSpriteAspectRatio = false,
+    bool useSourceAspectGeometry = false,
     bool breatheIdle = false,
     bool ghostIdle = false,
     double baseSpriteOpacity = 1,
@@ -45,8 +47,21 @@ class StageBossSpawner {
       final visualVariant = visualVariantCount <= 1
           ? 0
           : (random.nextDouble() * visualVariantCount).floor();
-      final maxX = math.max(0.0, bounds.x - initialSize);
-      final maxY = math.max(0.0, bounds.y - initialSize - 26);
+      final initialSprite = spriteForHp(
+        color,
+        rule.maxHp,
+        fake: initialIsFake,
+        visualVariant: visualVariant,
+      );
+      final componentSize = useSourceAspectGeometry
+          ? sourceAspectComponentSize(
+              initialSprite.image,
+              initialSize,
+              trailingHeight: BossBalloonComponent.healthBarAreaHeight,
+            )
+          : Vector2(initialSize, initialSize + 32);
+      final maxX = math.max(0.0, bounds.x - componentSize.x);
+      final maxY = math.max(0.0, bounds.y - componentSize.y);
       var angle = random.nextDouble() * math.pi * 2;
       if (rule.sharedHp && previousAngle != null) {
         final difference = math
@@ -63,14 +78,22 @@ class StageBossSpawner {
       var position =
           Vector2(random.nextDouble() * maxX, random.nextDouble() * maxY);
       for (var attempt = 0; attempt < 80; attempt++) {
-        final rect =
-            Rect.fromLTWH(position.x, position.y, initialSize, initialSize);
+        final rect = Rect.fromLTWH(
+          position.x,
+          position.y,
+          componentSize.x,
+          componentSize.y,
+        );
         if (occupied.every((other) => !other.inflate(12).overlaps(rect))) break;
         position =
             Vector2(random.nextDouble() * maxX, random.nextDouble() * maxY);
       }
-      occupied
-          .add(Rect.fromLTWH(position.x, position.y, initialSize, initialSize));
+      occupied.add(Rect.fromLTWH(
+        position.x,
+        position.y,
+        componentSize.x,
+        componentSize.y,
+      ));
       bosses.add(
         BossBalloonComponent(
           bossId: idBase + index,
@@ -89,15 +112,11 @@ class StageBossSpawner {
           onHitRequested: onHitRequested,
           directionRoll: random.nextDouble,
           spriteResolver: spriteForHp,
-          initialSprite: spriteForHp(
-            color,
-            rule.maxHp,
-            fake: initialIsFake,
-            visualVariant: visualVariant,
-          ),
+          initialSprite: initialSprite,
           initialIsFake: initialIsFake,
           visualVariant: visualVariant,
           preserveSpriteAspectRatio: preserveSpriteAspectRatio,
+          useSourceAspectGeometry: useSourceAspectGeometry,
           breatheIdle: breatheIdle,
           ghostIdle: ghostIdle,
           baseSpriteOpacity: baseSpriteOpacity,
