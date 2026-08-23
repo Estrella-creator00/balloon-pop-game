@@ -12,6 +12,9 @@ import 'balloon_skin_catalog.dart';
 import 'coin_purchase_page.dart';
 import 'dev/dev_coin_tool.dart';
 import 'game_engine/flame_game_page.dart';
+import 'game_engine/integration/flame_integration_contract.dart';
+import 'game_engine/integration/flame_integration_game_page.dart';
+import 'game_engine/legendary/flame_preview_skin.dart';
 import 'game_engine/poppop_engine_mode.dart';
 import 'gameplay/game_canvas.dart';
 import 'gameplay/boo_idle_motion.dart';
@@ -20,6 +23,7 @@ import 'gameplay/game_hit_tester.dart';
 import 'gameplay/game_render_state.dart';
 import 'gameplay/game_sprite_cache.dart';
 import 'gameplay/gameplay_ab_test_flags.dart';
+import 'gameplay/stage_intro_definition.dart';
 import 'onboarding_page.dart';
 import 'ranking/ranking_page.dart';
 import 'services/coin_service.dart';
@@ -28,6 +32,10 @@ import 'services/purchase_service.dart';
 import 'services/settings_service.dart';
 import 'settings_page.dart';
 import 'storage/progress_storage.dart';
+import 'widgets/game_header.dart';
+
+export 'widgets/game_header.dart';
+export 'gameplay/stage_intro_definition.dart';
 
 void main() {
   runApp(PoppopAppEntry(engineMode: poppopEngineModeFromUri(Uri.base)));
@@ -38,12 +46,16 @@ class PoppopAppEntry extends StatefulWidget {
     super.key,
     this.engineMode = defaultPoppopEngineMode,
     this.flameGameFactory,
+    this.integrationGameFactory,
   });
 
   final PoppopEngineMode engineMode;
 
   @visibleForTesting
   final PoppopGameFactory? flameGameFactory;
+
+  @visibleForTesting
+  final FlameIntegrationGameFactory? integrationGameFactory;
 
   @override
   State<PoppopAppEntry> createState() => _PoppopAppEntryState();
@@ -65,8 +77,11 @@ class _PoppopAppEntryState extends State<PoppopAppEntry> {
 
   @override
   Widget build(BuildContext context) {
-    if (_engineMode == PoppopEngineMode.production) {
-      return const BalloonPopApp();
+    if (_engineMode != PoppopEngineMode.flamePreview) {
+      return BalloonPopApp(
+        useFlameGameplay: _engineMode == PoppopEngineMode.flameIntegration,
+        integrationGameFactory: widget.integrationGameFactory,
+      );
     }
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -86,6 +101,8 @@ class BalloonPopApp extends StatefulWidget {
     this.stage30SwapRollForTest,
     this.toolHitDeltaForTest,
     this.gameplayRendererMode = defaultGameplayRendererMode,
+    this.useFlameGameplay = false,
+    this.integrationGameFactory,
   });
 
   @visibleForTesting
@@ -95,6 +112,10 @@ class BalloonPopApp extends StatefulWidget {
   final double? toolHitDeltaForTest;
 
   final GameplayRendererMode gameplayRendererMode;
+  final bool useFlameGameplay;
+
+  @visibleForTesting
+  final FlameIntegrationGameFactory? integrationGameFactory;
 
   @override
   State<BalloonPopApp> createState() => _BalloonPopAppState();
@@ -130,6 +151,8 @@ class _BalloonPopAppState extends State<BalloonPopApp> {
               stage30SwapRollForTest: widget.stage30SwapRollForTest,
               toolHitDeltaForTest: widget.toolHitDeltaForTest,
               gameplayRendererMode: widget.gameplayRendererMode,
+              useFlameGameplay: widget.useFlameGameplay,
+              integrationGameFactory: widget.integrationGameFactory,
             )
           : NicknameOnboardingPage(onCompleted: _completeNicknameOnboarding),
     );
@@ -1751,47 +1774,43 @@ LegendaryToolVisual pendingToolVisual(PendingToolHit hit) {
   );
 }
 
-@immutable
-class StageIntroDefinition {
-  const StageIntroDefinition({
-    required this.title,
-    required this.headline,
-    required this.rules,
-  });
-
-  final String title;
-  final String headline;
-  final List<String> rules;
-}
-
-const stageIntroDefinitions = <int, StageIntroDefinition>{
-  11: StageIntroDefinition(
-    title: 'STAGE 11–20',
-    headline: '단단한 풍선 등장!',
-    rules: ['풍선마다 2번 터치', '빠르게 모두 터뜨리기'],
-  ),
-  21: StageIntroDefinition(
-    title: 'STAGE 21–30',
-    headline: '가짜 풍선 등장!',
-    rules: ['가짜 풍선 터치 금지', '진짜 풍선만 터뜨리기'],
-  ),
-  31: StageIntroDefinition(
-    title: 'STAGE 31–40',
-    headline: '분열 풍선 등장!',
-    rules: ['터뜨리면 작은 풍선으로 분열', '분열된 풍선까지 모두 터뜨리기'],
-  ),
-  41: StageIntroDefinition(
-    title: 'STAGE 41–50',
-    headline: '숫자 풍선 등장!',
-    rules: ['풍선에 숫자 표시', '숫자 순서대로 터뜨리기'],
-  ),
-};
-
 bool playBalloonHitSound(BalloonSkinDefinition definition) {
   final assetPath = definition.hitSoundAssetPath;
   if (assetPath == null) return false;
   PopSound.playAsset(assetPath);
   return true;
+}
+
+void playFlameGameplayFeedback(FlameGameplayFeedbackEvent event) {
+  final skin = BalloonSkinCatalog.byIdOrDefault(event.skinId);
+  switch (event.kind) {
+    case FlameGameplayFeedbackKind.balloonFirstHit:
+      if (!playBalloonHitSound(skin)) PopSound.playLightTap();
+    case FlameGameplayFeedbackKind.balloonPop:
+      HapticService.shortImpact();
+      playBalloonHitSound(skin);
+      playGameplayBalloonPopSound(skin, boss: false);
+    case FlameGameplayFeedbackKind.kickExitStarted:
+      HapticService.shortImpact();
+      playBalloonHitSound(skin);
+    case FlameGameplayFeedbackKind.fakeHit:
+      HapticService.shortImpact();
+      PopSound.playFake();
+    case FlameGameplayFeedbackKind.bossHit:
+      HapticService.shortImpact();
+      if (!playBalloonHitSound(skin)) PopSound.play();
+    case FlameGameplayFeedbackKind.bossDefeated:
+      HapticService.shortImpact();
+      if (!playBalloonHitSound(skin)) PopSound.play();
+      playGameplayBalloonPopSound(skin, boss: true);
+    case FlameGameplayFeedbackKind.bossClear:
+      HapticService.shortImpact();
+      if (!playBalloonHitSound(skin)) PopSound.play();
+      playGameplayBalloonPopSound(skin, boss: true);
+      PopSound.playBossClear();
+    case FlameGameplayFeedbackKind.bossReady:
+      PopSound.playBossAppear();
+  }
 }
 
 const gameLoopInterval = Duration(milliseconds: 33);
@@ -1832,6 +1851,8 @@ class BalloonGamePage extends StatefulWidget {
     this.stage30SwapRollForTest,
     this.toolHitDeltaForTest,
     this.gameplayRendererMode = defaultGameplayRendererMode,
+    this.useFlameGameplay = false,
+    this.integrationGameFactory,
   });
 
   @visibleForTesting
@@ -1841,6 +1862,10 @@ class BalloonGamePage extends StatefulWidget {
   final double? toolHitDeltaForTest;
 
   final GameplayRendererMode gameplayRendererMode;
+  final bool useFlameGameplay;
+
+  @visibleForTesting
+  final FlameIntegrationGameFactory? integrationGameFactory;
 
   @override
   State<BalloonGamePage> createState() => _BalloonGamePageState();
@@ -2016,6 +2041,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   bool _devCoinDialogOpen = false;
   bool _isNewBest = false;
   bool _resultSaved = false;
+  bool _flameRouteActive = false;
+  int _flameSessionId = 0;
+  final Set<String> _persistedFlameClears = <String>{};
   MainTab _mainTab = MainTab.home;
   bool _storeNavigationVisible = true;
   StoreProductFilter _storeProductFilter = StoreProductFilter.all;
@@ -2210,6 +2238,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   void _startGame(int startStage) {
+    if (widget.useFlameGameplay) {
+      unawaited(_startFlameIntegration(startStage));
+      return;
+    }
     _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.reset();
@@ -2237,6 +2269,74 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (mounted) {
       setState(() {});
     }
+  }
+
+  Future<void> _startFlameIntegration(int startStage) async {
+    if (!mounted || _flameRouteActive) return;
+    _stopGameLoop();
+    _stageTimer?.cancel();
+    _stopwatch.stop();
+    _flameRouteActive = true;
+    final sessionId = ++_flameSessionId;
+    _persistedFlameClears.clear();
+    _coinRewardSession.reset();
+    _resultSaved = false;
+    _earnedCoins = 0;
+    final skin = flamePreviewSkinFromValue(_equippedBalloonSkin.id);
+    final result = await Navigator.of(context).push<FlameIntegrationResult>(
+      MaterialPageRoute(
+        builder: (context) => FlameIntegrationGamePage(
+          initialStage: startStage,
+          skin: skin,
+          sessionId: sessionId,
+          gameFactory: widget.integrationGameFactory,
+          onFeedback: (event) {
+            if (_flameRouteActive && sessionId == _flameSessionId) {
+              _handleFlameGameplayFeedback(event);
+            }
+          },
+          onStageCompleted: (event) {
+            if (_flameRouteActive && sessionId == _flameSessionId) {
+              _persistFlameStageCompletion(sessionId, event);
+            }
+          },
+        ),
+      ),
+    );
+    if (!mounted || sessionId != _flameSessionId) return;
+    _flameRouteActive = false;
+    if (result == null || !result.recordsResult) {
+      _returnToMenu();
+      return;
+    }
+    _score = result.score;
+    _stage = result.stage;
+    _secondsLeft = 0;
+    _recordResult();
+    setState(() {
+      _phase = result.outcome == FlameIntegrationOutcome.completed
+          ? GamePhase.completed
+          : GamePhase.gameOver;
+    });
+    _publishHeader();
+  }
+
+  void _persistFlameStageCompletion(
+    int sessionId,
+    FlameStageCompletionEvent event,
+  ) {
+    final key = '$sessionId:${event.stage}:${event.generation}';
+    if (!_persistedFlameClears.add(key)) return;
+    if (event.stage == 10) {
+      _secondSectionUnlocked = true;
+      ProgressStorage.unlockSecondSection();
+    }
+    final nextStage = StageConfig.nextStageAfter(event.stage);
+    if (nextStage != null) ProgressStorage.advanceNextPlayableStage(nextStage);
+  }
+
+  void _handleFlameGameplayFeedback(FlameGameplayFeedbackEvent event) {
+    playFlameGameplayFeedback(event);
   }
 
   void _startGameLoop() {
@@ -6619,177 +6719,6 @@ class StoreProductCard extends StatelessWidget {
           ),
         );
     }
-  }
-}
-
-class GameHeaderData {
-  const GameHeaderData({
-    required this.stage,
-    required this.score,
-    required this.remaining,
-    required this.secondsLeft,
-    required this.controlsEnabled,
-  });
-
-  final int stage;
-  final int score;
-  final int remaining;
-  final int secondsLeft;
-  final bool controlsEnabled;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is GameHeaderData &&
-          stage == other.stage &&
-          score == other.score &&
-          remaining == other.remaining &&
-          secondsLeft == other.secondsLeft &&
-          controlsEnabled == other.controlsEnabled;
-
-  @override
-  int get hashCode =>
-      Object.hash(stage, score, remaining, secondsLeft, controlsEnabled);
-}
-
-class GameHeader extends StatelessWidget {
-  const GameHeader({
-    super.key,
-    required this.data,
-    required this.onPause,
-    required this.onEnd,
-  });
-
-  final ValueListenable<GameHeaderData> data;
-  final VoidCallback onPause;
-  final VoidCallback onEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      key: const ValueKey('game-header-boundary'),
-      child: ValueListenableBuilder<GameHeaderData>(
-        valueListenable: data,
-        builder: (context, value, _) => Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-          child: Column(
-            children: [
-              const Text(
-                'POPPOP',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w900,
-                  shadows: [
-                    Shadow(
-                      color: Color(0x55006699),
-                      offset: Offset(0, 3),
-                      blurRadius: 2,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '${value.stage} STAGE',
-                style: const TextStyle(
-                  color: Color(0xFF5E35B1),
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _infoPill('점수', '${value.score}', const Color(0xFFFFB300)),
-                  const SizedBox(width: 10),
-                  _infoPill(
-                    '남은 풍선',
-                    '${value.remaining}',
-                    const Color(0xFF7E57C2),
-                  ),
-                  const SizedBox(width: 10),
-                  _infoPill(
-                    '시간',
-                    '${value.secondsLeft}',
-                    value.secondsLeft <= 5
-                        ? Colors.redAccent
-                        : const Color(0xFF26A69A),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FilledButton.icon(
-                    key: const ValueKey('pause-button'),
-                    onPressed: value.controlsEnabled ? onPause : null,
-                    icon: const Icon(Icons.pause_rounded, size: 25),
-                    label: const Text('일시정지'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(132, 50),
-                      backgroundColor: const Color(0xFF7E57C2),
-                      textStyle: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    key: const ValueKey('end-button'),
-                    onPressed: value.controlsEnabled ? onEnd : null,
-                    icon: const Icon(Icons.stop_circle_rounded, size: 25),
-                    label: const Text('끝내기'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(120, 50),
-                      backgroundColor: const Color(0xFFFF7043),
-                      textStyle: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _infoPill(String label, String value, Color color) {
-    return Flexible(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x22004666),
-              blurRadius: 7,
-              offset: Offset(0, 3),
-            ),
-          ],
-        ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            '$label  $value',
-            maxLines: 1,
-            style: TextStyle(
-              color: color,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

@@ -1,13 +1,15 @@
-enum PoppopEngineMode { production, flamePreview }
+enum PoppopEngineMode { production, flamePreview, flameIntegration }
 
 const String flamePreviewEngineQueryValue = 'flame-preview';
+const String flameIntegrationEngineQueryValue = 'flame-integration';
 const PoppopEngineMode defaultPoppopEngineMode = PoppopEngineMode.production;
 
-PoppopEngineMode poppopEngineModeFromUri(Uri uri) {
-  return uri.queryParameters['engine'] == flamePreviewEngineQueryValue
-      ? PoppopEngineMode.flamePreview
-      : defaultPoppopEngineMode;
-}
+PoppopEngineMode poppopEngineModeFromUri(Uri uri) =>
+    switch (uri.queryParameters['engine']) {
+      flamePreviewEngineQueryValue => PoppopEngineMode.flamePreview,
+      flameIntegrationEngineQueryValue => PoppopEngineMode.flameIntegration,
+      _ => defaultPoppopEngineMode,
+    };
 
 int flamePreviewStageFromUri(Uri uri) {
   final stage = int.tryParse(uri.queryParameters['stage'] ?? '');

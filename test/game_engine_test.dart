@@ -1,10 +1,12 @@
 import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
+import 'package:balloon_pop_game/audio/pop_sound.dart';
 import 'package:balloon_pop_game/game_engine/components/balloon_component.dart';
 import 'package:balloon_pop_game/game_engine/components/basic_pop_effect.dart';
 import 'package:balloon_pop_game/game_engine/flame_game_page.dart';
 import 'package:balloon_pop_game/game_engine/game_session_state.dart';
+import 'package:balloon_pop_game/game_engine/integration/flame_integration_contract.dart';
 import 'package:balloon_pop_game/game_engine/legendary/flame_preview_skin.dart';
 import 'package:balloon_pop_game/game_engine/legendary/legendary_skin_definition.dart';
 import 'package:balloon_pop_game/game_engine/legendary/legendary_sprite_cache.dart';
@@ -18,6 +20,8 @@ import 'package:balloon_pop_game/game_engine/stages/flame_stage_definition.dart'
 import 'package:balloon_pop_game/game_engine/stages/stage_balloon_spawner.dart';
 import 'package:balloon_pop_game/gameplay/game_canvas.dart';
 import 'package:balloon_pop_game/main.dart';
+import 'package:balloon_pop_game/services/coin_service.dart';
+import 'package:balloon_pop_game/services/haptic_service.dart';
 import 'package:balloon_pop_game/services/settings_service.dart';
 import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flame/components.dart';
@@ -40,6 +44,12 @@ void main() {
         poppopEngineModeFromUri(
             Uri.parse('https://x.test/?engine=flame-preview&stage=20')),
         PoppopEngineMode.flamePreview);
+    expect(
+        poppopEngineModeFromUri(
+            Uri.parse('https://x.test/?engine=flame-integration')),
+        PoppopEngineMode.flameIntegration);
+    expect(poppopEngineModeFromUri(Uri.parse('https://x.test/?engine=unknown')),
+        PoppopEngineMode.production);
     for (final stage in <int>[1, 9, 10, 11, 19, 20, 21, 29, 30]) {
       expect(
           flamePreviewStageFromUri(
@@ -146,7 +156,8 @@ void main() {
     expect(cache.estimatedRgbaBytes, greaterThanOrEqualTo(normalBytes));
   });
 
-  testWidgets('every catalog image asset decodes into a reusable normal profile',
+  testWidgets(
+      'every catalog image asset decodes into a reusable normal profile',
       (tester) async {
     for (final skin in FlamePreviewSkin.values.where(
       (skin) => skin.usesCatalogImage,
@@ -155,11 +166,16 @@ void main() {
       final cache = CatalogSpriteCache(definition);
       await tester.runAsync(() => cache.prepareForStage(flamePreviewStage(1)));
       expect(cache.profile, CatalogBodyProfile.normal);
-      expect(cache.loadCount,
-          definition.variantAssetPaths.isEmpty ? 1 : definition.variantAssetPaths.length);
+      expect(
+          cache.loadCount,
+          definition.variantAssetPaths.isEmpty
+              ? 1
+              : definition.variantAssetPaths.length);
       expect(cache.imageCount, greaterThan(0));
       expect(
-        cache.frame(definition.colorPalette.first, fake: false, variant: 0).image,
+        cache
+            .frame(definition.colorPalette.first, fake: false, variant: 0)
+            .image,
         isNotNull,
       );
       cache.dispose();
@@ -451,6 +467,325 @@ void main() {
     expect(find.byType(GameWidget<PoppopGame>), findsNothing);
   });
 
+  testWidgets(
+      'integration mode reuses production home and starts one Flame game',
+      (tester) async {
+    late PoppopGame game;
+    late GameSessionState session;
+    FlamePreviewSkin? selectedSkin;
+    var createCount = 0;
+    await tester.pumpWidget(PoppopAppEntry(
+      engineMode: PoppopEngineMode.flameIntegration,
+      integrationGameFactory: (created, skin, initialStage, onFeedback) {
+        createCount++;
+        session = created;
+        selectedSkin = skin;
+        return game = PoppopGame(
+          created,
+          initialStage: initialStage,
+          initialSkin: skin,
+          onGameplayFeedback: onFeedback,
+        );
+      },
+    ));
+    await tester.pump();
+    expect(find.byType(BalloonGamePage), findsOneWidget);
+    expect(find.byType(GameWidget<PoppopGame>), findsNothing);
+    expect(find.byKey(const ValueKey('flame-preview-skin-selector')),
+        findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('start-section-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await game.loaded;
+    await tester.pump();
+    expect(createCount, 1);
+    expect(selectedSkin, FlamePreviewSkin.basic);
+    expect(session.stage, 1);
+    expect(find.byKey(const ValueKey('flame-integration-game-widget')),
+        findsOneWidget);
+    expect(find.byType(GameWidget<PoppopGame>), findsOneWidget);
+    expect(find.byKey(const ValueKey('flame-preview-skin-selector')),
+        findsNothing);
+    final headerBefore = tester.widget<GameHeader>(find.byType(GameHeader));
+    final positionBefore = game.balloonComponents.first.position.clone();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(game.balloonComponents.first.position, isNot(positionBefore));
+    expect(
+        tester.widget<GameHeader>(find.byType(GameHeader)), same(headerBefore));
+
+    await tester.tap(find.byKey(const ValueKey('end-button')));
+    await tester.pump();
+    await tester.tap(find.text('끝내기').last);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    expect(game.isShutdown, isTrue);
+    expect(find.byType(GameWidget<PoppopGame>), findsNothing);
+    expect(find.byType(BalloonGamePage), findsOneWidget);
+  });
+
+  testWidgets('integration uses the production equipped skin', (tester) async {
+    final definition = BalloonSkinCatalog.byIdOrDefault('balloon-heart');
+    ProgressStorage.addCoins(definition.price);
+    expect(
+      ProgressStorage.tryPurchaseProduct(definition.id, definition.price),
+      isTrue,
+    );
+    ProgressStorage.setEquippedProductId('balloon', definition.id);
+    FlamePreviewSkin? selectedSkin;
+    await tester.pumpWidget(PoppopAppEntry(
+      engineMode: PoppopEngineMode.flameIntegration,
+      integrationGameFactory: (session, skin, initialStage, onFeedback) {
+        selectedSkin = skin;
+        return PoppopGame(
+          session,
+          initialStage: initialStage,
+          initialSkin: skin,
+          onGameplayFeedback: onFeedback,
+        );
+      },
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('start-section-1')));
+    await tester.pump();
+    expect(selectedSkin, FlamePreviewSkin.heart);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('integration persists each stage clear once', (tester) async {
+    late PoppopGame game;
+    await tester.pumpWidget(PoppopAppEntry(
+      engineMode: PoppopEngineMode.flameIntegration,
+      integrationGameFactory: (session, skin, initialStage, onFeedback) {
+        return game = PoppopGame(
+          session,
+          initialStage: initialStage,
+          initialSkin: skin,
+          onGameplayFeedback: onFeedback,
+        );
+      },
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('start-section-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await game.loaded;
+    await tester.pump();
+    await _hitEveryBalloon(game);
+    await tester.pump();
+    expect(ProgressStorage.nextPlayableStage(), 2);
+    final stale = game.balloonComponents.toList();
+    expect(stale, isEmpty);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(ProgressStorage.nextPlayableStage(), 2);
+    await game.jumpToStage(10);
+    expect(game.startBossStage(), isTrue);
+    final boss = game.bossComponents.single;
+    for (var hit = 0; hit < 10; hit++) {
+      expect(boss.requestHit(), isTrue);
+    }
+    await tester.pump();
+    expect(ProgressStorage.isSecondSectionUnlocked(), isTrue);
+    expect(ProgressStorage.nextPlayableStage(), 11);
+  });
+
+  testWidgets('integration section intro pauses time until acknowledged',
+      (tester) async {
+    ProgressStorage.unlockSecondSection();
+    late PoppopGame game;
+    late GameSessionState session;
+    await tester.pumpWidget(PoppopAppEntry(
+      engineMode: PoppopEngineMode.flameIntegration,
+      integrationGameFactory: (created, skin, initialStage, onFeedback) {
+        session = created;
+        return game = PoppopGame(
+          created,
+          initialStage: initialStage,
+          initialSkin: skin,
+          onGameplayFeedback: onFeedback,
+          showDiagnostics: false,
+        );
+      },
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('start-section-2')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await game.loaded;
+    await tester.pump();
+    expect(find.byKey(const ValueKey('flame-integration-stage-intro')),
+        findsOneWidget);
+    expect(session.phase, GameSessionPhase.paused);
+    final seconds = session.secondsLeft;
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(session.secondsLeft, seconds);
+    await tester
+        .tap(find.byKey(const ValueKey('flame-integration-stage-intro-next')));
+    await tester.pump();
+    expect(session.phase, GameSessionPhase.playing);
+  });
+
+  testWidgets(
+      'integration feedback is accepted-hit only and stops after dispose',
+      (tester) async {
+    final events = <FlameGameplayFeedbackEvent>[];
+    final session = GameSessionState();
+    final game = PoppopGame(
+      session,
+      onGameplayFeedback: events.add,
+    );
+    game.onGameResize(Vector2(320, 480));
+    await game.onLoad();
+    final balloon = game.balloonComponents.first;
+    expect(balloon.requestHit(), isTrue);
+    expect(events.single.kind, FlameGameplayFeedbackKind.balloonPop);
+    expect(balloon.requestHit(), isFalse);
+    expect(events, hasLength(1));
+    game.shutdown();
+    expect(balloon.requestHit(), isFalse);
+    expect(events, hasLength(1));
+    session.dispose();
+  });
+
+  testWidgets('integration emits semantic feedback for multi-hit fake and boss',
+      (tester) async {
+    final events = <FlameGameplayFeedbackEvent>[];
+    final session = GameSessionState();
+    final game = PoppopGame(
+      session,
+      initialStage: 11,
+      stage30SwapRoll: () => 1,
+      onGameplayFeedback: events.add,
+    );
+    game.onGameResize(Vector2(320, 520));
+    await game.onLoad();
+    final balloon = game.balloonComponents.first;
+    expect(balloon.requestHit(), isTrue);
+    expect(events.last.kind, FlameGameplayFeedbackKind.balloonFirstHit);
+    expect(balloon.requestHit(), isTrue);
+    expect(events.last.kind, FlameGameplayFeedbackKind.balloonPop);
+
+    await game.jumpToStage(21);
+    final fake = game.balloonComponents.firstWhere((item) => item.isFake);
+    expect(fake.requestHit(), isTrue);
+    expect(events.last.kind, FlameGameplayFeedbackKind.fakeHit);
+
+    await game.jumpToStage(20);
+    expect(events.last.kind, FlameGameplayFeedbackKind.bossReady);
+    expect(game.startBossStage(), isTrue);
+    expect(game.bossComponents.first.requestHit(), isTrue);
+    expect(events.last.kind, FlameGameplayFeedbackKind.bossHit);
+    game.shutdown();
+    session.dispose();
+  });
+
+  testWidgets('KICKS feedback fires at exit start without delayed duplicate',
+      (tester) async {
+    final events = <FlameGameplayFeedbackEvent>[];
+    late PoppopGame game;
+    await tester.pumpWidget(MaterialApp(
+      home: FlameGamePage(
+        initialSkin: FlamePreviewSkin.kicks,
+        onExit: () {},
+        gameFactory: (session) => game = PoppopGame(
+          session,
+          initialSkin: FlamePreviewSkin.kicks,
+          legendaryImageLoader: _testLegendaryImageLoader,
+          onGameplayFeedback: events.add,
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await game.loaded;
+    final balloon = game.balloonComponents.first;
+    expect(balloon.requestHit(), isTrue);
+    expect(events.single.kind, FlameGameplayFeedbackKind.kickExitStarted);
+    for (var frame = 0; frame < 6; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(events, hasLength(1));
+  });
+
+  testWidgets('integration terminal result saves score and coins exactly once',
+      (tester) async {
+    late PoppopGame game;
+    var createCount = 0;
+    await tester.pumpWidget(PoppopAppEntry(
+      engineMode: PoppopEngineMode.flameIntegration,
+      integrationGameFactory: (session, skin, initialStage, onFeedback) {
+        createCount++;
+        return game = PoppopGame(
+          session,
+          initialStage: initialStage,
+          initialSkin: skin,
+          stage30SwapRoll: () => 1,
+          onGameplayFeedback: onFeedback,
+        );
+      },
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('start-section-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await game.loaded;
+    await game.jumpToStage(30);
+    expect(game.startBossStage(), isTrue);
+    final real = game.bossComponents.firstWhere((boss) => !boss.isFake);
+    for (var hit = 0; hit < 12; hit++) {
+      expect(real.requestHit(), isTrue);
+    }
+    final terminalScore = game.sessionState.score;
+    expect(terminalScore, greaterThan(0));
+    await _pumpTransition(tester, 1.1);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('result-earned-coins')), findsOneWidget);
+    expect(ProgressStorage.lastScore(), terminalScore);
+    expect(ProgressStorage.bestScore(), terminalScore);
+    expect(CoinService.balance, CoinService.rewardForScore(terminalScore));
+    final savedCoins = CoinService.balance;
+    final completedGame = game;
+    expect(real.requestHit(), isFalse);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(CoinService.balance, savedCoins);
+    await tester.tap(find.byKey(const ValueKey('result-retry-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    expect(createCount, 2);
+    expect(completedGame.isShutdown, isTrue);
+    expect(game, isNot(same(completedGame)));
+    expect(find.byType(GameWidget<PoppopGame>), findsOneWidget);
+    expect(CoinService.balance, savedCoins);
+  });
+
+  test('integration feedback obeys production sound and haptic settings', () {
+    var haptics = 0;
+    HapticService.setPerformerForTest(() async => haptics++);
+    addTearDown(HapticService.resetPerformerForTest);
+    PopSound.resetDebug();
+    playFlameGameplayFeedback(const FlameGameplayFeedbackEvent(
+      kind: FlameGameplayFeedbackKind.balloonPop,
+      skinId: BalloonSkinCatalog.defaultId,
+    ));
+    expect(PopSound.basicPlayCount, 1);
+    expect(haptics, 1);
+
+    SettingsService.setSoundEnabled(false);
+    SettingsService.setHapticEnabled(false);
+    playFlameGameplayFeedback(const FlameGameplayFeedbackEvent(
+      kind: FlameGameplayFeedbackKind.fakeHit,
+      skinId: BalloonSkinCatalog.defaultId,
+    ));
+    expect(PopSound.fakePlayCount, 0);
+    expect(haptics, 1);
+  });
+
   testWidgets('preview stage shortcut starts selected stage without production',
       (tester) async {
     final harness = await _pumpPreview(tester, initialStage: 21);
@@ -708,7 +1043,8 @@ void main() {
         FlamePreviewSkin.wari => 3,
         _ => 1,
       };
-      expect(harness.game.activeCacheImageCount, lessThanOrEqualTo(expectedImageCap));
+      expect(harness.game.activeCacheImageCount,
+          lessThanOrEqualTo(expectedImageCap));
       expect(harness.game.activeCacheRgbaBytes, lessThan(40 * 1024 * 1024));
     });
   }

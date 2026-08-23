@@ -13,6 +13,7 @@ import 'components/game_diagnostics_component.dart';
 import 'components/legendary_background_component.dart';
 import 'components/legendary_burst_effect.dart';
 import 'game_session_state.dart';
+import 'integration/flame_integration_contract.dart';
 import 'legendary/flame_preview_skin.dart';
 import 'legendary/flame_skin_runtime.dart';
 import 'legendary/legendary_sprite_cache.dart';
@@ -32,6 +33,8 @@ class PoppopGame extends FlameGame {
     this.stageBossSpawner = const StageBossSpawner(),
     this.stage30SwapRoll,
     this.legendaryImageLoader,
+    this.onGameplayFeedback,
+    this.showDiagnostics = true,
     BasicBalloonSpriteCache? spriteCache,
   })  : stageDefinitions = stageDefinitions ?? flamePreviewStages,
         spriteCache = spriteCache ?? BasicBalloonSpriteCache(),
@@ -50,6 +53,8 @@ class PoppopGame extends FlameGame {
   final StageBossSpawner stageBossSpawner;
   final double Function()? stage30SwapRoll;
   final LegendaryImageLoader? legendaryImageLoader;
+  final FlameGameplayFeedbackCallback? onGameplayFeedback;
+  final bool showDiagnostics;
   final BasicBalloonSpriteCache spriteCache;
   final Map<int, BalloonComponent> _balloons = <int, BalloonComponent>{};
   final Map<int, BossBalloonComponent> _bosses = <int, BossBalloonComponent>{};
@@ -107,8 +112,10 @@ class PoppopGame extends FlameGame {
     camera.viewfinder
       ..anchor = Anchor.topLeft
       ..position = Vector2.zero();
-    await camera.viewport
-        .add(GameDiagnosticsComponent(textProvider: _diagnosticsText));
+    if (showDiagnostics) {
+      await camera.viewport
+          .add(GameDiagnosticsComponent(textProvider: _diagnosticsText));
+    }
     final requested = stageDefinitions.where((d) => d.stage == initialStage);
     final definition =
         requested.isEmpty ? stageDefinitions.first : requested.first;
@@ -275,6 +282,12 @@ class PoppopGame extends FlameGame {
     for (final boss in bosses) {
       boss.refreshRole();
     }
+    if (definition.isBoss) {
+      onGameplayFeedback?.call(FlameGameplayFeedbackEvent(
+        kind: FlameGameplayFeedbackKind.bossReady,
+        skinId: selectedSkin.queryValue,
+      ));
+    }
   }
 
   void _installLegendaryBackground() {
@@ -298,6 +311,7 @@ class PoppopGame extends FlameGame {
     }
     final result = sessionState.hitBalloon(balloon.balloonId);
     if (result == BalloonHitResult.ignored) return false;
+    _reportBalloonFeedback(result);
     final center = balloon.position + balloon.size / 2;
     if (result != BalloonHitResult.fakeHit) {
       _addHitEffect(
@@ -345,6 +359,7 @@ class PoppopGame extends FlameGame {
       swapRoll: stage30SwapRoll?.call() ?? _random.nextDouble(),
     );
     if (result == BossHitResult.ignored) return false;
+    _reportBossFeedback(result);
     final center = boss.position + boss.size / 2;
     if (result != BossHitResult.fakeHit) {
       _addHitEffect(
@@ -391,6 +406,39 @@ class PoppopGame extends FlameGame {
     _bosses.clear();
     _transitionElapsed = 0;
     return true;
+  }
+
+  void _reportBalloonFeedback(BalloonHitResult result) {
+    final kind = switch (result) {
+      BalloonHitResult.hit => FlameGameplayFeedbackKind.balloonFirstHit,
+      BalloonHitResult.popped ||
+      BalloonHitResult.stageCleared =>
+        FlameGameplayFeedbackKind.balloonPop,
+      BalloonHitResult.fakeHit => FlameGameplayFeedbackKind.fakeHit,
+      BalloonHitResult.ignored => null,
+    };
+    if (kind != null) {
+      onGameplayFeedback?.call(FlameGameplayFeedbackEvent(
+        kind: kind,
+        skinId: selectedSkin.queryValue,
+      ));
+    }
+  }
+
+  void _reportBossFeedback(BossHitResult result) {
+    final kind = switch (result) {
+      BossHitResult.hit => FlameGameplayFeedbackKind.bossHit,
+      BossHitResult.bossDefeated => FlameGameplayFeedbackKind.bossDefeated,
+      BossHitResult.bossCleared => FlameGameplayFeedbackKind.bossClear,
+      BossHitResult.fakeHit => FlameGameplayFeedbackKind.fakeHit,
+      BossHitResult.ignored => null,
+    };
+    if (kind != null) {
+      onGameplayFeedback?.call(FlameGameplayFeedbackEvent(
+        kind: kind,
+        skinId: selectedSkin.queryValue,
+      ));
+    }
   }
 
   BossBalloonComponent? _closestStage30Boss(Vector2 point) {
@@ -503,10 +551,17 @@ class PoppopGame extends FlameGame {
     if (direction.length2 < 0.001) direction = Vector2(1, -0.4);
     direction.normalize();
     final distance = size.length + balloon.size.length * 2;
-    return balloon.beginKickExit(
+    final accepted = balloon.beginKickExit(
       velocity: direction * (distance / 0.24),
       onFinished: _completeKickExit,
     );
+    if (accepted) {
+      onGameplayFeedback?.call(FlameGameplayFeedbackEvent(
+        kind: FlameGameplayFeedbackKind.kickExitStarted,
+        skinId: selectedSkin.queryValue,
+      ));
+    }
+    return accepted;
   }
 
   void _completeKickExit(BalloonComponent balloon) {
