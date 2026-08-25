@@ -2305,6 +2305,88 @@ void main() {
     expect(SettingsService.nicknameOnboardingCompleted, isTrue);
   });
 
+  test('new-user coins initialize once and preserve existing user data', () {
+    ProgressStorage.clear();
+
+    expect(
+      ProgressStorage.initializeNewUserCoins(),
+      ProgressStorage.initialCoinBalance,
+    );
+    expect(
+      ProgressStorage.initializeNewUserCoins(),
+      ProgressStorage.initialCoinBalance,
+    );
+
+    ProgressStorage.clear();
+    ProgressStorage.addCoins(731);
+    expect(ProgressStorage.initializeNewUserCoins(), 731);
+
+    ProgressStorage.clear();
+    ProgressStorage.setNickname('기존사용자');
+    expect(ProgressStorage.initializeNewUserCoins(), 0);
+  });
+
+  testWidgets(
+    'new user can buy and equip a balloon and keeps both after reload',
+    (tester) async {
+      ProgressStorage.clear();
+      await tester.pumpWidget(
+        const BalloonPopApp(gameplayRendererMode: GameplayRendererMode.legacy),
+      );
+      await tester.pump();
+
+      expect(CoinService.balance, ProgressStorage.initialCoinBalance);
+      await tester.enterText(
+        find.byKey(const ValueKey('onboarding-nickname-input')),
+        '심사사용자',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('onboarding-start-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+
+      await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+      await tester.pumpAndSettle();
+      await openBalloonPreview(tester, 'balloon-rabbit');
+      await tapBalloonPreviewAction(tester);
+      await tapBalloonPreviewAction(tester);
+
+      const expectedBalance = ProgressStorage.initialCoinBalance - 500;
+      expect(CoinService.balance, expectedBalance);
+      expect(
+        PurchaseService.ownedProductIds,
+        contains('balloon-rabbit'),
+      );
+      expect(
+        PurchaseService.equippedProductId(
+          StoreCategory.balloon.name,
+          defaultProductId: 'balloon-default',
+        ),
+        'balloon-rabbit',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(
+        const BalloonPopApp(gameplayRendererMode: GameplayRendererMode.legacy),
+      );
+      await tester.pump();
+
+      expect(CoinService.balance, expectedBalance);
+      expect(
+        PurchaseService.ownedProductIds,
+        contains('balloon-rabbit'),
+      );
+      expect(
+        PurchaseService.equippedProductId(
+          StoreCategory.balloon.name,
+          defaultProductId: 'balloon-default',
+        ),
+        'balloon-rabbit',
+      );
+    },
+  );
+
   testWidgets(
     'home ranking button opens R-01 with ordered top 20 and returns',
     (tester) async {

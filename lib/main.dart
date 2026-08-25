@@ -127,6 +127,7 @@ class _BalloonPopAppState extends State<BalloonPopApp> {
   @override
   void initState() {
     super.initState();
+    ProgressStorage.initializeNewUserCoins();
     SettingsService.applyStoredPreferences();
     _nicknameOnboardingCompleted = SettingsService.nicknameOnboardingCompleted;
   }
