@@ -35,6 +35,7 @@ class PoppopGame extends FlameGame {
     this.legendaryImageLoader,
     this.onGameplayFeedback,
     this.showDiagnostics = true,
+    this.diagnosticsTextProvider,
     BasicBalloonSpriteCache? spriteCache,
   })  : stageDefinitions = stageDefinitions ?? flamePreviewStages,
         spriteCache = spriteCache ?? BasicBalloonSpriteCache(),
@@ -55,6 +56,7 @@ class PoppopGame extends FlameGame {
   final LegendaryImageLoader? legendaryImageLoader;
   final FlameGameplayFeedbackCallback? onGameplayFeedback;
   final bool showDiagnostics;
+  final DiagnosticsTextProvider? diagnosticsTextProvider;
   final BasicBalloonSpriteCache spriteCache;
   final Map<int, BalloonComponent> _balloons = <int, BalloonComponent>{};
   final Map<int, BossBalloonComponent> _bosses = <int, BossBalloonComponent>{};
@@ -79,14 +81,25 @@ class PoppopGame extends FlameGame {
   double _lastAppliedDelta = 0;
   int _operationEpoch = 0;
   int _componentGeneration = 0;
+  int _updateCallCount = 0;
+  int _updateCallsAfterShutdown = 0;
   Vector2? _lastEffectOrigin;
 
   bool get isShutdown => _shutdown;
+  int get updateCallCount => _updateCallCount;
+  int get updateCallsAfterShutdown => _updateCallsAfterShutdown;
+  bool get hostWantsRunning => _hostWantsRunning;
   bool get isStageTransitionInFlight => _transitionInFlight;
   double get lastAppliedDelta => _lastAppliedDelta;
   int get activeBalloonCount => _balloons.length;
   int get activeBossCount => _bosses.length;
   int get activeEffectCount => _popEffects.length + _legendaryEffects.length;
+  int get activeGameplayComponentCount =>
+      activeBalloonCount +
+      activeBossCount +
+      activeEffectCount +
+      _backgroundPulses.length +
+      (_legendaryBackground == null ? 0 : 1);
   int get activeParticleCount =>
       _popEffects.fold(0, (sum, effect) => sum + effect.activeParticleCount) +
       _legendaryEffects.fold(0, (sum, effect) => sum + effect.particleCount);
@@ -115,8 +128,9 @@ class PoppopGame extends FlameGame {
       ..anchor = Anchor.topLeft
       ..position = Vector2.zero();
     if (showDiagnostics) {
-      await camera.viewport
-          .add(GameDiagnosticsComponent(textProvider: _diagnosticsText));
+      await camera.viewport.add(GameDiagnosticsComponent(
+        textProvider: diagnosticsTextProvider ?? _diagnosticsText,
+      ));
     }
     final requested = stageDefinitions.where((d) => d.stage == initialStage);
     final definition =
@@ -128,7 +142,11 @@ class PoppopGame extends FlameGame {
 
   @override
   void update(double dt) {
-    if (_shutdown) return;
+    _updateCallCount++;
+    if (_shutdown) {
+      _updateCallsAfterShutdown++;
+      return;
+    }
     final clamped = min(dt, BalloonComponent.maxUpdateDelta);
     _lastAppliedDelta = clamped;
     switch (sessionState.phase) {

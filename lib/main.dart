@@ -13,6 +13,7 @@ import 'coin_purchase_page.dart';
 import 'dev/dev_coin_tool.dart';
 import 'game_engine/flame_game_page.dart';
 import 'game_engine/integration/flame_integration_contract.dart';
+import 'game_engine/integration/flame_integration_debug.dart';
 import 'game_engine/integration/flame_integration_game_page.dart';
 import 'game_engine/legendary/flame_preview_skin.dart';
 import 'game_engine/poppop_engine_mode.dart';
@@ -38,7 +39,11 @@ export 'widgets/game_header.dart';
 export 'gameplay/stage_intro_definition.dart';
 
 void main() {
-  runApp(PoppopAppEntry(engineMode: poppopEngineModeFromUri(Uri.base)));
+  final uri = Uri.base;
+  runApp(PoppopAppEntry(
+    engineMode: poppopEngineModeFromUri(uri),
+    integrationDebugConfig: FlameIntegrationDebugConfig.fromUri(uri),
+  ));
 }
 
 class PoppopAppEntry extends StatefulWidget {
@@ -47,6 +52,8 @@ class PoppopAppEntry extends StatefulWidget {
     this.engineMode = defaultPoppopEngineMode,
     this.flameGameFactory,
     this.integrationGameFactory,
+    this.integrationDebugConfig = const FlameIntegrationDebugConfig(),
+    this.integrationMetrics,
   });
 
   final PoppopEngineMode engineMode;
@@ -56,6 +63,10 @@ class PoppopAppEntry extends StatefulWidget {
 
   @visibleForTesting
   final FlameIntegrationGameFactory? integrationGameFactory;
+  final FlameIntegrationDebugConfig integrationDebugConfig;
+
+  @visibleForTesting
+  final FlameIntegrationMetrics? integrationMetrics;
 
   @override
   State<PoppopAppEntry> createState() => _PoppopAppEntryState();
@@ -81,6 +92,8 @@ class _PoppopAppEntryState extends State<PoppopAppEntry> {
       return BalloonPopApp(
         useFlameGameplay: _engineMode == PoppopEngineMode.flameIntegration,
         integrationGameFactory: widget.integrationGameFactory,
+        integrationDebugConfig: widget.integrationDebugConfig,
+        integrationMetrics: widget.integrationMetrics,
       );
     }
     return MaterialApp(
@@ -103,6 +116,8 @@ class BalloonPopApp extends StatefulWidget {
     this.gameplayRendererMode = defaultGameplayRendererMode,
     this.useFlameGameplay = false,
     this.integrationGameFactory,
+    this.integrationDebugConfig = const FlameIntegrationDebugConfig(),
+    this.integrationMetrics,
   });
 
   @visibleForTesting
@@ -116,6 +131,10 @@ class BalloonPopApp extends StatefulWidget {
 
   @visibleForTesting
   final FlameIntegrationGameFactory? integrationGameFactory;
+  final FlameIntegrationDebugConfig integrationDebugConfig;
+
+  @visibleForTesting
+  final FlameIntegrationMetrics? integrationMetrics;
 
   @override
   State<BalloonPopApp> createState() => _BalloonPopAppState();
@@ -154,6 +173,8 @@ class _BalloonPopAppState extends State<BalloonPopApp> {
               gameplayRendererMode: widget.gameplayRendererMode,
               useFlameGameplay: widget.useFlameGameplay,
               integrationGameFactory: widget.integrationGameFactory,
+              integrationDebugConfig: widget.integrationDebugConfig,
+              integrationMetrics: widget.integrationMetrics,
             )
           : NicknameOnboardingPage(onCompleted: _completeNicknameOnboarding),
     );
@@ -1854,6 +1875,8 @@ class BalloonGamePage extends StatefulWidget {
     this.gameplayRendererMode = defaultGameplayRendererMode,
     this.useFlameGameplay = false,
     this.integrationGameFactory,
+    this.integrationDebugConfig = const FlameIntegrationDebugConfig(),
+    this.integrationMetrics,
   });
 
   @visibleForTesting
@@ -1867,6 +1890,10 @@ class BalloonGamePage extends StatefulWidget {
 
   @visibleForTesting
   final FlameIntegrationGameFactory? integrationGameFactory;
+  final FlameIntegrationDebugConfig integrationDebugConfig;
+
+  @visibleForTesting
+  final FlameIntegrationMetrics? integrationMetrics;
 
   @override
   State<BalloonGamePage> createState() => _BalloonGamePageState();
@@ -2290,7 +2317,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _coinRewardSession.reset();
     _resultSaved = false;
     _earnedCoins = 0;
-    final skin = flamePreviewSkinFromValue(_equippedBalloonSkin.id);
+    final debugConfig = widget.integrationDebugConfig;
+    final effectiveStartStage =
+        debugConfig.enabled ? debugConfig.stage : startStage;
+    final skin = debugConfig.enabled
+        ? debugConfig.skin
+        : flamePreviewSkinFromValue(_equippedBalloonSkin.id);
     final soundDefinition = skin.catalogDefinition;
     for (final path in <String?>[
       soundDefinition.hitSoundAssetPath,
@@ -2301,17 +2333,21 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final result = await Navigator.of(context).push<FlameIntegrationResult>(
       MaterialPageRoute(
         builder: (context) => FlameIntegrationGamePage(
-          initialStage: startStage,
+          initialStage: effectiveStartStage,
           skin: skin,
           sessionId: sessionId,
           gameFactory: widget.integrationGameFactory,
+          debugConfig: debugConfig,
+          metrics: widget.integrationMetrics,
           onFeedback: (event) {
             if (_flameRouteActive && sessionId == _flameSessionId) {
               _handleFlameGameplayFeedback(event);
             }
           },
           onStageCompleted: (event) {
-            if (_flameRouteActive && sessionId == _flameSessionId) {
+            if (!debugConfig.enabled &&
+                _flameRouteActive &&
+                sessionId == _flameSessionId) {
               _persistFlameStageCompletion(sessionId, event);
             }
           },
@@ -2319,6 +2355,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       ),
     );
     if (!mounted || sessionId != _flameSessionId) return;
+    if (debugConfig.enabled) {
+      _flameRouteActive = false;
+      _returnToMenu();
+      return;
+    }
     if (result == null || !result.recordsResult) {
       _flameRouteActive = false;
       _returnToMenu();
@@ -5089,6 +5130,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   @override
   Widget build(BuildContext context) {
+    if (_flameRouteActive) {
+      return const SizedBox.shrink(
+        key: ValueKey('flame-integration-production-suspended'),
+      );
+    }
     if (_phase == GamePhase.menu) {
       return TickerMode(
         enabled: !_flameRouteActive,

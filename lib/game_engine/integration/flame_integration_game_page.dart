@@ -10,6 +10,7 @@ import '../legendary/flame_preview_skin.dart';
 import '../poppop_game.dart';
 import '../session/game_session_snapshot.dart';
 import 'flame_integration_contract.dart';
+import 'flame_integration_debug.dart';
 
 typedef FlameIntegrationGameFactory = PoppopGame Function(
   GameSessionState session,
@@ -27,6 +28,8 @@ class FlameIntegrationGamePage extends StatefulWidget {
     required this.onFeedback,
     required this.onStageCompleted,
     this.gameFactory,
+    this.debugConfig = const FlameIntegrationDebugConfig(),
+    this.metrics,
   });
 
   final int initialStage;
@@ -35,6 +38,10 @@ class FlameIntegrationGamePage extends StatefulWidget {
   final FlameGameplayFeedbackCallback onFeedback;
   final FlameStageCompletionCallback onStageCompleted;
   final FlameIntegrationGameFactory? gameFactory;
+  final FlameIntegrationDebugConfig debugConfig;
+
+  @visibleForTesting
+  final FlameIntegrationMetrics? metrics;
 
   @override
   State<FlameIntegrationGamePage> createState() =>
@@ -46,6 +53,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
   late final GameSessionState _session;
   late final PoppopGame _game;
   late final ValueNotifier<GameHeaderData> _header;
+  late final FlameIntegrationMetrics _metrics;
   final Set<String> _reportedStageCompletions = <String>{};
   GameSessionPhase _lastPhase = GameSessionPhase.ready;
   bool _manualPause = false;
@@ -57,7 +65,12 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
   @override
   void initState() {
     super.initState();
+    _metrics = widget.metrics ?? FlameIntegrationMetrics();
     WidgetsBinding.instance.addObserver(this);
+    _metrics.lifecycleObserverCount++;
+    _metrics.lifecycleState =
+        (WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed)
+            .name;
     _session = GameSessionState()..addListener(_onSessionChanged);
     _header = ValueNotifier(_headerFor(_session));
     _game = widget.gameFactory?.call(
@@ -71,8 +84,32 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
           initialStage: widget.initialStage,
           initialSkin: widget.skin,
           onGameplayFeedback: widget.onFeedback,
-          showDiagnostics: false,
+          showDiagnostics: widget.debugConfig.enabled,
+          diagnosticsTextProvider:
+              widget.debugConfig.enabled ? _diagnosticsText : null,
         );
+    _metrics.activeGameInstances++;
+  }
+
+  String _diagnosticsText(double fps, double milliseconds) {
+    final running = _game.hostWantsRunning &&
+        !_game.isShutdown &&
+        _session.phase == GameSessionPhase.playing;
+    return 'INTEGRATION DEBUG  FPS ${fps.toStringAsFixed(0)}  '
+        '${milliseconds.toStringAsFixed(1)}ms\n'
+        'GAME ${_metrics.activeGameInstances}  '
+        'WIDGET ${_metrics.activeGameWidgetInstances}  '
+        'COMP ${_game.activeGameplayComponentCount}\n'
+        'EFFECT ${_game.activeEffectCount}  '
+        'PARTICLE ${_game.activeParticleCount}\n'
+        'HUD ${_metrics.hudRebuildCount}  '
+        'SESSION ${_metrics.sessionNotificationCount}  '
+        'SHELL ${_metrics.shellRebuildCount}\n'
+        'LIFE ${_metrics.lifecycleState}  '
+        '${running ? 'RUNNING' : 'PAUSED'}  '
+        'OBS ${_metrics.lifecycleObserverCount}\n'
+        'SHUTDOWN ${_game.isShutdown ? 'YES' : 'NO'}  '
+        'POST-UPDATE ${_metrics.updateAdvancedAfterShutdown ? 'YES' : 'NO'}';
   }
 
   GameHeaderData _headerFor(GameSessionState session) => GameHeaderData(
@@ -87,8 +124,12 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
 
   void _onSessionChanged() {
     if (!mounted || _resultReturned) return;
+    _metrics.sessionNotificationCount++;
     final nextHeader = _headerFor(_session);
-    if (_header.value != nextHeader) _header.value = nextHeader;
+    if (_header.value != nextHeader) {
+      _metrics.hudRebuildCount++;
+      _header.value = nextHeader;
+    }
 
     final phase = _session.phase;
     final phaseChanged = phase != _lastPhase;
@@ -134,6 +175,9 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
       score: _session.score,
       sessionId: widget.sessionId,
     );
+    _metrics.recordShutdown(_game.updateCallCount);
+    _game.shutdown();
+    _metrics.observePostShutdownUpdateCount(_game.updateCallCount);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Navigator.of(context).pop(result);
@@ -188,6 +232,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _metrics.lifecycleState = state.name;
     final backgrounded = state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused;
@@ -203,8 +248,12 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _metrics.lifecycleObserverCount--;
     _session.removeListener(_onSessionChanged);
+    _metrics.recordShutdown(_game.updateCallCount);
     _game.shutdown();
+    _metrics.observePostShutdownUpdateCount(_game.updateCallCount);
+    _metrics.activeGameInstances--;
     _session.dispose();
     _header.dispose();
     super.dispose();
@@ -212,6 +261,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
 
   @override
   Widget build(BuildContext context) {
+    _metrics.shellRebuildCount++;
     final phase = _session.phase;
     return Scaffold(
       key: const ValueKey('flame-integration-gameplay'),
@@ -231,9 +281,9 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: GameWidget<PoppopGame>(
-                        key: const ValueKey('flame-integration-game-widget'),
+                      child: _IntegrationGameWidget(
                         game: _game,
+                        metrics: _metrics,
                       ),
                     ),
                     if (phase == GameSessionPhase.loading)
@@ -259,6 +309,36 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
       ),
     );
   }
+}
+
+class _IntegrationGameWidget extends StatefulWidget {
+  const _IntegrationGameWidget({required this.game, required this.metrics});
+
+  final PoppopGame game;
+  final FlameIntegrationMetrics metrics;
+
+  @override
+  State<_IntegrationGameWidget> createState() => _IntegrationGameWidgetState();
+}
+
+class _IntegrationGameWidgetState extends State<_IntegrationGameWidget> {
+  @override
+  void initState() {
+    super.initState();
+    widget.metrics.activeGameWidgetInstances++;
+  }
+
+  @override
+  void dispose() {
+    widget.metrics.activeGameWidgetInstances--;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => GameWidget<PoppopGame>(
+        key: const ValueKey('flame-integration-game-widget'),
+        game: widget.game,
+      );
 }
 
 class _SectionIntroOverlay extends StatelessWidget {
