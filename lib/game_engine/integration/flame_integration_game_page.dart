@@ -27,6 +27,7 @@ class FlameIntegrationGamePage extends StatefulWidget {
     required this.sessionId,
     required this.onFeedback,
     required this.onStageCompleted,
+    this.onAudioPause,
     this.gameFactory,
     this.debugConfig = const FlameIntegrationDebugConfig(),
     this.metrics,
@@ -37,6 +38,7 @@ class FlameIntegrationGamePage extends StatefulWidget {
   final int sessionId;
   final FlameGameplayFeedbackCallback onFeedback;
   final FlameStageCompletionCallback onStageCompleted;
+  final VoidCallback? onAudioPause;
   final FlameIntegrationGameFactory? gameFactory;
   final FlameIntegrationDebugConfig debugConfig;
 
@@ -176,6 +178,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
       sessionId: widget.sessionId,
     );
     _metrics.recordShutdown(_game.updateCallCount);
+    widget.onAudioPause?.call();
     _game.shutdown();
     _metrics.observePostShutdownUpdateCount(_game.updateCallCount);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -187,6 +190,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
   void _pause() {
     if (_manualPause || _session.phase != GameSessionPhase.playing) return;
     setState(() => _manualPause = true);
+    widget.onAudioPause?.call();
     _game.pausePreview();
   }
 
@@ -204,7 +208,10 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
 
   Future<void> _confirmExit() async {
     final wasPaused = _manualPause;
-    if (!wasPaused) _game.pausePreview();
+    if (!wasPaused) {
+      widget.onAudioPause?.call();
+      _game.pausePreview();
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -238,6 +245,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
         state == AppLifecycleState.paused;
     if (backgrounded) {
       _backgroundPause = true;
+      widget.onAudioPause?.call();
       _game.pausePreview();
     } else if (state == AppLifecycleState.resumed) {
       _backgroundPause = false;

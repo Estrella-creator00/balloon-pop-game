@@ -10,6 +10,7 @@ import 'package:balloon_pop_game/game_engine/game_session_state.dart';
 import 'package:balloon_pop_game/game_engine/integration/flame_integration_contract.dart';
 import 'package:balloon_pop_game/game_engine/integration/flame_integration_debug.dart';
 import 'package:balloon_pop_game/game_engine/legendary/flame_preview_skin.dart';
+import 'package:balloon_pop_game/game_engine/legendary/flame_skin_runtime.dart';
 import 'package:balloon_pop_game/game_engine/legendary/legendary_skin_definition.dart';
 import 'package:balloon_pop_game/game_engine/legendary/legendary_sprite_cache.dart';
 import 'package:balloon_pop_game/game_engine/poppop_engine_mode.dart';
@@ -137,6 +138,8 @@ void main() {
     addTearDown(cache.dispose);
     await tester.runAsync(() => cache.prepareForStage(boss: false));
     final image = cache.bodyImage(const Color(0xFFD99542), fake: false);
+    expect(image.width, 320);
+    expect(image.height, 453);
     final data = await tester.runAsync(
       () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
     );
@@ -155,6 +158,11 @@ void main() {
     expect(cache.matteCleanupCount, 1);
     expect(cache.imageCount, 6);
     expect(cache.estimatedRgbaBytes, lessThan(8 * 1024 * 1024));
+
+    await tester.runAsync(() => cache.prepareForStage(boss: true));
+    final bossImage = cache.bodyImage(const Color(0xFFD99542), fake: false);
+    expect(bossImage.width, 361);
+    expect(bossImage.height, 512);
   });
 
   testWidgets('GEMI production assets stay inside the selected profile budget',
@@ -773,6 +781,24 @@ void main() {
       await game.loaded;
       await tester.pump();
 
+      if (skin == FlamePreviewSkin.shushu) {
+        final body = game.balloonComponents.first;
+        expect(body.useSourceAspectGeometry, isTrue);
+        expect(body.destinationRect.width, lessThan(body.size.x));
+        expect(body.destinationRect.height, closeTo(body.size.x, .0001));
+        expect(
+          body.destinationRect.width / body.destinationRect.height,
+          closeTo(body.spriteAspectRatio, .0001),
+        );
+        expect(
+          body.containsLocalPoint(Vector2(
+            body.bodyRect.center.dx,
+            body.bodyRect.center.dy,
+          )),
+          isTrue,
+        );
+      }
+
       expect(createCount, 1);
       expect(find.byKey(const ValueKey('pause-button')), findsOneWidget);
       expect(find.byKey(const ValueKey('end-button')), findsOneWidget);
@@ -835,6 +861,11 @@ void main() {
     late PoppopGame game;
     await tester.pumpWidget(PoppopAppEntry(
       engineMode: PoppopEngineMode.flameIntegration,
+      integrationDebugConfig: const FlameIntegrationDebugConfig(
+        enabled: true,
+        stage: 2,
+        skin: FlamePreviewSkin.wari,
+      ),
       integrationGameFactory: (session, skin, stage, onFeedback) {
         return game = PoppopGame(
           session,
@@ -850,21 +881,111 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('start-section-1')));
     await tester.pump();
     expect(PopSound.gameplayAssetPrepareCount, 1);
+    expect(PopSound.preparedGameplayAssetCount, 1);
+    expect(PopSound.activeGameplayVoiceCount, PopSound.gameplayVoiceCount);
     expect(PopSound.lastPreparedAssetPath, definition.popSoundAssetPath);
     await tester.pump(const Duration(milliseconds: 100));
     await game.loaded;
+    await tester.tap(find.byKey(const ValueKey('pause-button')));
+    await tester.pump();
+    expect(PopSound.gameplayAssetPauseCount, 1);
+    await tester.tap(find.byKey(const ValueKey('flame-integration-resume')));
+    await tester.pump();
     final prepared = PopSound.gameplayAssetPrepareCount;
-    final playsBeforePop = PopSound.assetPlayCount;
-    final balloon = game.balloonComponents.first;
-    expect(balloon.requestHit(), isTrue);
-    expect(PopSound.assetPlayCount, playsBeforePop + 1);
+    final playsBeforePop = PopSound.gameplayAssetPlayCount;
+    final singlePlaysBeforePop = PopSound.assetPlayCount;
+    final balloons = game.balloonComponents.toList();
+    expect(balloons[0].requestHit(), isTrue);
+    expect(balloons[1].requestHit(), isTrue);
+    expect(PopSound.gameplayAssetPlayCount, playsBeforePop + 2);
+    expect(PopSound.assetPlayCount, singlePlaysBeforePop);
     expect(PopSound.lastAssetPath, definition.popSoundAssetPath);
     expect(PopSound.gameplayAssetPrepareCount, prepared);
-    expect(balloon.requestHit(), isFalse);
-    expect(PopSound.assetPlayCount, playsBeforePop + 1);
-    await tester.pumpWidget(const SizedBox.shrink());
+    expect(balloons[0].requestHit(), isFalse);
+    expect(PopSound.gameplayAssetPlayCount, playsBeforePop + 2);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byKey(const ValueKey('end-button')));
+    await tester.pump();
+    await tester.tap(find.text('끝내기').last);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
     expect(game.isShutdown, isTrue);
+    expect(PopSound.activeGameplayVoiceCount, 0);
+    final playsAfterExit = PopSound.gameplayAssetPlayCount;
+    expect(balloons[0].requestHit(), isFalse);
+    expect(PopSound.gameplayAssetPlayCount, playsAfterExit);
+  });
+
+  test('Flame gameplay audio uses bounded reusable voices', () async {
+    const path = 'assets/sounds/test.mp3';
+    PopSound.resetDebug();
+    await PopSound.prepareGameplayAsset(path);
+    await PopSound.prepareGameplayAsset(path);
+    expect(PopSound.gameplayAssetPrepareCount, 1);
+    expect(PopSound.activeGameplayVoiceCount, PopSound.gameplayVoiceCount);
+    for (var hit = 0; hit < PopSound.gameplayVoiceCount * 3; hit++) {
+      PopSound.playGameplayAsset(path);
+    }
+    expect(PopSound.gameplayAssetPlayCount, PopSound.gameplayVoiceCount * 3);
+    expect(PopSound.activeGameplayVoiceCount, PopSound.gameplayVoiceCount);
+    PopSound.setEnabled(false);
+    PopSound.playGameplayAsset(path);
+    expect(PopSound.gameplayAssetPlayCount, PopSound.gameplayVoiceCount * 3);
+    PopSound.setEnabled(true);
+    PopSound.releaseGameplayAsset(path);
+    expect(PopSound.activeGameplayVoiceCount, 0);
+    await PopSound.prepareGameplayAsset(path);
+    expect(PopSound.activeGameplayVoiceCount, PopSound.gameplayVoiceCount);
+    PopSound.releaseGameplayAsset(path);
+    expect(PopSound.activeGameplayVoiceCount, 0);
+  });
+
+  testWidgets('SHUSHU integration prepares hit and pop voice pools',
+      (tester) async {
+    final definition = FlamePreviewSkin.shushu.catalogDefinition;
+    ProgressStorage.addCoins(definition.price);
+    expect(
+      ProgressStorage.tryPurchaseProduct(definition.id, definition.price),
+      isTrue,
+    );
+    ProgressStorage.setEquippedProductId('balloon', definition.id);
+    PopSound.resetDebug();
+    late PoppopGame game;
+    await tester.pumpWidget(PoppopAppEntry(
+      engineMode: PoppopEngineMode.flameIntegration,
+      integrationGameFactory: (session, skin, stage, onFeedback) {
+        return game = PoppopGame(
+          session,
+          initialStage: stage,
+          initialSkin: skin,
+          legendaryImageLoader: _testLegendaryImageLoader,
+          onGameplayFeedback: onFeedback,
+          showDiagnostics: false,
+        );
+      },
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('start-section-1')));
+    await tester.pump();
+    expect(PopSound.preparedGameplayAssetCount, 2);
+    expect(
+      PopSound.activeGameplayVoiceCount,
+      PopSound.gameplayVoiceCount * 2,
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await game.loaded;
+    final singlePlaysBeforePop = PopSound.assetPlayCount;
+    expect(game.balloonComponents.first.requestHit(), isTrue);
+    expect(PopSound.gameplayAssetPlayCount, 2);
+    expect(PopSound.assetPlayCount, singlePlaysBeforePop);
+    await tester.tap(find.byKey(const ValueKey('end-button')));
+    await tester.pump();
+    await tester.tap(find.text('끝내기').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(PopSound.activeGameplayVoiceCount, 0);
   });
 
   testWidgets('integration persists each stage clear once', (tester) async {
@@ -1200,19 +1321,26 @@ void main() {
     );
     expect(
       balloon.visualBoundsInParent.width / balloon.visualBoundsInParent.height,
-      closeTo(balloon.spriteAspectRatio, .0001),
+      closeTo(balloon.bodyRect.width / balloon.bodyRect.height, .0001),
     );
+    expect(balloon.destinationRect.width, lessThanOrEqualTo(balloon.size.x));
+    expect(balloon.destinationRect.height, lessThanOrEqualTo(balloon.size.x));
+    expect(balloon.bodyRect.left, greaterThan(balloon.destinationRect.left));
+    expect(balloon.bodyRect.right, lessThan(balloon.destinationRect.right));
     expect(balloon.currentVisualScale, inInclusiveRange(.982, 1.018));
     expect(
       balloon.containsLocalPoint(Vector2(
-        balloon.destinationRect.center.dx,
-        balloon.destinationRect.center.dy,
+        balloon.bodyRect.center.dx,
+        balloon.bodyRect.center.dy,
       )),
       isTrue,
     );
     expect(
       balloon.containsLocalPoint(
-        Vector2(balloon.destinationRect.right + 2, 0),
+        Vector2(
+          (balloon.destinationRect.left + balloon.bodyRect.left) / 2,
+          balloon.bodyRect.center.dy,
+        ),
       ),
       isFalse,
     );
@@ -1230,8 +1358,8 @@ void main() {
     );
     expect(
       balloon.containsLocalPoint(Vector2(
-        balloon.destinationRect.center.dx,
-        balloon.destinationRect.center.dy,
+        balloon.bodyRect.center.dx,
+        balloon.bodyRect.center.dy,
       )),
       isTrue,
     );
@@ -1257,17 +1385,26 @@ void main() {
       );
       expect(
         boss.visualBoundsInParent.width / boss.visualBoundsInParent.height,
-        closeTo(boss.spriteAspectRatio, .0001),
+        closeTo(boss.bodyRect.width / boss.bodyRect.height, .0001),
       );
-      final localCenter = boss.destinationRect.center;
+      expect(boss.destinationRect.width, lessThanOrEqualTo(boss.size.x));
+      expect(boss.destinationRect.height, lessThanOrEqualTo(boss.size.x));
+      final localCenter = boss.bodyRect.center;
       expect(
         boss.containsLocalPoint(Vector2(localCenter.dx, localCenter.dy)),
         isTrue,
       );
       expect(
-        boss.containsLocalPoint(Vector2(boss.destinationRect.right + 2, 0)),
+        boss.containsLocalPoint(Vector2(
+          (boss.destinationRect.left + boss.bodyRect.left) / 2,
+          boss.bodyRect.center.dy,
+        )),
         isFalse,
       );
+      expect(boss.healthTrackRect.center.dx,
+          closeTo(boss.bodyRect.center.dx, .0001));
+      expect(
+          boss.healthTrackRect.top, closeTo(boss.bodyRect.bottom + 8, .0001));
       final effectCenter = boss.visualCenterInParent;
       expect(
         boss.requestHit(
@@ -1303,6 +1440,22 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  test('SHUSHU is the only skin using visible-body source geometry', () {
+    final basicCache = BasicBalloonSpriteCache();
+    addTearDown(basicCache.dispose);
+    for (final skin in FlamePreviewSkin.values) {
+      final runtime = FlameSkinRuntime(
+        basicCache: basicCache,
+        initialSkin: skin,
+      );
+      expect(
+        runtime.usesSourceAspectGeometry,
+        skin == FlamePreviewSkin.shushu,
+        reason: skin.queryValue,
+      );
+    }
   });
 
   testWidgets('legendary Boss and Stage 30 retain shared gameplay rules',

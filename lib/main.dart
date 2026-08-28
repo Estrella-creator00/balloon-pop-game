@@ -1796,39 +1796,65 @@ LegendaryToolVisual pendingToolVisual(PendingToolHit hit) {
   );
 }
 
-bool playBalloonHitSound(BalloonSkinDefinition definition) {
+bool playBalloonHitSound(
+  BalloonSkinDefinition definition, {
+  bool preparedGameplayVoice = false,
+}) {
   final assetPath = definition.hitSoundAssetPath;
   if (assetPath == null) return false;
-  PopSound.playAsset(assetPath);
+  preparedGameplayVoice
+      ? PopSound.playGameplayAsset(assetPath)
+      : PopSound.playAsset(assetPath);
   return true;
+}
+
+void playFlameBalloonPopSound(
+  BalloonSkinDefinition definition, {
+  required bool boss,
+}) {
+  final assetPath = definition.popSoundAssetPath;
+  if (assetPath == null) {
+    playGameplayBalloonPopSound(definition, boss: boss);
+    return;
+  }
+  PopSound.playGameplayAsset(assetPath);
+  if (boss) PopSound.playBossExplosion();
 }
 
 void playFlameGameplayFeedback(FlameGameplayFeedbackEvent event) {
   final skin = BalloonSkinCatalog.byIdOrDefault(event.skinId);
   switch (event.kind) {
     case FlameGameplayFeedbackKind.balloonFirstHit:
-      if (!playBalloonHitSound(skin)) PopSound.playLightTap();
+      if (!playBalloonHitSound(skin, preparedGameplayVoice: true)) {
+        PopSound.playLightTap();
+      }
     case FlameGameplayFeedbackKind.balloonPop:
       HapticService.shortImpact();
-      playBalloonHitSound(skin);
-      playGameplayBalloonPopSound(skin, boss: false);
+      playBalloonHitSound(skin, preparedGameplayVoice: true);
+      playFlameBalloonPopSound(skin, boss: false);
     case FlameGameplayFeedbackKind.kickExitStarted:
       HapticService.shortImpact();
-      playBalloonHitSound(skin);
+      playBalloonHitSound(skin, preparedGameplayVoice: true);
     case FlameGameplayFeedbackKind.fakeHit:
       HapticService.shortImpact();
       PopSound.playFake();
     case FlameGameplayFeedbackKind.bossHit:
       HapticService.shortImpact();
-      if (!playBalloonHitSound(skin)) PopSound.play();
+      if (!playBalloonHitSound(skin, preparedGameplayVoice: true)) {
+        PopSound.play();
+      }
     case FlameGameplayFeedbackKind.bossDefeated:
       HapticService.shortImpact();
-      if (!playBalloonHitSound(skin)) PopSound.play();
-      playGameplayBalloonPopSound(skin, boss: true);
+      if (!playBalloonHitSound(skin, preparedGameplayVoice: true)) {
+        PopSound.play();
+      }
+      playFlameBalloonPopSound(skin, boss: true);
     case FlameGameplayFeedbackKind.bossClear:
       HapticService.shortImpact();
-      if (!playBalloonHitSound(skin)) PopSound.play();
-      playGameplayBalloonPopSound(skin, boss: true);
+      if (!playBalloonHitSound(skin, preparedGameplayVoice: true)) {
+        PopSound.play();
+      }
+      playFlameBalloonPopSound(skin, boss: true);
       PopSound.playBossClear();
     case FlameGameplayFeedbackKind.bossReady:
       PopSound.playBossAppear();
@@ -2311,7 +2337,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
-    setState(() => _flameRouteActive = true);
+    _flameRouteActive = true;
     final sessionId = ++_flameSessionId;
     _persistedFlameClears.clear();
     _coinRewardSession.reset();
@@ -2324,36 +2350,49 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ? debugConfig.skin
         : flamePreviewSkinFromValue(_equippedBalloonSkin.id);
     final soundDefinition = skin.catalogDefinition;
-    for (final path in <String?>[
+    final gameplaySoundPaths = <String?>{
       soundDefinition.hitSoundAssetPath,
       soundDefinition.popSoundAssetPath,
-    ]) {
-      if (path != null) PopSound.prepareGameplayAsset(path);
-    }
-    final result = await Navigator.of(context).push<FlameIntegrationResult>(
-      MaterialPageRoute(
-        builder: (context) => FlameIntegrationGamePage(
-          initialStage: effectiveStartStage,
-          skin: skin,
-          sessionId: sessionId,
-          gameFactory: widget.integrationGameFactory,
-          debugConfig: debugConfig,
-          metrics: widget.integrationMetrics,
-          onFeedback: (event) {
-            if (_flameRouteActive && sessionId == _flameSessionId) {
-              _handleFlameGameplayFeedback(event);
-            }
-          },
-          onStageCompleted: (event) {
-            if (!debugConfig.enabled &&
-                _flameRouteActive &&
-                sessionId == _flameSessionId) {
-              _persistFlameStageCompletion(sessionId, event);
-            }
-          },
-        ),
-      ),
+    }.whereType<String>().toSet();
+    await Future.wait(
+      gameplaySoundPaths.map(PopSound.prepareGameplayAsset),
     );
+    if (!mounted || sessionId != _flameSessionId) {
+      PopSound.releaseGameplayAssets(gameplaySoundPaths);
+      return;
+    }
+    setState(() {});
+    FlameIntegrationResult? result;
+    try {
+      result = await Navigator.of(context).push<FlameIntegrationResult>(
+        MaterialPageRoute(
+          builder: (context) => FlameIntegrationGamePage(
+            initialStage: effectiveStartStage,
+            skin: skin,
+            sessionId: sessionId,
+            gameFactory: widget.integrationGameFactory,
+            debugConfig: debugConfig,
+            metrics: widget.integrationMetrics,
+            onAudioPause: () =>
+                PopSound.pauseGameplayAssets(gameplaySoundPaths),
+            onFeedback: (event) {
+              if (_flameRouteActive && sessionId == _flameSessionId) {
+                _handleFlameGameplayFeedback(event);
+              }
+            },
+            onStageCompleted: (event) {
+              if (!debugConfig.enabled &&
+                  _flameRouteActive &&
+                  sessionId == _flameSessionId) {
+                _persistFlameStageCompletion(sessionId, event);
+              }
+            },
+          ),
+        ),
+      );
+    } finally {
+      PopSound.releaseGameplayAssets(gameplaySoundPaths);
+    }
     if (!mounted || sessionId != _flameSessionId) return;
     if (debugConfig.enabled) {
       _flameRouteActive = false;
@@ -2371,7 +2410,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _recordResult();
     setState(() {
       _flameRouteActive = false;
-      _phase = result.outcome == FlameIntegrationOutcome.completed
+      _phase = result!.outcome == FlameIntegrationOutcome.completed
           ? GamePhase.completed
           : GamePhase.gameOver;
     });

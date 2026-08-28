@@ -48,6 +48,7 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
     double? initialTurnCooldown,
   })  : _sprite = initialSprite.image,
         _visualHp = rule.maxHp,
+        _normalizedVisibleBounds = initialSprite.normalizedVisibleBounds,
         turnCooldown = initialTurnCooldown ?? rule.initialTurnCooldown,
         _sourceRect = Rect.fromLTWH(
           0,
@@ -57,6 +58,9 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
         ),
         _destinationRect = useSourceAspectGeometry
             ? sourceAspectDestinationRect(initialSprite.image, initialSize)
+            : Rect.fromLTWH(0, 0, initialSize, initialSize + 32),
+        _visibleBodyRect = useSourceAspectGeometry
+            ? sourceAspectVisibleBodyRect(initialSprite, initialSize)
             : Rect.fromLTWH(0, 0, initialSize, initialSize + 32),
         super(
           position: position,
@@ -108,8 +112,10 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   final Paint _healthFillPaint = Paint()..color = const Color(0xFFFF5C8A);
 
   Image _sprite;
+  Rect _normalizedVisibleBounds;
   Rect _sourceRect;
   Rect _destinationRect;
+  Rect _visibleBodyRect;
   int _visualHp;
   bool _hitRequestInProgress = false;
   bool _defeated = false;
@@ -153,19 +159,21 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
         size.y,
       );
   Rect get destinationRect => _destinationRect;
+  Rect get bodyRect => _visibleBodyRect;
+  Rect get healthTrackRect => _healthTrackRect;
   double get spriteAspectRatio => _sprite.width / _sprite.height;
   double get currentVisualScale =>
       breatheIdle ? _breatheScale[_visualPhaseIndex] : 1;
   Offset get visualCenterInParent => Offset(
-        position.x + _destinationRect.center.dx,
-        position.y + _destinationRect.center.dy,
+        position.x + _visibleBodyRect.center.dx,
+        position.y + _visibleBodyRect.center.dy,
       );
   Rect get visualBoundsInParent {
     final local = useSourceAspectGeometry
         ? Rect.fromCenter(
-            center: _destinationRect.center,
-            width: _destinationRect.width * currentVisualScale,
-            height: _destinationRect.height * currentVisualScale,
+            center: _visibleBodyRect.center,
+            width: _visibleBodyRect.width * currentVisualScale,
+            height: _visibleBodyRect.height * currentVisualScale,
           )
         : _destinationRect;
     return local.shift(Offset(position.x, position.y));
@@ -222,6 +230,7 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
       visualVariant: visualVariant,
     );
     _sprite = frame.image;
+    _normalizedVisibleBounds = frame.normalizedVisibleBounds;
     _spritePaint.colorFilter = frame.colorFilter;
     final nextDiameter = rule.sizeForHp(initialSize, hp);
     if (useSourceAspectGeometry) {
@@ -263,6 +272,7 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
       visualVariant: visualVariant,
     );
     _sprite = frame.image;
+    _normalizedVisibleBounds = frame.normalizedVisibleBounds;
     _spritePaint.colorFilter = frame.colorFilter;
     _sourceRect = Rect.fromLTWH(
       0,
@@ -270,6 +280,8 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
       _sprite.width.toDouble(),
       _sprite.height.toDouble(),
     );
+    _refreshDestinationRect();
+    _refreshHealthBarGeometry();
     _spritePaint.color = Color.fromRGBO(
       255,
       255,
@@ -281,11 +293,19 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   void _refreshDestinationRect() {
     if (useSourceAspectGeometry) {
       _destinationRect = sourceAspectDestinationRect(_sprite, size.x);
+      _visibleBodyRect = sourceAspectVisibleBodyRect(
+        FlameSpriteFrame(
+          _sprite,
+          normalizedVisibleBounds: _normalizedVisibleBounds,
+        ),
+        size.x,
+      );
       return;
     }
     final bodyHeight = size.x;
     if (!preserveSpriteAspectRatio) {
       _destinationRect = Rect.fromLTWH(0, 0, size.x, size.y);
+      _visibleBodyRect = _destinationRect;
       return;
     }
     final sourceAspect = _sprite.width / _sprite.height;
@@ -297,13 +317,14 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
       width,
       height,
     );
+    _visibleBodyRect = _destinationRect;
   }
 
   void _refreshHealthBarGeometry() {
-    final width = size.x * 0.72;
+    final width = _visibleBodyRect.width * 0.72;
     _healthTrackRect = Rect.fromLTWH(
-      (size.x - width) / 2,
-      _destinationRect.bottom + 8,
+      _visibleBodyRect.center.dx - width / 2,
+      _visibleBodyRect.bottom + 8,
       width,
       8,
     );
@@ -334,7 +355,7 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
         ghostIdle ? _sinLookup[(index * 7 ~/ 10) & 255] * 0.018 : 0.0;
     if (scale != 1 || offset != Offset.zero || rotation != 0) {
       final pivot = useSourceAspectGeometry
-          ? _destinationRect.center
+          ? _visibleBodyRect.center
           : Offset(size.x / 2, size.x / 2);
       canvas
         ..save()
@@ -364,9 +385,9 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   bool containsLocalPoint(Vector2 point) {
     if (useSourceAspectGeometry) {
       final hitBounds = Rect.fromCenter(
-        center: _destinationRect.center,
-        width: _destinationRect.width * currentVisualScale,
-        height: _destinationRect.height * currentVisualScale,
+        center: _visibleBodyRect.center,
+        width: _visibleBodyRect.width * currentVisualScale,
+        height: _visibleBodyRect.height * currentVisualScale,
       );
       return point.x > hitBounds.left &&
           point.x < hitBounds.right &&

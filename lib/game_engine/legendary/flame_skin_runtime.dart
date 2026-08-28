@@ -103,7 +103,7 @@ class FlameSkinRuntime {
     int visualVariant,
   ) =>
       isLegendary
-          ? FlameSpriteFrame(_legendaryCache!.bodyImage(color, fake: fake))
+          ? _legendaryFrame(color, fake: fake)
           : _skin.usesCatalogImage
               ? _catalogCache!.frame(
                   catalogDefinition.colorAtDamage(
@@ -125,7 +125,7 @@ class FlameSkinRuntime {
     required int visualVariant,
   }) =>
       isLegendary
-          ? FlameSpriteFrame(_legendaryCache!.bodyImage(color, fake: fake))
+          ? _legendaryFrame(color, fake: fake)
           : _skin.usesCatalogImage
               ? _catalogCache!.frame(
                   _activeStage!.bossRule!.colorForHp(hp),
@@ -133,6 +133,14 @@ class FlameSkinRuntime {
                   variant: visualVariant,
                 )
               : FlameSpriteFrame(basicCache.bossImageForHp(hp, fake: fake));
+
+  FlameSpriteFrame _legendaryFrame(Color color, {required bool fake}) =>
+      FlameSpriteFrame(
+        _legendaryCache!.bodyImage(color, fake: fake),
+        normalizedVisibleBounds: _skin == FlamePreviewSkin.shushu
+            ? _shushuNormalizedVisibleBounds
+            : const Rect.fromLTWH(0, 0, 1, 1),
+      );
 
   Future<void> switchSkin(FlamePreviewSkin skin) async {
     if (_skin == skin) return;
@@ -154,3 +162,13 @@ class FlameSkinRuntime {
     basicCache.dispose();
   }
 }
+
+// Alpha >= 32 bounds measured from the untouched 361x512 production PNG.
+// Low-alpha antialiasing remains rendered, while gameplay geometry follows the
+// visible cream-puff body rather than transparent edge pixels.
+const Rect _shushuNormalizedVisibleBounds = Rect.fromLTRB(
+  16 / 361,
+  1 / 512,
+  344 / 361,
+  507 / 512,
+);

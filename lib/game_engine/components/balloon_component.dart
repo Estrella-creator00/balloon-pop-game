@@ -43,10 +43,14 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     double? spriteOpacity,
   })  : _sprite = sprite.image,
         _visualHp = maxHp,
+        _normalizedVisibleBounds = sprite.normalizedVisibleBounds,
         _sourceRect = Rect.fromLTWH(0, 0, sprite.image.width.toDouble(),
             sprite.image.height.toDouble()),
         _destinationRect = useSourceAspectGeometry
             ? sourceAspectDestinationRect(sprite.image, balloonSize.x)
+            : Rect.fromLTWH(0, 0, balloonSize.x, balloonSize.y),
+        _visibleBodyRect = useSourceAspectGeometry
+            ? sourceAspectVisibleBodyRect(sprite, balloonSize.x)
             : Rect.fromLTWH(0, 0, balloonSize.x, balloonSize.y),
         super(position: position, size: balloonSize, priority: balloonId) {
     final opacity = (spriteOpacity ?? (isFake ? 0.35 : 1)) * baseSpriteOpacity;
@@ -82,8 +86,10 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     ..filterQuality = FilterQuality.medium;
 
   Image _sprite;
+  Rect _normalizedVisibleBounds;
   Rect _sourceRect;
   Rect _destinationRect;
+  Rect _visibleBodyRect;
   int _visualHp;
   bool _hitInProgress = false;
   bool _removed = false;
@@ -119,19 +125,20 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   Rect get playfieldBounds =>
       Rect.fromLTWH(position.x, position.y, size.x, size.y);
   Rect get destinationRect => _destinationRect;
+  Rect get bodyRect => _visibleBodyRect;
   double get spriteAspectRatio => _sprite.width / _sprite.height;
   double get currentVisualScale =>
       breatheIdle ? _breatheScale[_visualPhaseIndex] : 1;
   Offset get visualCenterInParent => Offset(
-        position.x + _destinationRect.center.dx,
-        position.y + _destinationRect.center.dy,
+        position.x + _visibleBodyRect.center.dx,
+        position.y + _visibleBodyRect.center.dy,
       );
   Rect get visualBoundsInParent {
     final local = useSourceAspectGeometry
         ? Rect.fromCenter(
-            center: _destinationRect.center,
-            width: _destinationRect.width * currentVisualScale,
-            height: _destinationRect.height * currentVisualScale,
+            center: _visibleBodyRect.center,
+            width: _visibleBodyRect.width * currentVisualScale,
+            height: _visibleBodyRect.height * currentVisualScale,
           )
         : _destinationRect;
     return local.shift(Offset(position.x, position.y));
@@ -181,6 +188,7 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     _visualHp = hp;
     final frame = spriteResolver(color, hp, maxHp, isFake, visualVariant);
     _sprite = frame.image;
+    _normalizedVisibleBounds = frame.normalizedVisibleBounds;
     _spritePaint.colorFilter = frame.colorFilter;
     final width = size.x * firstHitSizeMultiplier;
     if (useSourceAspectGeometry) {
@@ -197,10 +205,18 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   void _refreshDestinationRect() {
     if (useSourceAspectGeometry) {
       _destinationRect = sourceAspectDestinationRect(_sprite, size.x);
+      _visibleBodyRect = sourceAspectVisibleBodyRect(
+        FlameSpriteFrame(
+          _sprite,
+          normalizedVisibleBounds: _normalizedVisibleBounds,
+        ),
+        size.x,
+      );
       return;
     }
     if (!preserveSpriteAspectRatio) {
       _destinationRect = Rect.fromLTWH(0, 0, size.x, size.y);
+      _visibleBodyRect = _destinationRect;
       return;
     }
     final sourceAspect = _sprite.width / _sprite.height;
@@ -213,6 +229,7 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
       width,
       height,
     );
+    _visibleBodyRect = _destinationRect;
   }
 
   void markRemoved() {
@@ -253,7 +270,7 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
       return;
     }
     final pivot = useSourceAspectGeometry
-        ? _destinationRect.center
+        ? _visibleBodyRect.center
         : Offset(size.x / 2, size.y / 2);
     canvas
       ..save()
@@ -273,9 +290,9 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     if (_exiting) return false;
     if (useSourceAspectGeometry) {
       final hitBounds = Rect.fromCenter(
-        center: _destinationRect.center,
-        width: _destinationRect.width * currentVisualScale,
-        height: _destinationRect.height * currentVisualScale,
+        center: _visibleBodyRect.center,
+        width: _visibleBodyRect.width * currentVisualScale,
+        height: _visibleBodyRect.height * currentVisualScale,
       );
       return point.x > hitBounds.left &&
           point.x < hitBounds.right &&

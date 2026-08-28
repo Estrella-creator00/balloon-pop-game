@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:js_interop';
 
 @JS('AudioContext')
@@ -44,6 +45,7 @@ extension type _AudioElement._(JSObject _) implements JSObject {
 }
 
 abstract final class PopSound {
+  static const int gameplayVoiceCount = 8;
   static const uiClickAssetPath = 'assets/sounds/ui_click.mp3.mp3';
   static const bossAppearAssetPath = 'assets/sounds/boss_appear.mp3.mp3';
   static const bossClearAssetPath = 'assets/sounds/boss_clear.mp3.mp3';
@@ -54,7 +56,13 @@ abstract final class PopSound {
   static final Map<String, _AudioElement> _assetPlayers = {};
   static final Map<String, List<_AudioElement>> _polyphonicAssetPlayers = {};
   static final Map<String, int> _polyphonicVoiceIndexes = {};
+  static final Map<String, List<_AudioElement>> _gameplayAssetPlayers = {};
+  static final Map<String, int> _gameplayVoiceIndexes = {};
   static bool enabled = true;
+
+  static int get preparedGameplayAssetCount => _gameplayAssetPlayers.length;
+  static int get activeGameplayVoiceCount => _gameplayAssetPlayers.values
+      .fold(0, (total, voices) => total + voices.length);
 
   static void setEnabled(bool value) => enabled = value;
 
@@ -262,13 +270,79 @@ abstract final class PopSound {
 
   /// Requests media loading while the integration game is entered from a
   /// user gesture, so the first accepted hit only resets and plays the player.
-  static void prepareGameplayAsset(String assetPath) {
+  static Future<void> prepareGameplayAsset(String assetPath) async {
+    List<_AudioElement>? voices;
     try {
-      preloadAsset(assetPath);
-      final player = _assetPlayers[assetPath];
-      if (player != null && player.readyState < 2) player.load();
+      final context = _context ??= _AudioContext();
+      _ignorePlayback(context.resume());
+      voices = _gameplayAssetPlayers.putIfAbsent(
+        assetPath,
+        () => List<_AudioElement>.generate(gameplayVoiceCount, (_) {
+          final player = _AudioElement('assets/$assetPath');
+          player.preload = 'auto';
+          return player;
+        }, growable: false),
+      );
+      for (final voice in voices) {
+        if (voice.readyState < 2) voice.load();
+      }
     } catch (_) {
       // Media readiness must never block gameplay navigation.
+    }
+    if (voices == null) return;
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (voices.every((voice) => voice.readyState >= 2)) return;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+  }
+
+  static void playGameplayAsset(String assetPath) {
+    if (!enabled) return;
+    try {
+      final voices = _gameplayAssetPlayers[assetPath];
+      if (voices == null || voices.isEmpty) return;
+      final index = _gameplayVoiceIndexes[assetPath] ?? 0;
+      final player = voices[index % voices.length];
+      _gameplayVoiceIndexes[assetPath] = (index + 1) % voices.length;
+      player.currentTime = 0;
+      _ignorePlayback(player.play());
+    } catch (_) {
+      // A rejected Safari play promise must not affect gameplay.
+    }
+  }
+
+  static void releaseGameplayAsset(String assetPath) {
+    final voices = _gameplayAssetPlayers.remove(assetPath);
+    _gameplayVoiceIndexes.remove(assetPath);
+    if (voices == null) return;
+    for (final voice in voices) {
+      try {
+        voice
+          ..pause()
+          ..currentTime = 0;
+      } catch (_) {
+        // Teardown remains best-effort on browsers without media support.
+      }
+    }
+  }
+
+  static void pauseGameplayAssets(Iterable<String> assetPaths) {
+    for (final assetPath in assetPaths.toSet()) {
+      final voices = _gameplayAssetPlayers[assetPath];
+      if (voices == null) continue;
+      for (final voice in voices) {
+        try {
+          voice.pause();
+        } catch (_) {
+          // Pausing is best-effort across browser media implementations.
+        }
+      }
+    }
+  }
+
+  static void releaseGameplayAssets(Iterable<String> assetPaths) {
+    for (final assetPath in assetPaths.toSet()) {
+      releaseGameplayAsset(assetPath);
     }
   }
 
@@ -299,7 +373,7 @@ abstract final class PopSound {
       player
         ..pause()
         ..currentTime = 0;
-      player.play();
+      _ignorePlayback(player.play());
     } catch (_) {
       // Missing browser audio support must never affect gameplay.
     }
@@ -315,7 +389,7 @@ abstract final class PopSound {
       final player = voices[index % voices.length];
       _polyphonicVoiceIndexes[assetPath] = (index + 1) % voices.length;
       player.currentTime = 0;
-      player.play();
+      _ignorePlayback(player.play());
     } catch (_) {
       // Missing browser audio support must never affect gameplay.
     }
@@ -350,6 +424,10 @@ abstract final class PopSound {
     } catch (_) {
       // Unsupported audio must never alter gameplay.
     }
+  }
+
+  static void _ignorePlayback(JSPromise<JSAny?> promise) {
+    unawaited(promise.toDart.then<void>((_) {}, onError: (_, __) {}));
   }
 
   static void resetDebug() {}
