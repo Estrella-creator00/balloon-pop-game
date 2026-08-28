@@ -69,7 +69,7 @@ class LegendarySpriteCache {
       return;
     }
     final image = await _load(
-      definition.catalog.assetPath!,
+      definition.bodyAssetPath,
       targetWidth,
       cleanTransparentMatte: definition.cleansTransparentMatte,
     );

@@ -16,6 +16,7 @@ class LegendarySkinDefinition {
     required this.normalBodyWidth,
     required this.bossBodyWidth,
     required this.precomposedFake,
+    this.bodyAssetPathOverride,
   });
 
   final FlamePreviewSkin skin;
@@ -26,9 +27,12 @@ class LegendarySkinDefinition {
   final int normalBodyWidth;
   final int bossBodyWidth;
   final bool precomposedFake;
+  final String? bodyAssetPathOverride;
 
   List<Color> get palette => catalog.colorPalette;
-  bool get cleansTransparentMatte => skin == FlamePreviewSkin.shushu;
+  String get bodyAssetPath => bodyAssetPathOverride ?? catalog.assetPath!;
+  bool get cleansTransparentMatte =>
+      skin == FlamePreviewSkin.shushu && bodyAssetPathOverride == null;
 }
 
 LegendarySkinDefinition legendaryDefinitionFor(FlamePreviewSkin skin) {
@@ -61,6 +65,8 @@ LegendarySkinDefinition legendaryDefinitionFor(FlamePreviewSkin skin) {
         normalBodyWidth: 320,
         bossBodyWidth: 512,
         precomposedFake: false,
+        bodyAssetPathOverride:
+            'assets/images/balloon_shushu_canvas_runtime.png',
         effectAssets: <String, int>{
           catalog.hitToolAssetPath!: 256,
           catalog.burstAssetPath!: 320,

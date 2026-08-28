@@ -163,12 +163,10 @@ class FlameSkinRuntime {
   }
 }
 
-// Alpha >= 32 bounds measured from the untouched 361x512 production PNG.
-// Low-alpha antialiasing remains rendered, while gameplay geometry follows the
-// visible cream-puff body rather than transparent edge pixels.
+// Visible alpha bounds of the precomposed 361x512 Flame runtime PNG.
 const Rect _shushuNormalizedVisibleBounds = Rect.fromLTRB(
-  16 / 361,
-  1 / 512,
-  344 / 361,
+  17 / 361,
+  4 / 512,
+  343 / 361,
   507 / 512,
 );

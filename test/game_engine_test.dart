@@ -30,6 +30,7 @@ import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -126,11 +127,15 @@ void main() {
     expect(shushu.catalog.id, 'balloon-chouchou');
     expect(shushu.catalog.rarity, BalloonRarity.legendary);
     expect(shushu.catalog.assetPath, 'assets/images/balloon_shushu_asset.png');
-    expect(shushu.cleansTransparentMatte, isTrue);
+    expect(
+      shushu.bodyAssetPath,
+      'assets/images/balloon_shushu_canvas_runtime.png',
+    );
+    expect(shushu.cleansTransparentMatte, isFalse);
     expect(shushu.idleStyle, LegendaryIdleStyle.breathe);
   });
 
-  testWidgets('SHUSHU production asset decodes with transparent matte cleanup',
+  testWidgets('SHUSHU Flame body decodes directly with transparent alpha',
       (tester) async {
     final cache = LegendarySpriteCache(
       legendaryDefinitionFor(FlamePreviewSkin.shushu),
@@ -155,7 +160,15 @@ void main() {
       }
     }
     expect(transparentRgbViolations, 0);
-    expect(cache.matteCleanupCount, 1);
+    expect(cache.matteCleanupCount, 0);
+    expect(
+      cache.loadedAssetPaths,
+      contains('assets/images/balloon_shushu_canvas_runtime.png'),
+    );
+    expect(
+      cache.loadedAssetPaths,
+      isNot(contains('assets/images/balloon_shushu_asset.png')),
+    );
     expect(cache.imageCount, 6);
     expect(cache.estimatedRgbaBytes, lessThan(8 * 1024 * 1024));
 
@@ -788,7 +801,7 @@ void main() {
         expect(body.destinationRect.height, closeTo(body.size.x, .0001));
         expect(
           body.destinationRect.width / body.destinationRect.height,
-          closeTo(body.spriteAspectRatio, .0001),
+          closeTo(shushuSourceAspectRatio, .0001),
         );
         expect(
           body.containsLocalPoint(Vector2(
@@ -1283,7 +1296,8 @@ void main() {
     expect(harness.game.isBackgroundEffectActive, isFalse);
   });
 
-  testWidgets('SHUSHU uses cleaned cached body and breathe for normal and fake',
+  testWidgets(
+      'SHUSHU uses precomposed cached body and breathe for normal and fake',
       (tester) async {
     final harness = await _pumpPreview(
       tester,
@@ -1300,9 +1314,9 @@ void main() {
     expect(body.containsLocalPoint(Vector2.zero()), isFalse);
     expect(harness.game.skinRuntime.legendaryCache!.bodyImageCount, 1);
     final cache = harness.game.skinRuntime.legendaryCache!;
-    expect(cache.matteCleanupCount, 1);
+    expect(cache.matteCleanupCount, 0);
     expect(cache.loadedAssetPaths,
-        contains('assets/images/balloon_shushu_asset.png'));
+        contains('assets/images/balloon_shushu_canvas_runtime.png'));
   });
 
   testWidgets(
@@ -1317,7 +1331,7 @@ void main() {
     expect(balloon.useSourceAspectGeometry, isTrue);
     expect(
       balloon.destinationRect.width / balloon.destinationRect.height,
-      closeTo(balloon.spriteAspectRatio, .0001),
+      closeTo(shushuSourceAspectRatio, .0001),
     );
     expect(
       balloon.visualBoundsInParent.width / balloon.visualBoundsInParent.height,
@@ -1354,7 +1368,7 @@ void main() {
     expect(harness.game.lastEffectOrigin!.y, closeTo(firstOrigin.dy, .0001));
     expect(
       balloon.destinationRect.width / balloon.destinationRect.height,
-      closeTo(balloon.spriteAspectRatio, .0001),
+      closeTo(shushuSourceAspectRatio, .0001),
     );
     expect(
       balloon.containsLocalPoint(Vector2(
@@ -1381,7 +1395,7 @@ void main() {
       expect(boss.useSourceAspectGeometry, isTrue);
       expect(
         boss.destinationRect.width / boss.destinationRect.height,
-        closeTo(boss.spriteAspectRatio, .0001),
+        closeTo(shushuSourceAspectRatio, .0001),
       );
       expect(
         boss.visualBoundsInParent.width / boss.visualBoundsInParent.height,
@@ -1416,7 +1430,7 @@ void main() {
       expect(harness.game.lastEffectOrigin!.y, closeTo(effectCenter.dy, .0001));
       expect(
         boss.destinationRect.width / boss.destinationRect.height,
-        closeTo(boss.spriteAspectRatio, .0001),
+        closeTo(shushuSourceAspectRatio, .0001),
       );
       expect(
         harness.game.activeCacheImageCount,
@@ -1424,6 +1438,97 @@ void main() {
       );
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
+    }
+  });
+
+  testWidgets(
+      'SHUSHU Integration normal and two-hit components use the real runtime body',
+      (tester) async {
+    for (final stage in <int>[1, 11, 21]) {
+      final harness = await _pumpShushuIntegration(tester, stage: stage);
+      final balloons = harness.game.balloonComponents;
+      expect(balloons, isNotEmpty);
+      for (final balloon in balloons) {
+        _expectShushuComponentGeometry(
+          destination: balloon.destinationRect,
+          body: balloon.bodyRect,
+          componentPosition: balloon.position,
+          componentScaleX: balloon.scale.x,
+          componentScaleY: balloon.scale.y,
+          visualScale: balloon.currentVisualScale,
+          containsLocalPoint: balloon.containsLocalPoint,
+        );
+      }
+      if (stage == 11) {
+        final balloon = balloons.first;
+        expect(balloon.requestHit(), isTrue);
+        expect(balloon.visualHp, 1);
+        _expectShushuComponentGeometry(
+          destination: balloon.destinationRect,
+          body: balloon.bodyRect,
+          componentPosition: balloon.position,
+          componentScaleX: balloon.scale.x,
+          componentScaleY: balloon.scale.y,
+          visualScale: balloon.currentVisualScale,
+          containsLocalPoint: balloon.containsLocalPoint,
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(harness.game.isShutdown, isTrue);
+    }
+  });
+
+  testWidgets(
+      'SHUSHU Integration Stage 20 and 30 bosses share real render and hit geometry',
+      (tester) async {
+    for (final stage in <int>[20, 30]) {
+      final harness = await _pumpShushuIntegration(tester, stage: stage);
+      expect(harness.game.startBossStage(), isTrue);
+      final bosses = harness.game.bossComponents;
+      expect(bosses, isNotEmpty);
+      if (stage == 30) {
+        expect(bosses.any((boss) => boss.isFake), isTrue);
+        expect(bosses.any((boss) => !boss.isFake), isTrue);
+      }
+      for (final boss in bosses) {
+        _expectShushuComponentGeometry(
+          destination: boss.destinationRect,
+          body: boss.bodyRect,
+          componentPosition: boss.position,
+          componentScaleX: boss.scale.x,
+          componentScaleY: boss.scale.y,
+          visualScale: boss.currentVisualScale,
+          containsLocalPoint: boss.containsLocalPoint,
+        );
+        expect(
+          boss.healthTrackRect.center.dx,
+          closeTo(boss.bodyRect.center.dx, .0001),
+        );
+      }
+      final real = bosses.firstWhere((boss) => !boss.isFake);
+      final oldHp = real.visualHp;
+      expect(
+        real.requestHit(
+            worldPoint: Vector2(
+          real.visualCenterInParent.dx,
+          real.visualCenterInParent.dy,
+        )),
+        isTrue,
+      );
+      expect(real.visualHp, oldHp - 1);
+      _expectShushuComponentGeometry(
+        destination: real.destinationRect,
+        body: real.bodyRect,
+        componentPosition: real.position,
+        componentScaleX: real.scale.x,
+        componentScaleY: real.scale.y,
+        visualScale: real.currentVisualScale,
+        containsLocalPoint: real.containsLocalPoint,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(harness.game.isShutdown, isTrue);
     }
   });
 
@@ -1978,6 +2083,127 @@ Future<_Harness> _pumpPreview(
   await game.loaded;
   await tester.pump();
   return _Harness(game, session);
+}
+
+Future<_Harness> _pumpShushuIntegration(
+  WidgetTester tester, {
+  required int stage,
+}) async {
+  final body = await tester.runAsync(
+    () => _decodeAssetImage(
+      'assets/images/balloon_shushu_canvas_runtime.png',
+      stage == 10 || stage == 20 || stage == 30 ? 512 : 320,
+    ),
+  );
+  expect(body, isNotNull);
+  late PoppopGame game;
+  late GameSessionState session;
+  await tester.pumpWidget(PoppopAppEntry(
+    engineMode: PoppopEngineMode.flameIntegration,
+    integrationDebugConfig: FlameIntegrationDebugConfig(
+      enabled: true,
+      stage: stage,
+      skin: FlamePreviewSkin.shushu,
+    ),
+    integrationGameFactory: (created, skin, initialStage, onFeedback) {
+      session = created;
+      return game = PoppopGame(
+        created,
+        initialStage: initialStage,
+        initialSkin: skin,
+        stage30SwapRoll: () => 1,
+        legendaryImageLoader: (path, targetWidth, cleanTransparentMatte) {
+          if (path == 'assets/images/balloon_shushu_canvas_runtime.png') {
+            return Future<ui.Image>.value(body!);
+          }
+          return _testLegendaryImageLoader(
+            path,
+            targetWidth,
+            cleanTransparentMatte,
+          );
+        },
+        onGameplayFeedback: onFeedback,
+        showDiagnostics: false,
+      );
+    },
+  ));
+  await tester.pump();
+  await tester.tap(find.byKey(const ValueKey('start-section-1')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+  await game.loaded;
+  await tester.pump();
+  final intro = find.byKey(
+    const ValueKey('flame-integration-stage-intro-next'),
+  );
+  if (intro.evaluate().isNotEmpty) {
+    await tester.tap(intro);
+    await tester.pump();
+  }
+  expect(game.selectedSkin, FlamePreviewSkin.shushu);
+  expect(game.skinRuntime.legendaryCache!.loadedAssetPaths,
+      contains('assets/images/balloon_shushu_canvas_runtime.png'));
+  return _Harness(game, session);
+}
+
+Future<ui.Image> _decodeAssetImage(String path, int targetWidth) async {
+  final data = await rootBundle.load(path);
+  final codec = await ui.instantiateImageCodec(
+    data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+    targetWidth: targetWidth,
+    allowUpscaling: false,
+  );
+  final frame = await codec.getNextFrame();
+  codec.dispose();
+  return frame.image;
+}
+
+void _expectShushuComponentGeometry({
+  required Rect destination,
+  required Rect body,
+  required Vector2 componentPosition,
+  required double componentScaleX,
+  required double componentScaleY,
+  required double visualScale,
+  required bool Function(Vector2) containsLocalPoint,
+}) {
+  expect(
+    destination.width / destination.height,
+    closeTo(361 / 512, .0001),
+  );
+  expect(componentScaleX, closeTo(componentScaleY, .0001));
+
+  final scaledBody = Rect.fromCenter(
+    center: body.center,
+    width: body.width * visualScale,
+    height: body.height * visualScale,
+  );
+  final visualCenter = Offset(
+    componentPosition.x + scaledBody.center.dx,
+    componentPosition.y + scaledBody.center.dy,
+  );
+  final hitCenter = Offset(
+    componentPosition.x + body.center.dx,
+    componentPosition.y + body.center.dy,
+  );
+  expect(visualCenter.dx, closeTo(hitCenter.dx, .0001));
+  expect(visualCenter.dy, closeTo(hitCenter.dy, .0001));
+
+  for (final point in <Offset>[
+    Offset(scaledBody.center.dx, scaledBody.top + 1),
+    scaledBody.center,
+    Offset(scaledBody.center.dx, scaledBody.bottom - 1),
+  ]) {
+    expect(containsLocalPoint(Vector2(point.dx, point.dy)), isTrue);
+  }
+  expect(
+    containsLocalPoint(Vector2(destination.left + 1, body.center.dy)),
+    isFalse,
+  );
+  expect(
+    containsLocalPoint(Vector2(destination.right - 1, body.center.dy)),
+    isFalse,
+  );
 }
 
 Offset _center(PositionComponent component) => Offset(

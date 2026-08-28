@@ -15,7 +15,10 @@ class FlameSpriteFrame {
 }
 
 /// Geometry shared by SHUSHU's normal and boss components. The decoded image
-/// ratio is authoritative and contained inside a square gameplay extent.
+/// is contained inside a square gameplay extent. Use the production source
+/// ratio instead of the rounded dimensions of the 320px decoded profile.
+const double shushuSourceAspectRatio = 361 / 512;
+
 Vector2 sourceAspectComponentSize(
   Image image,
   double bodyExtent, {
@@ -24,7 +27,7 @@ Vector2 sourceAspectComponentSize(
     Vector2(bodyExtent, bodyExtent + trailingHeight);
 
 Rect sourceAspectDestinationRect(Image image, double bodyExtent) {
-  final aspect = image.width / image.height;
+  const aspect = shushuSourceAspectRatio;
   final width = aspect >= 1 ? bodyExtent : bodyExtent * aspect;
   final height = aspect >= 1 ? bodyExtent / aspect : bodyExtent;
   return Rect.fromLTWH(
