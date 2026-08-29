@@ -42,9 +42,13 @@ void main() {
   });
 
   test('engine and preview stage query use safe fallbacks', () {
-    expect(defaultPoppopEngineMode, PoppopEngineMode.production);
+    expect(defaultPoppopEngineMode, PoppopEngineMode.flameIntegration);
     expect(poppopEngineModeFromUri(Uri.parse('https://x.test/')),
-        PoppopEngineMode.production);
+        PoppopEngineMode.flameIntegration);
+    expect(
+        poppopEngineModeFromUri(
+            Uri.parse('https://x.test/?engine=canvas-phase4a')),
+        PoppopEngineMode.canvasPhase4A);
     expect(
         poppopEngineModeFromUri(
             Uri.parse('https://x.test/?engine=flame-preview&stage=20')),
@@ -54,7 +58,7 @@ void main() {
             Uri.parse('https://x.test/?engine=flame-integration')),
         PoppopEngineMode.flameIntegration);
     expect(poppopEngineModeFromUri(Uri.parse('https://x.test/?engine=unknown')),
-        PoppopEngineMode.production);
+        PoppopEngineMode.flameIntegration);
     for (final stage in <int>[1, 9, 10, 11, 19, 20, 21, 29, 30]) {
       expect(
           flamePreviewStageFromUri(
@@ -92,6 +96,18 @@ void main() {
     expect(
       FlameIntegrationDebugConfig.fromUri(Uri.parse(
         'https://x.test/?engine=flame-preview&debug=1&stage=30&skin=gemi',
+      )).enabled,
+      isFalse,
+    );
+    expect(
+      FlameIntegrationDebugConfig.fromUri(Uri.parse(
+        'https://x.test/?debug=1&stage=30&skin=gemi',
+      )).enabled,
+      isFalse,
+    );
+    expect(
+      FlameIntegrationDebugConfig.fromUri(Uri.parse(
+        'https://x.test/?engine=unknown&debug=1&stage=30&skin=gemi',
       )).enabled,
       isFalse,
     );
@@ -524,12 +540,35 @@ void main() {
     expect(finished, 1);
   });
 
-  testWidgets('default entry protects production and canvasPhase4A',
+  testWidgets('default entry keeps production shell and selects Flame gameplay',
       (tester) async {
     expect(defaultGameplayRendererMode, GameplayRendererMode.canvasPhase4A);
     await tester.pumpWidget(const PoppopAppEntry());
     await tester.pump();
     expect(find.byType(BalloonGamePage), findsOneWidget);
+    expect(find.byType(GameWidget<PoppopGame>), findsNothing);
+    expect(
+      tester
+          .widget<BalloonGamePage>(find.byType(BalloonGamePage))
+          .useFlameGameplay,
+      isTrue,
+    );
+  });
+
+  testWidgets('canvas-phase4a query keeps the legacy production gameplay path',
+      (tester) async {
+    await tester.pumpWidget(const PoppopAppEntry(
+      engineMode: PoppopEngineMode.canvasPhase4A,
+    ));
+    await tester.pump();
+
+    expect(find.byType(BalloonGamePage), findsOneWidget);
+    expect(
+      tester
+          .widget<BalloonGamePage>(find.byType(BalloonGamePage))
+          .useFlameGameplay,
+      isFalse,
+    );
     expect(find.byType(GameWidget<PoppopGame>), findsNothing);
   });
 

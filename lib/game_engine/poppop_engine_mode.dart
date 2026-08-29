@@ -1,11 +1,19 @@
-enum PoppopEngineMode { production, flamePreview, flameIntegration }
+enum PoppopEngineMode {
+  production,
+  canvasPhase4A,
+  flamePreview,
+  flameIntegration,
+}
 
+const String canvasPhase4AEngineQueryValue = 'canvas-phase4a';
 const String flamePreviewEngineQueryValue = 'flame-preview';
 const String flameIntegrationEngineQueryValue = 'flame-integration';
-const PoppopEngineMode defaultPoppopEngineMode = PoppopEngineMode.production;
+const PoppopEngineMode defaultPoppopEngineMode =
+    PoppopEngineMode.flameIntegration;
 
 PoppopEngineMode poppopEngineModeFromUri(Uri uri) =>
     switch (uri.queryParameters['engine']) {
+      canvasPhase4AEngineQueryValue => PoppopEngineMode.canvasPhase4A,
       flamePreviewEngineQueryValue => PoppopEngineMode.flamePreview,
       flameIntegrationEngineQueryValue => PoppopEngineMode.flameIntegration,
       _ => defaultPoppopEngineMode,

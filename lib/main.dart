@@ -83,7 +83,7 @@ class _PoppopAppEntryState extends State<PoppopAppEntry> {
 
   void _exitFlamePreview() {
     if (!mounted) return;
-    setState(() => _engineMode = PoppopEngineMode.production);
+    setState(() => _engineMode = defaultPoppopEngineMode);
   }
 
   @override

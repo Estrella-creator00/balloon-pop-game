@@ -13,7 +13,7 @@ class FlameIntegrationDebugConfig {
   final FlamePreviewSkin skin;
 
   factory FlameIntegrationDebugConfig.fromUri(Uri uri) {
-    if (poppopEngineModeFromUri(uri) != PoppopEngineMode.flameIntegration ||
+    if (uri.queryParameters['engine'] != flameIntegrationEngineQueryValue ||
         uri.queryParameters['debug'] != '1') {
       return const FlameIntegrationDebugConfig();
     }
