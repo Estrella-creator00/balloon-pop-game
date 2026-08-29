@@ -42,10 +42,14 @@ extension type _AudioElement._(JSObject _) implements JSObject {
   external set currentTime(num value);
   external set preload(String value);
   external int get readyState;
+  external bool get paused;
+  external bool get ended;
+  external void removeAttribute(String name);
 }
 
 abstract final class PopSound {
-  static const int gameplayVoiceCount = 8;
+  static const int gameplayVoiceCount = 4;
+  static const int rapidGameplayVoiceCount = 8;
   static const uiClickAssetPath = 'assets/sounds/ui_click.mp3.mp3';
   static const bossAppearAssetPath = 'assets/sounds/boss_appear.mp3.mp3';
   static const bossClearAssetPath = 'assets/sounds/boss_clear.mp3.mp3';
@@ -58,11 +62,26 @@ abstract final class PopSound {
   static final Map<String, int> _polyphonicVoiceIndexes = {};
   static final Map<String, List<_AudioElement>> _gameplayAssetPlayers = {};
   static final Map<String, int> _gameplayVoiceIndexes = {};
+  static final Set<String> _readyGameplayAssets = <String>{};
+  static int gameplayPendingPrepareCount = 0;
   static bool enabled = true;
 
   static int get preparedGameplayAssetCount => _gameplayAssetPlayers.length;
   static int get activeGameplayVoiceCount => _gameplayAssetPlayers.values
       .fold(0, (total, voices) => total + voices.length);
+  static int get playingGameplayVoiceCount => _gameplayAssetPlayers.values.fold(
+      0,
+      (total, voices) =>
+          total +
+          voices.where((voice) => !voice.paused && !voice.ended).length);
+  static int get readyGameplayAssetCount => _readyGameplayAssets.length;
+  static int get gameplayListenerCount => 0;
+
+  static int gameplayVoiceCountForAsset(String assetPath) =>
+      assetPath.endsWith('wari_watermelon_bite.mp3.mp3') ||
+              assetPath.endsWith('muggy_break.mp3.mp3')
+          ? rapidGameplayVoiceCount
+          : gameplayVoiceCount;
 
   static void setEnabled(bool value) => enabled = value;
 
@@ -271,13 +290,16 @@ abstract final class PopSound {
   /// Requests media loading while the integration game is entered from a
   /// user gesture, so the first accepted hit only resets and plays the player.
   static Future<void> prepareGameplayAsset(String assetPath) async {
+    if (!enabled || _gameplayAssetPlayers.containsKey(assetPath)) return;
     List<_AudioElement>? voices;
+    gameplayPendingPrepareCount++;
     try {
       final context = _context ??= _AudioContext();
       _ignorePlayback(context.resume());
       voices = _gameplayAssetPlayers.putIfAbsent(
         assetPath,
-        () => List<_AudioElement>.generate(gameplayVoiceCount, (_) {
+        () => List<_AudioElement>.generate(
+            gameplayVoiceCountForAsset(assetPath), (_) {
           final player = _AudioElement('assets/$assetPath');
           player.preload = 'auto';
           return player;
@@ -289,10 +311,17 @@ abstract final class PopSound {
     } catch (_) {
       // Media readiness must never block gameplay navigation.
     }
-    if (voices == null) return;
-    for (var attempt = 0; attempt < 20; attempt++) {
-      if (voices.every((voice) => voice.readyState >= 2)) return;
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+    try {
+      if (voices == null) return;
+      for (var attempt = 0; attempt < 20; attempt++) {
+        if (voices.every((voice) => voice.readyState >= 2)) {
+          _readyGameplayAssets.add(assetPath);
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    } finally {
+      gameplayPendingPrepareCount--;
     }
   }
 
@@ -314,12 +343,15 @@ abstract final class PopSound {
   static void releaseGameplayAsset(String assetPath) {
     final voices = _gameplayAssetPlayers.remove(assetPath);
     _gameplayVoiceIndexes.remove(assetPath);
+    _readyGameplayAssets.remove(assetPath);
     if (voices == null) return;
     for (final voice in voices) {
       try {
         voice
           ..pause()
-          ..currentTime = 0;
+          ..currentTime = 0
+          ..removeAttribute('src')
+          ..load();
       } catch (_) {
         // Teardown remains best-effort on browsers without media support.
       }

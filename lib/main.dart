@@ -2350,10 +2350,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ? debugConfig.skin
         : flamePreviewSkinFromValue(_equippedBalloonSkin.id);
     final soundDefinition = skin.catalogDefinition;
-    final gameplaySoundPaths = <String?>{
-      soundDefinition.hitSoundAssetPath,
-      soundDefinition.popSoundAssetPath,
-    }.whereType<String>().toSet();
+    final gameplaySoundPaths = PopSound.enabled
+        ? <String?>{
+            soundDefinition.hitSoundAssetPath,
+            soundDefinition.popSoundAssetPath,
+          }.whereType<String>().toSet()
+        : <String>{};
     await Future.wait(
       gameplaySoundPaths.map(PopSound.prepareGameplayAsset),
     );

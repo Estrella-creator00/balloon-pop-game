@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/audio/pop_sound.dart';
+import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/game_engine/components/balloon_component.dart';
 import 'package:balloon_pop_game/game_engine/components/basic_pop_effect.dart';
 import 'package:balloon_pop_game/game_engine/components/game_diagnostics_component.dart';
@@ -195,6 +196,30 @@ void main() {
     expect(cache.imageCount, 16);
     expect(cache.estimatedRgbaBytes, lessThan(24 * 1024 * 1024));
     expect(cache.estimatedRgbaBytes, greaterThanOrEqualTo(normalBytes));
+  });
+
+  testWidgets(
+      'integration legendary cache omits the duplicate Flame background image',
+      (tester) async {
+    final definition = legendaryDefinitionFor(FlamePreviewSkin.shushu);
+    final cache = LegendarySpriteCache(
+      definition,
+      imageLoader: _testLegendaryImageLoader,
+      includeBackground: false,
+    );
+    addTearDown(cache.dispose);
+    await tester.runAsync(() => cache.prepareForStage(boss: false));
+    expect(cache.loadedAssetPaths, isNot(contains(definition.backgroundAsset)));
+    expect(
+      cache.loadedAssetPaths,
+      containsAll(definition.effectAssets.keys),
+    );
+    expect(cache.bodyImageCount, 1);
+    final normalLoadCount = cache.loadCount;
+
+    await tester.runAsync(() => cache.prepareForStage(boss: true));
+    expect(cache.loadedAssetPaths, isNot(contains(definition.backgroundAsset)));
+    expect(cache.loadCount, normalLoadCount + 1);
   });
 
   testWidgets(
@@ -716,6 +741,13 @@ void main() {
     expect(text, contains('HUD'));
     expect(text, contains('SESSION'));
     expect(text, contains('SHELL'));
+    expect(text, contains('AUDIO'));
+    expect(text, contains('CACHE'));
+    expect(text, contains('BG 0'));
+    expect(
+      find.byKey(const ValueKey('flame-integration-fullscreen-background')),
+      findsNothing,
+    );
     expect(ProgressStorage.nextPlayableStage(), progressBefore);
     expect(ProgressStorage.equippedProductId('balloon'), definition.id);
 
@@ -783,6 +815,7 @@ void main() {
             initialSkin: selected,
             legendaryImageLoader: _testLegendaryImageLoader,
             onGameplayFeedback: onFeedback,
+            renderLegendaryBackground: false,
             showDiagnostics: false,
           );
         },
@@ -813,6 +846,14 @@ void main() {
       }
 
       expect(createCount, 1);
+      expect(game.hasLegendaryBackground, isFalse);
+      expect(
+        find.byKey(
+          const ValueKey('flame-integration-fullscreen-background'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(BalloonBackgroundRenderer), findsOneWidget);
       expect(find.byKey(const ValueKey('pause-button')), findsOneWidget);
       expect(find.byKey(const ValueKey('end-button')), findsOneWidget);
       expect(
@@ -822,6 +863,24 @@ void main() {
       final gameWidget = tester.widget<GameWidget<PoppopGame>>(
         find.byKey(const ValueKey('flame-integration-game-widget')),
       );
+      final routeRect = tester.getRect(
+        find.byKey(const ValueKey('flame-integration-gameplay')),
+      );
+      final backgroundRect = tester.getRect(
+        find.byKey(
+          const ValueKey('flame-integration-fullscreen-background'),
+        ),
+      );
+      final headerRect = tester.getRect(
+        find.byKey(const ValueKey('flame-integration-hud-layer')),
+      );
+      final playfieldRect = tester.getRect(
+        find.byKey(const ValueKey('flame-integration-playfield-clip')),
+      );
+      expect(backgroundRect, routeRect);
+      expect(backgroundRect.contains(headerRect.center), isTrue);
+      expect(backgroundRect.contains(playfieldRect.center), isTrue);
+      expect(playfieldRect.top, headerRect.bottom);
       final header = tester.widget<GameHeader>(find.byType(GameHeader));
       final hiddenHome = find.byType(
         HomeFloatingBalloons,
@@ -837,6 +896,9 @@ void main() {
       );
 
       expect(game.balloonComponents.first.requestHit(), isTrue);
+      if (skin == FlamePreviewSkin.gemi) {
+        expect(game.isBackgroundEffectActive, isTrue);
+      }
       await tester.pump(const Duration(milliseconds: 100));
       expect(
         tester.widget<GameWidget<PoppopGame>>(
@@ -895,13 +957,21 @@ void main() {
     await tester.pump();
     expect(PopSound.gameplayAssetPrepareCount, 1);
     expect(PopSound.preparedGameplayAssetCount, 1);
-    expect(PopSound.activeGameplayVoiceCount, PopSound.gameplayVoiceCount);
+    expect(
+      PopSound.activeGameplayVoiceCount,
+      PopSound.rapidGameplayVoiceCount,
+    );
+    expect(PopSound.playingGameplayVoiceCount, 0);
+    expect(PopSound.readyGameplayAssetCount, 1);
+    expect(PopSound.gameplayPendingPrepareCount, 0);
+    expect(PopSound.gameplayListenerCount, 0);
     expect(PopSound.lastPreparedAssetPath, definition.popSoundAssetPath);
     await tester.pump(const Duration(milliseconds: 100));
     await game.loaded;
     await tester.tap(find.byKey(const ValueKey('pause-button')));
     await tester.pump();
     expect(PopSound.gameplayAssetPauseCount, 1);
+    expect(PopSound.playingGameplayVoiceCount, 0);
     await tester.tap(find.byKey(const ValueKey('flame-integration-resume')));
     await tester.pump();
     final prepared = PopSound.gameplayAssetPrepareCount;
@@ -926,6 +996,9 @@ void main() {
     await tester.pump();
     expect(game.isShutdown, isTrue);
     expect(PopSound.activeGameplayVoiceCount, 0);
+    expect(PopSound.playingGameplayVoiceCount, 0);
+    expect(PopSound.readyGameplayAssetCount, 0);
+    expect(PopSound.gameplayListenerCount, 0);
     final playsAfterExit = PopSound.gameplayAssetPlayCount;
     expect(balloons[0].requestHit(), isFalse);
     expect(PopSound.gameplayAssetPlayCount, playsAfterExit);
@@ -938,6 +1011,10 @@ void main() {
     await PopSound.prepareGameplayAsset(path);
     expect(PopSound.gameplayAssetPrepareCount, 1);
     expect(PopSound.activeGameplayVoiceCount, PopSound.gameplayVoiceCount);
+    expect(PopSound.playingGameplayVoiceCount, 0);
+    expect(PopSound.readyGameplayAssetCount, 1);
+    expect(PopSound.gameplayPendingPrepareCount, 0);
+    expect(PopSound.gameplayListenerCount, 0);
     for (var hit = 0; hit < PopSound.gameplayVoiceCount * 3; hit++) {
       PopSound.playGameplayAsset(path);
     }
@@ -949,10 +1026,28 @@ void main() {
     PopSound.setEnabled(true);
     PopSound.releaseGameplayAsset(path);
     expect(PopSound.activeGameplayVoiceCount, 0);
+    expect(PopSound.playingGameplayVoiceCount, 0);
+    expect(PopSound.readyGameplayAssetCount, 0);
     await PopSound.prepareGameplayAsset(path);
     expect(PopSound.activeGameplayVoiceCount, PopSound.gameplayVoiceCount);
     PopSound.releaseGameplayAsset(path);
     expect(PopSound.activeGameplayVoiceCount, 0);
+    expect(PopSound.playingGameplayVoiceCount, 0);
+    expect(PopSound.readyGameplayAssetCount, 0);
+  });
+
+  test('disabled sound does not prepare gameplay players', () async {
+    const path = 'assets/sounds/test-disabled.mp3';
+    PopSound.resetDebug();
+    PopSound.setEnabled(false);
+    await PopSound.prepareGameplayAsset(path);
+    expect(PopSound.gameplayAssetPrepareCount, 0);
+    expect(PopSound.preparedGameplayAssetCount, 0);
+    expect(PopSound.activeGameplayVoiceCount, 0);
+    expect(PopSound.playingGameplayVoiceCount, 0);
+    expect(PopSound.readyGameplayAssetCount, 0);
+    expect(PopSound.gameplayPendingPrepareCount, 0);
+    PopSound.setEnabled(true);
   });
 
   testWidgets('SHUSHU integration prepares hit and pop voice pools',
@@ -987,6 +1082,10 @@ void main() {
       PopSound.activeGameplayVoiceCount,
       PopSound.gameplayVoiceCount * 2,
     );
+    expect(PopSound.playingGameplayVoiceCount, 0);
+    expect(PopSound.readyGameplayAssetCount, 2);
+    expect(PopSound.gameplayPendingPrepareCount, 0);
+    expect(PopSound.gameplayListenerCount, 0);
     await tester.pump(const Duration(milliseconds: 100));
     await game.loaded;
     final singlePlaysBeforePop = PopSound.assetPlayCount;
@@ -999,6 +1098,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(PopSound.activeGameplayVoiceCount, 0);
+    expect(PopSound.playingGameplayVoiceCount, 0);
+    expect(PopSound.readyGameplayAssetCount, 0);
+    expect(PopSound.gameplayListenerCount, 0);
   });
 
   testWidgets('integration persists each stage clear once', (tester) async {

@@ -15,11 +15,15 @@ typedef LegendaryImageLoader = Future<ui.Image> Function(
 );
 
 class LegendarySpriteCache {
-  LegendarySpriteCache(this.definition, {LegendaryImageLoader? imageLoader})
-      : _imageLoader = imageLoader;
+  LegendarySpriteCache(
+    this.definition, {
+    LegendaryImageLoader? imageLoader,
+    this.includeBackground = true,
+  }) : _imageLoader = imageLoader;
 
   final LegendarySkinDefinition definition;
   final LegendaryImageLoader? _imageLoader;
+  final bool includeBackground;
   final Map<String, ui.Image> _staticImages = <String, ui.Image>{};
   final Map<String, ui.Image> _bodyImages = <String, ui.Image>{};
   LegendaryBodyProfile? _bodyProfile;
@@ -81,8 +85,10 @@ class LegendarySpriteCache {
 
   Future<void> _prepareStaticImages() async {
     if (_staticImages.isNotEmpty) return;
-    _staticImages[definition.backgroundAsset] =
-        await _load(definition.backgroundAsset, 720);
+    if (includeBackground) {
+      _staticImages[definition.backgroundAsset] =
+          await _load(definition.backgroundAsset, 720);
+    }
     for (final entry in definition.effectAssets.entries) {
       _staticImages[entry.key] = await _load(entry.key, entry.value);
     }

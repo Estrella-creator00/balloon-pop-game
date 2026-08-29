@@ -34,6 +34,7 @@ class PoppopGame extends FlameGame {
     this.stage30SwapRoll,
     this.legendaryImageLoader,
     this.onGameplayFeedback,
+    this.renderLegendaryBackground = true,
     this.showDiagnostics = true,
     this.diagnosticsTextProvider,
     BasicBalloonSpriteCache? spriteCache,
@@ -55,6 +56,7 @@ class PoppopGame extends FlameGame {
   final double Function()? stage30SwapRoll;
   final LegendaryImageLoader? legendaryImageLoader;
   final FlameGameplayFeedbackCallback? onGameplayFeedback;
+  final bool renderLegendaryBackground;
   final bool showDiagnostics;
   final DiagnosticsTextProvider? diagnosticsTextProvider;
   final BasicBalloonSpriteCache spriteCache;
@@ -71,6 +73,7 @@ class PoppopGame extends FlameGame {
     basicCache: spriteCache,
     initialSkin: initialSkin,
     legendaryImageLoader: legendaryImageLoader,
+    includeLegendaryBackground: renderLegendaryBackground,
   );
   LegendaryBackgroundComponent? _legendaryBackground;
   bool _shutdown = false;
@@ -118,7 +121,9 @@ class PoppopGame extends FlameGame {
       sessionState.matchesActiveBossComponentIds(_bosses.keys);
 
   @override
-  Color backgroundColor() => const Color(0xFF14243A);
+  Color backgroundColor() => renderLegendaryBackground
+      ? const Color(0xFF14243A)
+      : const Color(0x00000000);
 
   @override
   Future<void> onLoad() async {
@@ -313,6 +318,7 @@ class PoppopGame extends FlameGame {
   }
 
   void _installLegendaryBackground() {
+    if (!renderLegendaryBackground) return;
     final cache = skinRuntime.legendaryCache;
     if (cache == null) return;
     final background = LegendaryBackgroundComponent(cache.backgroundImage);

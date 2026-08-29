@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
+import '../../audio/pop_sound.dart';
+import '../../balloon_background.dart';
 import '../../widgets/game_header.dart';
 import '../../gameplay/stage_intro_definition.dart';
 import '../game_session_state.dart';
@@ -86,6 +88,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
           initialStage: widget.initialStage,
           initialSkin: widget.skin,
           onGameplayFeedback: widget.onFeedback,
+          renderLegendaryBackground: false,
           showDiagnostics: widget.debugConfig.enabled,
           diagnosticsTextProvider:
               widget.debugConfig.enabled ? _diagnosticsText : null,
@@ -104,6 +107,13 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
         'COMP ${_game.activeGameplayComponentCount}\n'
         'EFFECT ${_game.activeEffectCount}  '
         'PARTICLE ${_game.activeParticleCount}\n'
+        'AUDIO ${PopSound.playingGameplayVoiceCount}/'
+        '${PopSound.activeGameplayVoiceCount}  '
+        'READY ${PopSound.readyGameplayAssetCount}  '
+        'PENDING ${PopSound.gameplayPendingPrepareCount}\n'
+        'AUDIO-LISTENER ${PopSound.gameplayListenerCount}  '
+        'CACHE ${_game.activeCacheImageCount}  '
+        'BG ${_hasDedicatedBackground ? 1 : 0}\n'
         'HUD ${_metrics.hudRebuildCount}  '
         'SESSION ${_metrics.sessionNotificationCount}  '
         'SHELL ${_metrics.shellRebuildCount}\n'
@@ -123,6 +133,9 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
         secondsLeft: session.secondsLeft,
         controlsEnabled: session.phase == GameSessionPhase.playing,
       );
+
+  bool get _hasDedicatedBackground =>
+      widget.skin.catalogDefinition.background != BalloonBackgroundType.none;
 
   void _onSessionChanged() {
     if (!mounted || _resultReturned) return;
@@ -274,46 +287,70 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     return Scaffold(
       key: const ValueKey('flame-integration-gameplay'),
       backgroundColor: const Color(0xFFAEE7FF),
-      body: SafeArea(
-        child: Column(
-          children: [
-            GameHeader(
-              key: const ValueKey('flame-integration-hud-layer'),
-              data: _header,
-              onPause: _pause,
-              onEnd: _confirmExit,
-            ),
-            Expanded(
-              child: ClipRect(
-                key: const ValueKey('flame-integration-playfield-clip'),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: _IntegrationGameWidget(
-                        game: _game,
-                        metrics: _metrics,
-                      ),
-                    ),
-                    if (phase == GameSessionPhase.loading)
-                      const _StatusOverlay(title: '준비 중...'),
-                    if (phase == GameSessionPhase.bossReady)
-                      _BossReadyOverlay(
-                        stage: _session.stage,
-                        onStart: _game.startBossStage,
-                      ),
-                    if (_sectionIntroVisible)
-                      _SectionIntroOverlay(
-                        definition: stageIntroDefinitions[_session.stage]!,
-                        onStart: _dismissSectionIntro,
-                      ),
-                    if (_manualPause)
-                      _PauseOverlay(onResume: _resume, onExit: _confirmExit),
-                  ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_hasDedicatedBackground)
+            Positioned.fill(
+              key: const ValueKey(
+                'flame-integration-fullscreen-background',
+              ),
+              child: IgnorePointer(
+                child: BalloonBackgroundRenderer(
+                  background: widget.skin.catalogDefinition.background,
+                  assetPathOverride:
+                      BalloonBackgroundRegistry.gameplayAssetPathFor(
+                    widget.skin.catalogDefinition.background,
+                  ),
+                  fallback: const ColoredBox(color: Color(0xFFAEE7FF)),
                 ),
               ),
             ),
-          ],
-        ),
+          SafeArea(
+            child: Column(
+              children: [
+                GameHeader(
+                  key: const ValueKey('flame-integration-hud-layer'),
+                  data: _header,
+                  onPause: _pause,
+                  onEnd: _confirmExit,
+                ),
+                Expanded(
+                  child: ClipRect(
+                    key: const ValueKey('flame-integration-playfield-clip'),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: _IntegrationGameWidget(
+                            game: _game,
+                            metrics: _metrics,
+                          ),
+                        ),
+                        if (phase == GameSessionPhase.loading)
+                          const _StatusOverlay(title: '준비 중...'),
+                        if (phase == GameSessionPhase.bossReady)
+                          _BossReadyOverlay(
+                            stage: _session.stage,
+                            onStart: _game.startBossStage,
+                          ),
+                        if (_sectionIntroVisible)
+                          _SectionIntroOverlay(
+                            definition: stageIntroDefinitions[_session.stage]!,
+                            onStart: _dismissSectionIntro,
+                          ),
+                        if (_manualPause)
+                          _PauseOverlay(
+                            onResume: _resume,
+                            onExit: _confirmExit,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -14,10 +14,12 @@ class FlameSkinRuntime {
     required this.basicCache,
     required FlamePreviewSkin initialSkin,
     this.legendaryImageLoader,
+    this.includeLegendaryBackground = true,
   }) : _skin = initialSkin;
 
   final BasicBalloonSpriteCache basicCache;
   final LegendaryImageLoader? legendaryImageLoader;
+  final bool includeLegendaryBackground;
   FlamePreviewSkin _skin;
   LegendarySpriteCache? _legendaryCache;
   CatalogSpriteCache? _catalogCache;
@@ -91,6 +93,7 @@ class FlameSkinRuntime {
     final cache = _legendaryCache ??= LegendarySpriteCache(
       legendaryDefinition!,
       imageLoader: legendaryImageLoader,
+      includeBackground: includeLegendaryBackground,
     );
     await cache.prepareForStage(boss: stage.isBoss);
   }
