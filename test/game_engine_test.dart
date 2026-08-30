@@ -826,6 +826,166 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('equipped store preview starts one current-skin Integration game',
+      (tester) async {
+    ProgressStorage.advanceNextPlayableStage(21);
+    late PoppopGame game;
+    var createCount = 0;
+    FlamePreviewSkin? selectedSkin;
+    int? initialStage;
+    await tester.pumpWidget(PoppopAppEntry(
+      engineMode: PoppopEngineMode.flameIntegration,
+      integrationGameFactory: (session, skin, stage, onFeedback) {
+        createCount++;
+        selectedSkin = skin;
+        initialStage = stage;
+        return game = PoppopGame(
+          session,
+          initialStage: stage,
+          initialSkin: skin,
+          onGameplayFeedback: onFeedback,
+        );
+      },
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('store-product-balloon-default')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('착용 완료!'), findsOneWidget);
+    expect(find.byKey(const ValueKey('balloon-preview-action')), findsNothing);
+    final play = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('balloon-preview-play')),
+    );
+    play.onPressed!.call();
+    play.onPressed!.call();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await game.loaded;
+    await tester.pump();
+
+    expect(createCount, 1);
+    expect(selectedSkin, FlamePreviewSkin.basic);
+    expect(initialStage, 21);
+    expect(find.byType(GameWidget<PoppopGame>), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('balloon-preview-dialog')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('store-product-grid')), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    expect(game.isShutdown, isTrue);
+  });
+
+  testWidgets('store preview home action creates no gameplay and keeps equip',
+      (tester) async {
+    var createCount = 0;
+    await tester.pumpWidget(PoppopAppEntry(
+      engineMode: PoppopEngineMode.flameIntegration,
+      integrationGameFactory: (session, skin, stage, onFeedback) {
+        createCount++;
+        return PoppopGame(
+          session,
+          initialStage: stage,
+          initialSkin: skin,
+          onGameplayFeedback: onFeedback,
+        );
+      },
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('store-product-balloon-default')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.byKey(const ValueKey('balloon-preview-home')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(createCount, 0);
+    expect(find.byType(GameWidget<PoppopGame>), findsNothing);
+    expect(find.byType(HomeFloatingBalloons), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-nav-selected-home')),
+      findsOneWidget,
+    );
+    expect(
+      ProgressStorage.equippedProductId('balloon'),
+      anyOf(isNull, 'balloon-default'),
+    );
+  });
+
+  for (final viewport in <Size>[
+    const Size(360, 640),
+    const Size(390, 844),
+    const Size(1365, 932),
+  ]) {
+    testWidgets(
+        'compact HUD is stable at ${viewport.width.toInt()}x${viewport.height.toInt()}',
+        (tester) async {
+      tester.view.physicalSize = viewport;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final data = ValueNotifier(const GameHeaderData(
+        stage: 1,
+        score: 123456,
+        remaining: 99,
+        secondsLeft: 10,
+        controlsEnabled: true,
+      ));
+      addTearDown(data.dispose);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SafeArea(
+            child: GameHeader(data: data, onPause: () {}, onEnd: () {}),
+          ),
+        ),
+      ));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('STAGE 01'), findsOneWidget);
+      expect(find.byKey(const ValueKey('game-hud-panel')), findsOneWidget);
+      expect(find.byKey(const ValueKey('hud-score')), findsOneWidget);
+      expect(find.byKey(const ValueKey('hud-remaining')), findsOneWidget);
+      expect(find.byKey(const ValueKey('hud-time')), findsOneWidget);
+      expect(find.bySemanticsLabel('일시정지'), findsOneWidget);
+      expect(find.bySemanticsLabel('끝내기'), findsOneWidget);
+      expect(find.byType(BackdropFilter), findsNothing);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('pause-button'))),
+        const Size(44, 44),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('end-button'))),
+        const Size(44, 44),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('game-hud-panel'))).width,
+        lessThanOrEqualTo(460),
+      );
+
+      data.value = const GameHeaderData(
+        stage: 30,
+        score: 123456,
+        remaining: 99,
+        secondsLeft: 4,
+        controlsEnabled: true,
+      );
+      await tester.pump();
+      expect(find.text('STAGE 30'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final skin in <FlamePreviewSkin>[
     FlamePreviewSkin.gemi,
     FlamePreviewSkin.shushu,

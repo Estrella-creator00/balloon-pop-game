@@ -245,6 +245,8 @@ enum StorePreviewType { balloon, effect, background, sound, music }
 
 enum StoreProductFilter { all, owned, unowned, limited }
 
+enum BalloonPreviewDestination { play, home }
+
 const storeProductsPerPage = 8;
 
 int storeRarityPageCount(int productCount) =>
@@ -2330,6 +2332,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (mounted) {
       setState(() {});
     }
+  }
+
+  int _startStageForCurrentProgress() {
+    final nextPlayableStage = ProgressStorage.nextPlayableStage();
+    if (nextPlayableStage >= 21) return 21;
+    if (nextPlayableStage >= 11 && _secondSectionUnlocked) return 11;
+    return 1;
   }
 
   Future<void> _startFlameIntegration(int startStage) async {
@@ -5037,7 +5046,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (product.category != StoreCategory.balloon || product.locked) return;
     PopSound.playUiClick();
     final definition = BalloonSkinCatalog.byIdOrDefault(product.id);
-    await showGeneralDialog<void>(
+    final destination = await showGeneralDialog<BalloonPreviewDestination>(
       context: context,
       barrierDismissible: true,
       barrierLabel: '풍선 미리보기 닫기',
@@ -5060,6 +5069,15 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       ),
     );
+    if (!mounted) return;
+    switch (destination) {
+      case BalloonPreviewDestination.play:
+        _startGame(_startStageForCurrentProgress());
+      case BalloonPreviewDestination.home:
+        _onHomeMenuTap();
+      case null:
+        break;
+    }
   }
 
   void _onStoreProductPressed(StoreProduct product) {
@@ -6169,6 +6187,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
   late int _visualVariant;
   late bool _specialVisual;
   int _toolApproach = 0;
+  bool _navigationPending = false;
 
   @override
   void initState() {
@@ -6328,6 +6347,13 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     if (mounted) setState(() {});
   }
 
+  void _finishPreview(BalloonPreviewDestination destination) {
+    if (_navigationPending) return;
+    setState(() => _navigationPending = true);
+    PopSound.playUiClick();
+    Navigator.of(context).pop(destination);
+  }
+
   @override
   void dispose() {
     _cycleTimer?.cancel();
@@ -6357,204 +6383,205 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
             elevation: 12,
             shadowColor: const Color(0x553B246B),
             borderRadius: BorderRadius.circular(26),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      const SizedBox(width: 40),
-                      Expanded(
-                        child: Text(
-                          widget.definition.displayName,
-                          key: const ValueKey('balloon-preview-name'),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFFF4F7B),
-                            fontSize: 23,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        key: const ValueKey('balloon-preview-close'),
-                        onPressed: () {
-                          PopSound.playUiClick();
-                          Navigator.of(context).pop();
-                        },
-                        icon: const Icon(Icons.close_rounded),
-                        color: const Color(0xFF526B79),
-                        tooltip: '닫기',
-                      ),
-                    ],
-                  ),
-                  Text(
-                    widget.definition.rarity.label,
-                    key: const ValueKey('balloon-preview-rarity'),
-                    style: TextStyle(
-                      color: widget.definition.rarity.color,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  if (widget.definition.showsDescription) ...[
-                    const SizedBox(height: 5),
-                    Text(
-                      widget.definition.description!,
-                      key: const ValueKey('balloon-preview-description'),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF526B79),
-                        fontSize: 12,
-                        height: 1.25,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 3),
-                  Text(
-                    widget.definition.price == 0
-                        ? '기본 보유'
-                        : '${widget.definition.price} coin',
-                    key: const ValueKey('balloon-preview-price'),
-                    style: const TextStyle(
-                      color: Color(0xFFD99000),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  SizedBox(
-                    width: _previewSize.width,
-                    height: _previewSize.height,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      alignment: Alignment.center,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
                       children: [
-                        Positioned.fill(
-                          child: ClipRect(
-                            child: BalloonBackgroundRenderer(
-                              key: const ValueKey('balloon-preview-background'),
-                              background: widget.definition.background,
-                              // The dialog's white Material remains the stage
-                              // for skins without a dedicated background.
-                              fallback: const SizedBox.expand(),
+                        const SizedBox(width: 40),
+                        Expanded(
+                          child: Text(
+                            widget.definition.displayName,
+                            key: const ValueKey('balloon-preview-name'),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFFF4F7B),
+                              fontSize: 23,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
                         ),
-                        if (_balloonVisible)
-                          SizedBox(
-                            key: const ValueKey('balloon-preview-renderer'),
-                            width: _balloonSize.width,
-                            height: _balloonSize.height,
-                            child: RepaintBoundary(
-                              child: AnimatedBuilder(
-                                animation: _idleController,
-                                builder: (context, _) => BalloonSkinRenderer(
-                                  definition: widget.definition,
-                                  color: _color,
-                                  visualVariant: _visualVariant,
-                                  specialVisual: _specialVisual,
-                                  animationPhase:
-                                      _idleController.value * pi * 2,
-                                ),
+                        IconButton(
+                          key: const ValueKey('balloon-preview-close'),
+                          onPressed: () {
+                            PopSound.playUiClick();
+                            Navigator.of(context).pop();
+                          },
+                          icon: const Icon(Icons.close_rounded),
+                          color: const Color(0xFF526B79),
+                          tooltip: '닫기',
+                        ),
+                      ],
+                    ),
+                    Text(
+                      widget.definition.rarity.label,
+                      key: const ValueKey('balloon-preview-rarity'),
+                      style: TextStyle(
+                        color: widget.definition.rarity.color,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (widget.definition.showsDescription) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        widget.definition.description!,
+                        key: const ValueKey('balloon-preview-description'),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF526B79),
+                          fontSize: 12,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 3),
+                    Text(
+                      widget.definition.price == 0
+                          ? '기본 보유'
+                          : '${widget.definition.price} coin',
+                      key: const ValueKey('balloon-preview-price'),
+                      style: const TextStyle(
+                        color: Color(0xFFD99000),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      width: _previewSize.width,
+                      height: _previewSize.height,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.center,
+                        children: [
+                          Positioned.fill(
+                            child: ClipRect(
+                              child: BalloonBackgroundRenderer(
+                                key: const ValueKey(
+                                    'balloon-preview-background'),
+                                background: widget.definition.background,
+                                // The dialog's white Material remains the stage
+                                // for skins without a dedicated background.
+                                fallback: const SizedBox.expand(),
                               ),
                             ),
                           ),
-                        if (widget.definition.burstAssetPath != null)
+                          if (_balloonVisible)
+                            SizedBox(
+                              key: const ValueKey('balloon-preview-renderer'),
+                              width: _balloonSize.width,
+                              height: _balloonSize.height,
+                              child: RepaintBoundary(
+                                child: AnimatedBuilder(
+                                  animation: _idleController,
+                                  builder: (context, _) => BalloonSkinRenderer(
+                                    definition: widget.definition,
+                                    color: _color,
+                                    visualVariant: _visualVariant,
+                                    specialVisual: _specialVisual,
+                                    animationPhase:
+                                        _idleController.value * pi * 2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (widget.definition.burstAssetPath != null)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: AnimatedBuilder(
+                                  animation: _effectController,
+                                  builder: (context, _) {
+                                    final progress = _effectController.value;
+                                    if (!_effectController.isAnimating ||
+                                        progress < 0.10 ||
+                                        progress > 0.48) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final fade =
+                                        ((0.48 - progress) / 0.38).clamp(
+                                      0.0,
+                                      1.0,
+                                    );
+                                    return Center(
+                                      child: Opacity(
+                                        opacity: fade,
+                                        child: Transform.scale(
+                                          scale: 0.55 + progress,
+                                          child: SizedBox.square(
+                                            dimension: 118,
+                                            child: Image.asset(
+                                              widget.definition.burstAssetPath!,
+                                              fit: BoxFit.contain,
+                                              filterQuality: FilterQuality.low,
+                                              cacheWidth: 320,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
                           Positioned.fill(
                             child: IgnorePointer(
                               child: AnimatedBuilder(
                                 animation: _effectController,
                                 builder: (context, _) {
-                                  final progress = _effectController.value;
-                                  if (!_effectController.isAnimating ||
-                                      progress < 0.10 ||
-                                      progress > 0.48) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  final fade = ((0.48 - progress) / 0.38).clamp(
-                                    0.0,
-                                    1.0,
-                                  );
-                                  return Center(
-                                    child: Opacity(
-                                      opacity: fade,
-                                      child: Transform.scale(
-                                        scale: 0.55 + progress,
-                                        child: SizedBox.square(
-                                          dimension: 118,
-                                          child: Image.asset(
-                                            widget.definition.burstAssetPath!,
-                                            fit: BoxFit.contain,
-                                            filterQuality: FilterQuality.low,
-                                            cacheWidth: 320,
-                                          ),
-                                        ),
-                                      ),
+                                  final toolVisuals = _previewToolVisuals();
+                                  return AssetEffectsCanvas(
+                                    key: const ValueKey(
+                                      'balloon-preview-asset-effects',
                                     ),
+                                    effects: _assetEffects,
+                                    revision: _effectsRevision,
+                                    preloadAssets: legendaryEffectPreloadAssets(
+                                      widget.definition,
+                                    ),
+                                    toolVisuals: toolVisuals,
+                                    toolRevision:
+                                        (_effectController.value * 10000)
+                                            .round(),
                                   );
                                 },
                               ),
                             ),
                           ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: AnimatedBuilder(
-                              animation: _effectController,
-                              builder: (context, _) {
-                                final toolVisuals = _previewToolVisuals();
-                                return AssetEffectsCanvas(
-                                  key: const ValueKey(
-                                    'balloon-preview-asset-effects',
-                                  ),
-                                  effects: _assetEffects,
-                                  revision: _effectsRevision,
-                                  preloadAssets: legendaryEffectPreloadAssets(
-                                    widget.definition,
-                                  ),
-                                  toolVisuals: toolVisuals,
-                                  toolRevision:
-                                      (_effectController.value * 10000).round(),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: RepaintBoundary(
-                              child: AnimatedBuilder(
-                                animation: _effectController,
-                                builder: (context, _) => CustomPaint(
-                                  key: const ValueKey(
-                                    'balloon-preview-effects',
-                                  ),
-                                  painter: EffectsPainter(
-                                    pieces: _pieces,
-                                    rings: _rings,
-                                    revision: _effectsRevision,
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: RepaintBoundary(
+                                child: AnimatedBuilder(
+                                  animation: _effectController,
+                                  builder: (context, _) => CustomPaint(
+                                    key: const ValueKey(
+                                      'balloon-preview-effects',
+                                    ),
+                                    painter: EffectsPainter(
+                                      pieces: _pieces,
+                                      rings: _rings,
+                                      revision: _effectsRevision,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: _actionButton(product),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    _actionArea(product),
+                  ],
+                ),
               ),
             ),
           ),
@@ -6563,15 +6590,88 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     );
   }
 
-  Widget _actionButton(StoreProduct product) {
-    if (product.equipped) {
-      return FilledButton.icon(
-        key: const ValueKey('balloon-preview-action'),
-        onPressed: null,
-        icon: const Icon(Icons.check_circle_rounded),
-        label: const Text('사용 중'),
+  Widget _actionArea(StoreProduct product) {
+    if (!product.equipped) {
+      return SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: _actionButton(product),
       );
     }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.check_circle_rounded,
+              color: Color(0xFF2EAD78),
+              size: 21,
+            ),
+            SizedBox(width: 6),
+            Text(
+              '착용 완료!',
+              key: ValueKey('balloon-preview-equipped-status'),
+              style: TextStyle(
+                color: Color(0xFF25385F),
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 9),
+        SizedBox(
+          height: 50,
+          child: FilledButton.icon(
+            key: const ValueKey('balloon-preview-play'),
+            onPressed: _navigationPending
+                ? null
+                : () => _finishPreview(BalloonPreviewDestination.play),
+            icon: const Icon(Icons.play_arrow_rounded, size: 25),
+            label: const Text('바로 플레이'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4F7B),
+              foregroundColor: Colors.white,
+              textStyle: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 48,
+          child: OutlinedButton.icon(
+            key: const ValueKey('balloon-preview-home'),
+            onPressed: _navigationPending
+                ? null
+                : () => _finishPreview(BalloonPreviewDestination.home),
+            icon: const Icon(Icons.home_rounded, size: 21),
+            label: const Text('홈으로'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF25385F),
+              side: const BorderSide(color: Color(0xFFCAD4E6), width: 1.2),
+              textStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _actionButton(StoreProduct product) {
     if (product.owned) {
       return FilledButton(
         key: const ValueKey('balloon-preview-action'),

@@ -2180,7 +2180,7 @@ void main() {
     );
 
     await tapSectionStart(tester, 3);
-    expect(find.text('21 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 21'), findsOneWidget);
   });
 
   testWidgets('initial progress keeps the first home stage page', (
@@ -3123,12 +3123,17 @@ void main() {
         BalloonBackgroundType.none,
       );
       expect(
-        tester
-            .widget<FilledButton>(
-              find.byKey(const ValueKey('balloon-preview-action')),
-            )
-            .onPressed,
-        isNull,
+        find.byKey(const ValueKey('balloon-preview-action')),
+        findsNothing,
+      );
+      expect(find.text('착용 완료!'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('balloon-preview-play')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('balloon-preview-home')),
+        findsOneWidget,
       );
       expect(PopSound.basicPlayCount, 0);
 
@@ -3174,6 +3179,29 @@ void main() {
       );
     },
   );
+
+  testWidgets('equipped balloon preview fits a 360x640 mobile viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+    await tester.pumpAndSettle();
+
+    await openBalloonPreview(tester, 'balloon-default');
+    expect(find.text('착용 완료!'), findsOneWidget);
+    expect(find.byKey(const ValueKey('balloon-preview-play')), findsOneWidget);
+    expect(find.byKey(const ValueKey('balloon-preview-home')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
+  });
 
   testWidgets('gemi preview paints eight color-tinted official shards', (
     tester,
@@ -3288,6 +3316,15 @@ void main() {
         defaultProductId: 'balloon-default',
       ),
       'balloon-rabbit',
+    );
+    expect(find.text('착용 완료!'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('balloon-preview-play')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('balloon-preview-home')),
+      findsOneWidget,
     );
 
     await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
@@ -3691,7 +3728,7 @@ void main() {
     await tester.pump();
     await tapSectionStart(tester, 1);
 
-    expect(find.text('1 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 01'), findsOneWidget);
     expect(find.text('팡!'), findsNothing);
     expect(find.byKey(const ValueKey(0)), findsOneWidget);
     expect(find.byKey(const ValueKey(1)), findsOneWidget);
@@ -3745,7 +3782,7 @@ void main() {
 
     expect(find.byKey(const ValueKey(0)), findsNothing);
     expect(find.byKey(const ValueKey(1)), findsOneWidget);
-    expect(find.text('1 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 01'), findsOneWidget);
     expect(find.text('점수  0'), findsOneWidget);
     expect(hapticCount, 1);
   });
@@ -4119,7 +4156,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 399));
       expect(find.text('Stage Clear!'), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 1));
-      expect(find.text('2 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 02'), findsOneWidget);
       expect(find.text('Stage Clear!'), findsNothing);
     },
   );
@@ -4207,7 +4244,7 @@ void main() {
       expect(effects.pieces.first.life, effectLife);
 
       await tester.pump(const Duration(milliseconds: 201));
-      expect(find.text('2 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 02'), findsOneWidget);
       expect(find.text('Stage Clear!'), findsNothing);
       canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
       expect(canvas.renderState.basicBalloons, hasLength(3));
@@ -4519,7 +4556,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 399));
       expect(find.text('Stage Clear!'), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 1));
-      expect(find.text('22 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 22'), findsOneWidget);
       expect(find.text('Stage Clear!'), findsNothing);
       expect(
         find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
@@ -4665,7 +4702,10 @@ void main() {
     await tapSectionStart(tester, 2);
 
     for (var stage = 11; stage <= 19; stage++) {
-      expect(find.text('$stage STAGE'), findsOneWidget);
+      expect(
+        find.text('STAGE ${stage.toString().padLeft(2, '0')}'),
+        findsOneWidget,
+      );
       final canvasFinder = find.byKey(
         const ValueKey('phase-1-persistent-game-canvas'),
       );
@@ -4697,7 +4737,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    expect(find.text('20 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 20'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
       findsNothing,
@@ -4720,7 +4760,10 @@ void main() {
     await tapSectionStart(tester, 3);
 
     for (var stage = 21; stage <= 29; stage++) {
-      expect(find.text('$stage STAGE'), findsOneWidget);
+      expect(
+        find.text('STAGE ${stage.toString().padLeft(2, '0')}'),
+        findsOneWidget,
+      );
       final canvasFinder = find.byKey(
         const ValueKey('phase-1-persistent-game-canvas'),
       );
@@ -4741,7 +4784,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    expect(find.text('30 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 30'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
       findsNothing,
@@ -4803,13 +4846,16 @@ void main() {
       await tapSectionStart(tester, 1);
 
       for (var stage = 1; stage <= 9; stage++) {
-        expect(find.text('$stage STAGE'), findsOneWidget);
+        expect(
+          find.text('STAGE ${stage.toString().padLeft(2, '0')}'),
+          findsOneWidget,
+        );
         await clearCurrentCanvasStage(tester);
         expect(find.text('Stage Clear!'), findsOneWidget);
         await tester.pump(const Duration(milliseconds: 400));
       }
 
-      expect(find.text('10 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 10'), findsOneWidget);
       final canvasFinder = find.byKey(
         const ValueKey('phase-1-persistent-game-canvas'),
       );
@@ -4883,7 +4929,7 @@ void main() {
       expect(find.byKey(const ValueKey('stage-intro-11')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
       await tester.pump();
-      expect(find.text('11 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 11'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
         findsOneWidget,
@@ -4915,7 +4961,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    expect(find.text('20 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 20'), findsOneWidget);
     final canvasFinder = find.byKey(
       const ValueKey('phase-1-persistent-game-canvas'),
     );
@@ -4944,7 +4990,7 @@ void main() {
     expect(find.byKey(const ValueKey('stage-intro-21')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
     await tester.pump();
-    expect(find.text('21 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 21'), findsOneWidget);
     expect(
       tester
           .widget<PersistentGameCanvas<Balloon>>(canvasFinder)
@@ -4973,7 +5019,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 400));
       }
 
-      expect(find.text('30 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 30'), findsOneWidget);
       final canvasFinder = find.byKey(
         const ValueKey('phase-1-persistent-game-canvas'),
       );
@@ -5093,13 +5139,13 @@ void main() {
     await tapSectionStart(tester, 1);
 
     await tapGameTarget(tester, 0);
-    expect(find.text('1 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 01'), findsOneWidget);
 
     await tapGameTarget(tester, 1);
     expect(find.text('Stage Clear!'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('2 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 02'), findsOneWidget);
     expect(find.text('시간  10'), findsOneWidget);
     expect(find.text('점수  10'), findsOneWidget);
     expect(find.byKey(const ValueKey(2)), findsOneWidget);
@@ -5127,7 +5173,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    expect(find.text('7 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 07'), findsOneWidget);
     expect(find.text('시간  20'), findsOneWidget);
   });
 
@@ -5137,7 +5183,7 @@ void main() {
     await tapSectionStart(tester, 1);
 
     expect(find.text('시간  10'), findsOneWidget);
-    expect(find.text('1 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 01'), findsOneWidget);
   });
 
   testWidgets('first launch locks the second section', (tester) async {
@@ -5154,7 +5200,7 @@ void main() {
     expect(lockedButton.onPressed, isNull);
 
     await tapSectionStart(tester, 2);
-    expect(find.text('11 STAGE'), findsNothing);
+    expect(find.text('STAGE 11'), findsNothing);
     expect(find.text('11~20 STAGE 시작 🔒'), findsOneWidget);
   });
 
@@ -5177,7 +5223,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    expect(find.text('10 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 10'), findsOneWidget);
     expect(find.text('시간  8'), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(
@@ -5216,7 +5262,7 @@ void main() {
     expect(find.text('BOSS CLEAR!'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('11 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 11'), findsOneWidget);
     expect(find.text('점수  153'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -5225,7 +5271,7 @@ void main() {
     await tester.pump();
     expect(find.text('11~20 STAGE 시작'), findsOneWidget);
     await tapSectionStart(tester, 2);
-    expect(find.text('11 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 11'), findsOneWidget);
     expect(find.text('점수  0'), findsOneWidget);
   });
 
@@ -5266,7 +5312,7 @@ void main() {
     await tapGameTargetThroughPointer(tester, firstId);
     expect(find.byKey(ValueKey(firstId)), findsNothing);
     expect(find.byKey(ValueKey(secondId)), findsOneWidget);
-    expect(find.text('11 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 11'), findsOneWidget);
     expect(find.text('남은 풍선  1'), findsOneWidget);
     expect(hapticCount, 1);
   });
@@ -5304,7 +5350,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 350));
       await tapSectionStart(tester, 3);
 
-      expect(find.text('21 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 21'), findsOneWidget);
       expect(find.text('시간  14'), findsOneWidget);
       expect(find.text('남은 풍선  2'), findsOneWidget);
       expect(find.byKey(const ValueKey(0)), findsOneWidget);
@@ -5373,7 +5419,10 @@ void main() {
 
       var nextBalloonId = 0;
       for (var stage = 21; stage <= 29; stage++) {
-        expect(find.text('$stage STAGE'), findsOneWidget);
+        expect(
+          find.text('STAGE ${stage.toString().padLeft(2, '0')}'),
+          findsOneWidget,
+        );
         final config = StageConfig.forStage(stage);
         expect(config.requiredHits, 1);
 
@@ -5452,7 +5501,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 401));
       }
 
-      expect(find.text('30 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 30'), findsOneWidget);
       expect(find.text('시간  18'), findsOneWidget);
       expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
       expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
@@ -5674,7 +5723,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    expect(find.text('20 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 20'), findsOneWidget);
     expect(find.text('시간  10'), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
@@ -5822,7 +5871,7 @@ void main() {
     expect(find.text('점수  $scoreAtStage20Clear'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('21 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 21'), findsOneWidget);
     expect(find.text('점수  $scoreAtStage20Clear'), findsOneWidget);
     expect(find.text('게임 완료!'), findsNothing);
     expect(find.byKey(const ValueKey('stage-intro-next')), findsOneWidget);
@@ -5845,7 +5894,7 @@ void main() {
       }
     }
 
-    expect(find.text('30 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 30'), findsOneWidget);
     for (var hit = 0; hit < 12; hit++) {
       await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
     }
@@ -5895,7 +5944,7 @@ void main() {
     await tester.tap(retryButton);
     await tester.pump();
     await tester.pump();
-    expect(find.text('30 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 30'), findsOneWidget);
 
     for (var hit = 0; hit < 12; hit++) {
       await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
@@ -5908,7 +5957,7 @@ void main() {
     await tester.tap(homeButton);
     await tester.pump();
     expect(find.text('1~10 STAGE 시작'), findsOneWidget);
-    expect(find.text('30 STAGE'), findsNothing);
+    expect(find.text('STAGE 30'), findsNothing);
   });
 
   testWidgets('home hides progress reset and preserves second-section unlock', (
@@ -5943,7 +5992,7 @@ void main() {
         .onPressed!
         .call();
     await tester.pump();
-    expect(find.text('일시정지'), findsWidgets);
+    expect(find.text('일시정지'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
 
     expect(find.text('시간  10'), findsOneWidget);
@@ -5957,7 +6006,7 @@ void main() {
         .onPressed!
         .call();
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('일시정지'), findsOneWidget);
+    expect(find.bySemanticsLabel('일시정지'), findsOneWidget);
     expect(find.text('시간  10'), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(const ValueKey(0))) != positionBefore,
@@ -5979,7 +6028,7 @@ void main() {
     await tester.tap(find.text('취소'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('1 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 01'), findsOneWidget);
     expect(find.text('시간  10'), findsOneWidget);
   });
 
@@ -6000,7 +6049,7 @@ void main() {
     expect(find.text('11~20 STAGE 시작'), findsOneWidget);
     expect(ProgressStorage.isSecondSectionUnlocked(), true);
     await tester.pump(const Duration(seconds: 20));
-    expect(find.text('11 STAGE'), findsNothing);
+    expect(find.text('STAGE 11'), findsNothing);
   });
 
   testWidgets('backgrounding the app pauses without automatic resume', (
@@ -6012,11 +6061,11 @@ void main() {
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     await tester.pump();
-    expect(find.text('일시정지'), findsWidgets);
+    expect(find.bySemanticsLabel('일시정지'), findsOneWidget);
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump(const Duration(seconds: 2));
-    expect(find.text('일시정지'), findsWidgets);
+    expect(find.bySemanticsLabel('일시정지'), findsWidgets);
     expect(find.text('시간  10'), findsOneWidget);
   });
 
@@ -6352,7 +6401,7 @@ void main() {
       const ValueKey('phase-1-persistent-game-canvas'),
     );
     final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
-    expect(find.text('10 STAGE'), findsOneWidget);
+    expect(find.text('STAGE 10'), findsOneWidget);
     expect(canvas.renderState.bosses, hasLength(1));
     expect(
       canvas.renderState.bosses.single.spriteAssetPath,
@@ -6435,7 +6484,7 @@ void main() {
       );
 
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('2 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 02'), findsOneWidget);
       expect(find.byKey(const ValueKey<int>(2)), findsOneWidget);
       expect(find.byKey(const ValueKey<int>(3)), findsOneWidget);
       expect(find.byKey(const ValueKey<int>(4)), findsOneWidget);
@@ -6768,7 +6817,7 @@ void main() {
       final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
       final painter = tester.widget<CustomPaint>(painterFinder).painter;
       final boss = canvas.renderState.bosses.single;
-      expect(find.text('10 STAGE'), findsOneWidget);
+      expect(find.text('STAGE 10'), findsOneWidget);
       expect(find.byType(BalloonSkinRenderer), findsNothing);
       expect(boss.spriteAssetPath, isNotNull);
 
