@@ -3645,7 +3645,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           right: 10,
                           height: 38,
                           child: _mainTopOverlay(
-                            enableDevCoinTap: true,
+                            enableDevCoinTap: kDebugMode,
                             showCoinAddButton: true,
                           ),
                         ),
