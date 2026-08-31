@@ -41,7 +41,7 @@ class FlameSkinRuntime {
   int get estimatedRgbaBytes => isLegendary
       ? (_legendaryCache?.estimatedRgbaBytes ?? 0)
       : (_catalogCache?.estimatedRgbaBytes ?? 0);
-  double get fakeRenderOpacity => _skin == FlamePreviewSkin.gemi ? 0.58 : 1;
+  double get fakeRenderOpacity => _skin == FlamePreviewSkin.gemi ? 0.40 : 1;
   double get fakeOpacity =>
       (isLegendary
           ? (legendaryDefinition?.precomposedFake == true ? 1 : 0.35)

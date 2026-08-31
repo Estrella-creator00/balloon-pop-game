@@ -1733,7 +1733,7 @@ void main() {
       );
       expect(
         runtime.fakeRenderOpacity,
-        skin == FlamePreviewSkin.gemi ? 0.58 : 1,
+        skin == FlamePreviewSkin.gemi ? 0.40 : 1,
       );
     }
 
@@ -1743,8 +1743,8 @@ void main() {
       skin: FlamePreviewSkin.gemi,
     );
     expect(stage21.game.skinRuntime.baseSpriteOpacity, 1);
-    expect(stage21.game.skinRuntime.fakeRenderOpacity, 0.58);
-    expect(stage21.game.skinRuntime.fakeOpacity, 0.58);
+    expect(stage21.game.skinRuntime.fakeRenderOpacity, 0.40);
+    expect(stage21.game.skinRuntime.fakeOpacity, 0.40);
     expect(stage21.game.balloonComponents.where((body) => body.isFake),
         hasLength(2));
     for (final body
@@ -1771,9 +1771,9 @@ void main() {
     final originalFake =
         stage30.game.bossComponents.singleWhere((boss) => boss.isFake);
     expect(originalReal.baseSpriteOpacity, 1);
-    expect(originalReal.fakeSpriteOpacity, 0.58);
+    expect(originalReal.fakeSpriteOpacity, 0.40);
     expect(originalFake.baseSpriteOpacity, 1);
-    expect(originalFake.fakeSpriteOpacity, 0.58);
+    expect(originalFake.fakeSpriteOpacity, 0.40);
     final realGeometry = originalReal.destinationRect;
     final fakeGeometry = originalFake.destinationRect;
     expect(
@@ -1791,8 +1791,8 @@ void main() {
     expect(originalReal.requestHit(), isTrue);
     expect(originalReal.isFake, isTrue);
     expect(originalFake.isFake, isFalse);
-    expect(originalReal.fakeSpriteOpacity, 0.58);
-    expect(originalFake.fakeSpriteOpacity, 0.58);
+    expect(originalReal.fakeSpriteOpacity, 0.40);
+    expect(originalFake.fakeSpriteOpacity, 0.40);
     expect(
         originalReal.containsLocalPoint(Vector2(
           originalReal.destinationRect.center.dx,
@@ -1847,7 +1847,7 @@ void main() {
     await tester.pump();
     expect(game.selectedSkin, FlamePreviewSkin.gemi);
     expect(game.balloonComponents.where((body) => body.isFake), hasLength(2));
-    expect(game.skinRuntime.fakeOpacity, 0.58);
+    expect(game.skinRuntime.fakeOpacity, 0.40);
     expect(game.skinRuntime.legendaryCache!.bodyImageCount, 8);
   });
 
