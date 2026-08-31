@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 
 import 'flame_preview_skin.dart';
+import 'gemi_fake_hologram.dart';
 import 'legendary_skin_definition.dart';
 
 enum LegendaryBodyProfile { normal, boss }
@@ -30,6 +31,7 @@ class LegendarySpriteCache {
   bool _disposed = false;
   int _loadCount = 0;
   int _matteCleanupCount = 0;
+  int _gemiFakeHologramComposeCount = 0;
   final Set<String> _loadedAssetPaths = <String>{};
 
   LegendaryBodyProfile? get bodyProfile => _bodyProfile;
@@ -38,6 +40,7 @@ class LegendarySpriteCache {
   int get staticImageCount => _staticImages.values.toSet().length;
   int get loadCount => _loadCount;
   int get matteCleanupCount => _matteCleanupCount;
+  int get gemiFakeHologramComposeCount => _gemiFakeHologramComposeCount;
   Set<String> get loadedAssetPaths =>
       Set<String>.unmodifiable(_loadedAssetPaths);
   int get estimatedRgbaBytes => _uniqueImages.fold(
@@ -66,9 +69,30 @@ class LegendarySpriteCache {
         final key = color.toARGB32();
         final normalPath = definition.catalog.runtimeColorAssetPaths[key]!;
         final fakePath = definition.catalog.runtimeFakeColorAssetPaths[key]!;
-        _bodyImages[_bodyKey(key, false)] =
-            await _load(normalPath, targetWidth);
-        _bodyImages[_bodyKey(key, true)] = await _load(fakePath, targetWidth);
+        final normal = await _load(normalPath, targetWidth);
+        final fadedFake = await _load(fakePath, targetWidth);
+        late final ui.Image hologramFake;
+        try {
+          hologramFake = await GemiFakeHologramComposer.compose(
+            normal: normal,
+            fadedFake: fadedFake,
+          );
+        } catch (_) {
+          normal.dispose();
+          rethrow;
+        } finally {
+          fadedFake.dispose();
+        }
+        if (_disposed) {
+          normal.dispose();
+          hologramFake.dispose();
+          throw StateError(
+            'Legendary sprite cache was disposed during GEMI composition.',
+          );
+        }
+        _gemiFakeHologramComposeCount++;
+        _bodyImages[_bodyKey(key, false)] = normal;
+        _bodyImages[_bodyKey(key, true)] = hologramFake;
       }
       return;
     }

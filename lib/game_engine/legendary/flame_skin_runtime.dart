@@ -140,6 +140,9 @@ class FlameSkinRuntime {
   FlameSpriteFrame _legendaryFrame(Color color, {required bool fake}) =>
       FlameSpriteFrame(
         _legendaryCache!.bodyImage(color, fake: fake),
+        treatment: _skin == FlamePreviewSkin.gemi && fake
+            ? FlameSpriteTreatment.gemiFakeHologram
+            : FlameSpriteTreatment.none,
         normalizedVisibleBounds: _skin == FlamePreviewSkin.shushu
             ? _shushuNormalizedVisibleBounds
             : const Rect.fromLTWH(0, 0, 1, 1),
