@@ -2,20 +2,16 @@ import 'dart:ui';
 
 import 'package:flame/components.dart';
 
-enum FlameSpriteTreatment { none, gemiFakeHologram }
-
 class FlameSpriteFrame {
   const FlameSpriteFrame(
     this.image, {
     this.colorFilter,
     this.normalizedVisibleBounds = const Rect.fromLTWH(0, 0, 1, 1),
-    this.treatment = FlameSpriteTreatment.none,
   });
 
   final Image image;
   final ColorFilter? colorFilter;
   final Rect normalizedVisibleBounds;
-  final FlameSpriteTreatment treatment;
 }
 
 /// Geometry shared by SHUSHU's normal and boss components. The decoded image

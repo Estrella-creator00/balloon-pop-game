@@ -42,7 +42,6 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     this.baseSpriteOpacity = 1,
     double? spriteOpacity,
   })  : _sprite = sprite.image,
-        _spriteTreatment = sprite.treatment,
         _visualHp = maxHp,
         _normalizedVisibleBounds = sprite.normalizedVisibleBounds,
         _sourceRect = Rect.fromLTWH(0, 0, sprite.image.width.toDouble(),
@@ -87,7 +86,6 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     ..filterQuality = FilterQuality.medium;
 
   Image _sprite;
-  FlameSpriteTreatment _spriteTreatment;
   Rect _normalizedVisibleBounds;
   Rect _sourceRect;
   Rect _destinationRect;
@@ -129,7 +127,6 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
   Rect get destinationRect => _destinationRect;
   Rect get bodyRect => _visibleBodyRect;
   double get spriteAspectRatio => _sprite.width / _sprite.height;
-  FlameSpriteTreatment get spriteTreatment => _spriteTreatment;
   double get currentVisualScale =>
       breatheIdle ? _breatheScale[_visualPhaseIndex] : 1;
   Offset get visualCenterInParent => Offset(
@@ -191,7 +188,6 @@ class BalloonComponent extends PositionComponent with TapCallbacks {
     _visualHp = hp;
     final frame = spriteResolver(color, hp, maxHp, isFake, visualVariant);
     _sprite = frame.image;
-    _spriteTreatment = frame.treatment;
     _normalizedVisibleBounds = frame.normalizedVisibleBounds;
     _spritePaint.colorFilter = frame.colorFilter;
     final width = size.x * firstHitSizeMultiplier;

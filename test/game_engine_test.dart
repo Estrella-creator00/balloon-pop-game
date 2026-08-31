@@ -13,7 +13,6 @@ import 'package:balloon_pop_game/game_engine/integration/flame_integration_debug
 import 'package:balloon_pop_game/game_engine/integration/flame_integration_game_page.dart';
 import 'package:balloon_pop_game/game_engine/legendary/flame_preview_skin.dart';
 import 'package:balloon_pop_game/game_engine/legendary/flame_skin_runtime.dart';
-import 'package:balloon_pop_game/game_engine/legendary/gemi_fake_hologram.dart';
 import 'package:balloon_pop_game/game_engine/legendary/legendary_skin_definition.dart';
 import 'package:balloon_pop_game/game_engine/legendary/legendary_sprite_cache.dart';
 import 'package:balloon_pop_game/game_engine/poppop_engine_mode.dart';
@@ -264,49 +263,16 @@ void main() {
     );
     addTearDown(cache.dispose);
     await tester.runAsync(() => cache.prepareForStage(boss: false));
-    final color = FlamePreviewSkin.gemi.catalogDefinition.colorPalette.first;
-    final normalImage = cache.bodyImage(color, fake: false);
-    final fakeImage = cache.bodyImage(color, fake: true);
     expect(cache.bodyImageCount, 8);
     expect(cache.staticImageCount, 8);
     expect(cache.imageCount, 16);
     expect(cache.estimatedRgbaBytes, lessThan(20 * 1024 * 1024));
-    expect(cache.gemiFakeHologramComposeCount, 4);
-    expect(fakeImage, isNot(same(normalImage)));
-    expect(fakeImage.width, normalImage.width);
-    expect(fakeImage.height, normalImage.height);
-    await tester.runAsync(() => cache.prepareForStage(boss: false));
-    expect(cache.bodyImage(color, fake: false), same(normalImage));
-    expect(cache.bodyImage(color, fake: true), same(fakeImage));
-    expect(cache.gemiFakeHologramComposeCount, 4);
     final normalBytes = cache.estimatedRgbaBytes;
     await tester.runAsync(() => cache.prepareForStage(boss: true));
     expect(cache.bodyImageCount, 8);
     expect(cache.imageCount, 16);
     expect(cache.estimatedRgbaBytes, lessThan(24 * 1024 * 1024));
     expect(cache.estimatedRgbaBytes, greaterThanOrEqualTo(normalBytes));
-    expect(cache.gemiFakeHologramComposeCount, 8);
-  });
-
-  test('GEMI Fake hologram has bounded opposite rims and two masked bands', () {
-    const size = Size(320, 500);
-    final bands = GemiFakeHologramSpec.projectionBands(size);
-    expect(
-        GemiFakeHologramSpec.cyanRim, isNot(GemiFakeHologramSpec.magentaRim));
-    expect(GemiFakeHologramSpec.rimOffsetForWidth(size.width),
-        inInclusiveRange(3, 8));
-    expect(bands, hasLength(2));
-    expect(GemiFakeHologramSpec.projectionBandCenters, hasLength(2));
-    expect(GemiFakeHologramSpec.projectionMaskBlendMode, BlendMode.dstIn);
-    for (final band in bands) {
-      expect(band.left, 0);
-      expect(band.width, size.width);
-      expect(band.height, greaterThanOrEqualTo(4));
-      expect(band.height, lessThanOrEqualTo(14));
-      expect((Offset.zero & size).contains(band.topLeft), isTrue);
-      expect(band.bottom, lessThan(size.height));
-    }
-    expect(bands[0].center.dy, lessThan(bands[1].center.dy));
   });
 
   testWidgets(
@@ -1664,11 +1630,6 @@ void main() {
     expect(harness.game.activeBalloonCount, 4);
     expect(harness.session.remainingBalloons, 2);
     expect(harness.session.fakeCount, 2);
-    expect(
-      harness.game.balloonComponents
-          .every((body) => body.spriteTreatment == FlameSpriteTreatment.none),
-      isTrue,
-    );
     expect(find.byType(BalloonGamePage), findsNothing);
     await harness.game.jumpToStage(999);
     await tester.pump();
@@ -1702,60 +1663,85 @@ void main() {
     expect(harness.game.hasLegendaryBackground, isTrue);
     expect(harness.game.skinRuntime.legendaryCache!.bodyImageCount, 8);
     expect(harness.game.activeCacheImageCount, lessThanOrEqualTo(16));
-    expect(
-      harness.game.balloonComponents
-          .every((body) => body.spriteTreatment == FlameSpriteTreatment.none),
-      isTrue,
-    );
   });
 
   testWidgets(
-      'GEMI Fake cached hologram reaches Stage 21 and Stage 30 components',
+      'GEMI Canvas and Flame Fake reuse the same precomposed alpha contract',
+      (tester) async {
+    final definition = legendaryDefinitionFor(FlamePreviewSkin.gemi);
+    final color = definition.catalog.colorPalette.first;
+    final canvasReal = Balloon(
+      id: 1,
+      position: Offset.zero,
+      velocity: Offset.zero,
+      color: color,
+      size: 100,
+      floatPhase: 0,
+      floatPower: 0,
+      hp: 1,
+      maxHp: 1,
+      skinId: definition.catalog.id,
+    );
+    final canvasFake = Balloon(
+      id: 2,
+      position: Offset.zero,
+      velocity: Offset.zero,
+      color: color,
+      size: 100,
+      floatPhase: 0,
+      floatPower: 0,
+      hp: 1,
+      maxHp: 1,
+      skinId: definition.catalog.id,
+      isFake: true,
+    );
+    expect(canvasReal.spriteAssetPath,
+        definition.catalog.runtimeColorAssetPaths[color.toARGB32()]);
+    expect(canvasFake.spriteAssetPath,
+        definition.catalog.runtimeFakeColorAssetPaths[color.toARGB32()]);
+    expect(canvasReal.spriteOpacity, 1);
+    expect(canvasFake.spriteOpacity, 1);
+    expect(canvasReal.spriteColorMatrix, isNull);
+    expect(canvasFake.spriteColorMatrix, isNull);
+
+    final cache = LegendarySpriteCache(definition);
+    addTearDown(cache.dispose);
+    await tester.runAsync(() => cache.prepareForStage(boss: false));
+    final realImage = cache.bodyImage(color, fake: false);
+    final fakeImage = cache.bodyImage(color, fake: true);
+    final alphas = await tester.runAsync(() async => <int>[
+          await _maxImageAlpha(realImage),
+          await _maxImageAlpha(fakeImage),
+        ]);
+    expect(alphas, <int>[255, 89]);
+    expect(fakeImage.width, realImage.width);
+    expect(fakeImage.height, realImage.height);
+    expect(cache.bodyImageCount, 8);
+    expect(cache.imageCount, 16);
+    await tester.runAsync(() => cache.prepareForStage(boss: false));
+    expect(cache.bodyImage(color, fake: false), same(realImage));
+    expect(cache.bodyImage(color, fake: true), same(fakeImage));
+  });
+
+  testWidgets(
+      'GEMI Stage 21 and Stage 30 use faded Fake without geometry drift',
       (tester) async {
     final stage21 = await _pumpPreview(
       tester,
       initialStage: 21,
       skin: FlamePreviewSkin.gemi,
     );
-    final normalBodies =
-        stage21.game.balloonComponents.where((body) => !body.isFake).toList();
-    final fakeBodies =
-        stage21.game.balloonComponents.where((body) => body.isFake).toList();
-    expect(normalBodies, hasLength(2));
-    expect(fakeBodies, hasLength(2));
-    expect(
-      normalBodies.every(
-        (body) => body.spriteTreatment == FlameSpriteTreatment.none,
-      ),
-      isTrue,
-    );
-    expect(
-      fakeBodies.every(
-        (body) => body.spriteTreatment == FlameSpriteTreatment.gemiFakeHologram,
-      ),
-      isTrue,
-    );
-    for (final body in stage21.game.balloonComponents) {
-      final geometry = body.destinationRect;
-      final effectOrigin = body.visualCenterInParent;
+    expect(stage21.game.balloonComponents.where((body) => body.isFake),
+        hasLength(2));
+    for (final body
+        in stage21.game.balloonComponents.where((body) => body.isFake)) {
+      final destination = body.destinationRect;
       expect(
         body.containsLocalPoint(
-            Vector2(geometry.center.dx, geometry.center.dy)),
+            Vector2(destination.center.dx, destination.center.dy)),
         isTrue,
       );
-      expect(body.destinationRect, geometry);
-      if (!body.isFake) {
-        expect(body.requestHit(), isTrue);
-        expect(
-            stage21.game.lastEffectOrigin!.x, closeTo(effectOrigin.dx, .0001));
-        expect(
-            stage21.game.lastEffectOrigin!.y, closeTo(effectOrigin.dy, .0001));
-        break;
-      }
     }
-    expect(
-        stage21.game.skinRuntime.legendaryCache!.gemiFakeHologramComposeCount,
-        4);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -1770,8 +1756,6 @@ void main() {
         stage30.game.bossComponents.singleWhere((boss) => !boss.isFake);
     final originalFake =
         stage30.game.bossComponents.singleWhere((boss) => boss.isFake);
-    expect(originalReal.spriteTreatment, FlameSpriteTreatment.none);
-    expect(originalFake.spriteTreatment, FlameSpriteTreatment.gemiFakeHologram);
     final realGeometry = originalReal.destinationRect;
     final fakeGeometry = originalFake.destinationRect;
     expect(
@@ -1789,8 +1773,6 @@ void main() {
     expect(originalReal.requestHit(), isTrue);
     expect(originalReal.isFake, isTrue);
     expect(originalFake.isFake, isFalse);
-    expect(originalReal.spriteTreatment, FlameSpriteTreatment.gemiFakeHologram);
-    expect(originalFake.spriteTreatment, FlameSpriteTreatment.none);
     expect(
         originalReal.containsLocalPoint(Vector2(
           originalReal.destinationRect.center.dx,
@@ -1803,12 +1785,9 @@ void main() {
           originalFake.destinationRect.center.dy,
         )),
         isTrue);
-    expect(
-        stage30.game.skinRuntime.legendaryCache!.gemiFakeHologramComposeCount,
-        4);
   });
 
-  testWidgets('GEMI Fake treatment is identical in Integration',
+  testWidgets('GEMI Fake asset path is identical in Integration',
       (tester) async {
     late PoppopGame game;
     await tester.pumpWidget(PoppopAppEntry(
@@ -1837,17 +1816,9 @@ void main() {
     await game.loaded;
     await tester.pump();
     expect(game.selectedSkin, FlamePreviewSkin.gemi);
-    expect(
-      game.balloonComponents.where((body) => body.isFake).every((body) =>
-          body.spriteTreatment == FlameSpriteTreatment.gemiFakeHologram),
-      isTrue,
-    );
-    expect(
-      game.balloonComponents
-          .where((body) => !body.isFake)
-          .every((body) => body.spriteTreatment == FlameSpriteTreatment.none),
-      isTrue,
-    );
+    expect(game.balloonComponents.where((body) => body.isFake), hasLength(2));
+    expect(game.skinRuntime.fakeOpacity, 1);
+    expect(game.skinRuntime.legendaryCache!.bodyImageCount, 8);
   });
 
   testWidgets('GEMI two-hit shards are bounded and become fully idle',
@@ -1889,11 +1860,6 @@ void main() {
     expect(body.containsLocalPoint(body.size / 2), isTrue);
     expect(body.containsLocalPoint(Vector2.zero()), isFalse);
     expect(harness.game.skinRuntime.legendaryCache!.bodyImageCount, 1);
-    expect(
-      harness.game.balloonComponents
-          .every((body) => body.spriteTreatment == FlameSpriteTreatment.none),
-      isTrue,
-    );
     final cache = harness.game.skinRuntime.legendaryCache!;
     expect(cache.matteCleanupCount, 0);
     expect(cache.loadedAssetPaths,
@@ -2303,24 +2269,12 @@ void main() {
       expect(harness.game.activeBalloonCount, 4);
       expect(harness.game.balloonComponents.where((body) => body.isFake),
           hasLength(2));
-      expect(
-        harness.game.balloonComponents.every(
-          (body) => body.spriteTreatment == FlameSpriteTreatment.none,
-        ),
-        isTrue,
-      );
 
       await harness.game.jumpToStage(30);
       await tester.pump();
       expect(harness.game.activeBossCount, 2);
       expect(harness.game.bossComponents.where((boss) => boss.isFake),
           hasLength(1));
-      expect(
-        harness.game.bossComponents.every(
-          (boss) => boss.spriteTreatment == FlameSpriteTreatment.none,
-        ),
-        isTrue,
-      );
       expect(harness.game.isComponentStateSynchronized, isTrue);
       final expectedImageCap = switch (skin) {
         FlamePreviewSkin.mochi => 25,
@@ -2817,6 +2771,16 @@ Future<void> _pumpTransition(WidgetTester tester, double seconds) async {
   for (var i = 0; i < frames; i++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
+}
+
+Future<int> _maxImageAlpha(ui.Image image) async {
+  final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+  var maxAlpha = 0;
+  for (var offset = 3; offset < data!.lengthInBytes; offset += 4) {
+    final alpha = data.getUint8(offset);
+    if (alpha > maxAlpha) maxAlpha = alpha;
+  }
+  return maxAlpha;
 }
 
 Future<ui.Image> _testLegendaryImageLoader(

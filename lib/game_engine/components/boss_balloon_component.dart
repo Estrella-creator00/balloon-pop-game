@@ -47,7 +47,6 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
     this.turnIntervalOffset = 0,
     double? initialTurnCooldown,
   })  : _sprite = initialSprite.image,
-        _spriteTreatment = initialSprite.treatment,
         _visualHp = rule.maxHp,
         _normalizedVisibleBounds = initialSprite.normalizedVisibleBounds,
         turnCooldown = initialTurnCooldown ?? rule.initialTurnCooldown,
@@ -113,7 +112,6 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   final Paint _healthFillPaint = Paint()..color = const Color(0xFFFF5C8A);
 
   Image _sprite;
-  FlameSpriteTreatment _spriteTreatment;
   Rect _normalizedVisibleBounds;
   Rect _sourceRect;
   Rect _destinationRect;
@@ -164,7 +162,6 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
   Rect get bodyRect => _visibleBodyRect;
   Rect get healthTrackRect => _healthTrackRect;
   double get spriteAspectRatio => _sprite.width / _sprite.height;
-  FlameSpriteTreatment get spriteTreatment => _spriteTreatment;
   double get currentVisualScale =>
       breatheIdle ? _breatheScale[_visualPhaseIndex] : 1;
   Offset get visualCenterInParent => Offset(
@@ -233,7 +230,6 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
       visualVariant: visualVariant,
     );
     _sprite = frame.image;
-    _spriteTreatment = frame.treatment;
     _normalizedVisibleBounds = frame.normalizedVisibleBounds;
     _spritePaint.colorFilter = frame.colorFilter;
     final nextDiameter = rule.sizeForHp(initialSize, hp);
@@ -276,7 +272,6 @@ class BossBalloonComponent extends PositionComponent with TapCallbacks {
       visualVariant: visualVariant,
     );
     _sprite = frame.image;
-    _spriteTreatment = frame.treatment;
     _normalizedVisibleBounds = frame.normalizedVisibleBounds;
     _spritePaint.colorFilter = frame.colorFilter;
     _sourceRect = Rect.fromLTWH(
