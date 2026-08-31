@@ -41,9 +41,12 @@ class FlameSkinRuntime {
   int get estimatedRgbaBytes => isLegendary
       ? (_legendaryCache?.estimatedRgbaBytes ?? 0)
       : (_catalogCache?.estimatedRgbaBytes ?? 0);
-  double get fakeOpacity => isLegendary
-      ? (legendaryDefinition?.precomposedFake == true ? 1 : 0.35)
-      : 0.35;
+  double get fakeRenderOpacity => _skin == FlamePreviewSkin.gemi ? 0.58 : 1;
+  double get fakeOpacity =>
+      (isLegendary
+          ? (legendaryDefinition?.precomposedFake == true ? 1 : 0.35)
+          : 0.35) *
+      fakeRenderOpacity;
   bool get usesSeparateBossHealthBar => isLegendary || _skin.usesCatalogImage;
   bool get preserveSpriteAspectRatio => isLegendary || _skin.usesCatalogImage;
   bool get usesSourceAspectGeometry => _skin == FlamePreviewSkin.shushu;

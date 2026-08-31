@@ -1666,7 +1666,7 @@ void main() {
   });
 
   testWidgets(
-      'GEMI Canvas and Flame Fake reuse the same precomposed alpha contract',
+      'GEMI Canvas and Flame cache reuse the precomposed Fake source alpha',
       (tester) async {
     final definition = legendaryDefinitionFor(FlamePreviewSkin.gemi);
     final color = definition.catalog.colorPalette.first;
@@ -1723,14 +1723,28 @@ void main() {
     expect(cache.bodyImage(color, fake: true), same(fakeImage));
   });
 
-  testWidgets(
-      'GEMI Stage 21 and Stage 30 use faded Fake without geometry drift',
-      (tester) async {
+  testWidgets('GEMI Fake render opacity', (tester) async {
+    final basicCache = BasicBalloonSpriteCache();
+    addTearDown(basicCache.dispose);
+    for (final skin in FlamePreviewSkin.values) {
+      final runtime = FlameSkinRuntime(
+        basicCache: basicCache,
+        initialSkin: skin,
+      );
+      expect(
+        runtime.fakeRenderOpacity,
+        skin == FlamePreviewSkin.gemi ? 0.58 : 1,
+      );
+    }
+
     final stage21 = await _pumpPreview(
       tester,
       initialStage: 21,
       skin: FlamePreviewSkin.gemi,
     );
+    expect(stage21.game.skinRuntime.baseSpriteOpacity, 1);
+    expect(stage21.game.skinRuntime.fakeRenderOpacity, 0.58);
+    expect(stage21.game.skinRuntime.fakeOpacity, 0.58);
     expect(stage21.game.balloonComponents.where((body) => body.isFake),
         hasLength(2));
     for (final body
@@ -1756,6 +1770,10 @@ void main() {
         stage30.game.bossComponents.singleWhere((boss) => !boss.isFake);
     final originalFake =
         stage30.game.bossComponents.singleWhere((boss) => boss.isFake);
+    expect(originalReal.baseSpriteOpacity, 1);
+    expect(originalReal.fakeSpriteOpacity, 0.58);
+    expect(originalFake.baseSpriteOpacity, 1);
+    expect(originalFake.fakeSpriteOpacity, 0.58);
     final realGeometry = originalReal.destinationRect;
     final fakeGeometry = originalFake.destinationRect;
     expect(
@@ -1773,6 +1791,8 @@ void main() {
     expect(originalReal.requestHit(), isTrue);
     expect(originalReal.isFake, isTrue);
     expect(originalFake.isFake, isFalse);
+    expect(originalReal.fakeSpriteOpacity, 0.58);
+    expect(originalFake.fakeSpriteOpacity, 0.58);
     expect(
         originalReal.containsLocalPoint(Vector2(
           originalReal.destinationRect.center.dx,
@@ -1785,6 +1805,16 @@ void main() {
           originalFake.destinationRect.center.dy,
         )),
         isTrue);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    final shushu = await _pumpPreview(
+      tester,
+      initialStage: 21,
+      skin: FlamePreviewSkin.shushu,
+    );
+    expect(shushu.game.skinRuntime.fakeRenderOpacity, 1);
+    expect(shushu.game.skinRuntime.fakeOpacity, 0.35);
   });
 
   testWidgets('GEMI Fake asset path is identical in Integration',
@@ -1817,7 +1847,7 @@ void main() {
     await tester.pump();
     expect(game.selectedSkin, FlamePreviewSkin.gemi);
     expect(game.balloonComponents.where((body) => body.isFake), hasLength(2));
-    expect(game.skinRuntime.fakeOpacity, 1);
+    expect(game.skinRuntime.fakeOpacity, 0.58);
     expect(game.skinRuntime.legendaryCache!.bodyImageCount, 8);
   });
 
