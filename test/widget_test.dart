@@ -11,6 +11,9 @@ import 'package:balloon_pop_game/gameplay/game_render_state.dart';
 import 'package:balloon_pop_game/gameplay/game_scene_painter.dart';
 import 'package:balloon_pop_game/gameplay/game_sprite_cache.dart';
 import 'package:balloon_pop_game/gameplay/gameplay_ab_test_flags.dart';
+import 'package:balloon_pop_game/game_engine/integration/flame_integration_debug.dart';
+import 'package:balloon_pop_game/game_engine/integration/flame_integration_game_page.dart';
+import 'package:balloon_pop_game/game_engine/legendary/flame_preview_skin.dart';
 import 'package:balloon_pop_game/audio/pop_sound.dart';
 import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
@@ -2192,6 +2195,70 @@ void main() {
     final pageView = tester.widget<PageView>(find.byType(PageView));
     expect(pageView.controller!.initialPage, 0);
     expect(find.text('1 ~ 10'), findsOneWidget);
+  });
+
+  testWidgets('endless entry is locked while stage swipe remains available',
+      (tester) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('endless-mode-entry')), findsOneWidget);
+    expect(find.text('🔒 무한 팝'), findsOneWidget);
+    expect(find.text('Stage 30 완료 후 해제'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('endless-mode-start')));
+    await tester.pump();
+    expect(find.text('Stage 30 완료 후 해제됩니다.'), findsOneWidget);
+
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('21 ~ 30'), findsOneWidget);
+    expect(find.byKey(const ValueKey('endless-mode-entry')), findsOneWidget);
+  });
+
+  testWidgets('endless unlock intro info and immediate re-entry are isolated',
+      (tester) async {
+    ProgressStorage.advanceNextPlayableStage(31);
+    ProgressStorage.saveEndlessBestScore(128);
+    await tester.pumpWidget(const BalloonPopApp(useFlameGameplay: true));
+    await tester.pump();
+
+    expect(find.text('∞ 무한 팝'), findsOneWidget);
+    expect(find.text('BEST 128'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('endless-mode-info')));
+    await tester.pump();
+    expect(find.text('풍선을 계속 터뜨려 최고 기록에 도전하세요.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('endless-intro-start')), findsNothing);
+    await tester.tap(find.text('닫기'));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('endless-mode-start')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('endless-intro-start')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('endless-intro-start')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(ProgressStorage.endlessIntroSeen(), isTrue);
+    final page = tester.widget<FlameIntegrationGamePage>(
+      find.byType(FlameIntegrationGamePage),
+    );
+    expect(page.endlessMode, isTrue);
+    expect(find.byKey(const ValueKey('flame-integration-gameplay')),
+        findsOneWidget);
+  });
+
+  testWidgets('integration debug stage override does not unlock endless mode',
+      (tester) async {
+    await tester.pumpWidget(const PoppopAppEntry(
+      integrationDebugConfig: FlameIntegrationDebugConfig(
+        enabled: true,
+        stage: 30,
+        skin: FlamePreviewSkin.gemi,
+      ),
+    ));
+    await tester.pump();
+
+    expect(ProgressStorage.nextPlayableStage(), 1);
+    expect(find.text('🔒 무한 팝'), findsOneWidget);
   });
 
   test(

@@ -6,6 +6,7 @@ import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/game_engine/components/balloon_component.dart';
 import 'package:balloon_pop_game/game_engine/components/basic_pop_effect.dart';
 import 'package:balloon_pop_game/game_engine/components/game_diagnostics_component.dart';
+import 'package:balloon_pop_game/game_engine/endless/endless_mode.dart';
 import 'package:balloon_pop_game/game_engine/flame_game_page.dart';
 import 'package:balloon_pop_game/game_engine/game_session_state.dart';
 import 'package:balloon_pop_game/game_engine/integration/flame_integration_contract.dart';
@@ -414,6 +415,77 @@ void main() {
     expect(session.hitBalloon(2), BalloonHitResult.stageCleared);
     expect(session.fakeCount, 0);
     expect(session.score, 12);
+  });
+
+  test('endless difficulty reuses bounded production mechanics', () {
+    final early = EndlessModeRules.profileFor(
+      record: 19,
+      spawnOrdinal: 3,
+      activeFakeCount: 0,
+    );
+    final middle = EndlessModeRules.profileFor(
+      record: 20,
+      spawnOrdinal: 4,
+      activeFakeCount: 0,
+    );
+    final late = EndlessModeRules.profileFor(
+      record: 40,
+      spawnOrdinal: 8,
+      activeFakeCount: 0,
+    );
+    final capped = EndlessModeRules.profileFor(
+      record: 10000,
+      spawnOrdinal: 12,
+      activeFakeCount: EndlessModeRules.activeFakeLimit,
+    );
+
+    expect(early.requiredHits, 1);
+    expect(early.isFake, isFalse);
+    expect(middle.requiredHits, 2);
+    expect(late.isFake, isTrue);
+    expect(capped.isFake, isFalse);
+    expect(capped.speed, EndlessModeRules.maximumSpeed);
+    expect(EndlessModeRules.activeBalloonLimit, 6);
+  });
+
+  test('endless session counts final real pops and ends on third fake', () {
+    final session = GameSessionState();
+    session.startEndless(
+      <int, int>{1: 1, 2: 2},
+      fakeIds: <int>{3, 4, 5},
+      generation: 9,
+    );
+
+    expect(session.hitBalloon(2), BalloonHitResult.hit);
+    expect(session.score, 0);
+    expect(session.hitBalloon(2), BalloonHitResult.popped);
+    expect(session.score, 1);
+    session.addEndlessBalloon(6, hp: 1, isFake: false);
+    expect(session.hitBalloon(3), BalloonHitResult.fakeHit);
+    expect(session.endlessMistakes, 1);
+    expect(session.phase, GameSessionPhase.playing);
+    expect(session.hitBalloon(4), BalloonHitResult.fakeHit);
+    expect(session.endlessMistakes, 2);
+    expect(session.phase, GameSessionPhase.playing);
+    expect(session.hitBalloon(5), BalloonHitResult.fakeHit);
+    expect(session.endlessMistakes, EndlessModeRules.mistakeLimit);
+    expect(session.phase, GameSessionPhase.endlessComplete);
+    expect(session.hitBalloon(6), BalloonHitResult.ignored);
+  });
+
+  test('endless best and intro storage are isolated and monotonic', () {
+    ProgressStorage.addCoins(321);
+    ProgressStorage.advanceNextPlayableStage(31);
+    expect(ProgressStorage.endlessBestScore(), 0);
+    expect(ProgressStorage.endlessIntroSeen(), isFalse);
+    expect(ProgressStorage.saveEndlessBestScore(128), isTrue);
+    expect(ProgressStorage.saveEndlessBestScore(64), isFalse);
+    ProgressStorage.setEndlessIntroSeen(true);
+
+    expect(ProgressStorage.endlessBestScore(), 128);
+    expect(ProgressStorage.endlessIntroSeen(), isTrue);
+    expect(ProgressStorage.coinBalance(), 321);
+    expect(ProgressStorage.nextPlayableStage(), 31);
   });
 
   test('Stage 20 bosses own independent HP and score exactly once', () {
@@ -1427,6 +1499,19 @@ void main() {
     await tester.pump();
     expect(ProgressStorage.isSecondSectionUnlocked(), isTrue);
     expect(ProgressStorage.nextPlayableStage(), 11);
+    await game.jumpToStage(30);
+    expect(game.startBossStage(), isTrue);
+    for (var hit = 0; hit < stage30BossRule.maxHp; hit++) {
+      final realId = game.sessionState.stage30RealBossId!;
+      expect(
+        game.bossComponents
+            .singleWhere((candidate) => candidate.bossId == realId)
+            .requestHit(),
+        isTrue,
+      );
+    }
+    await tester.pump();
+    expect(ProgressStorage.nextPlayableStage(), 31);
   });
 
   testWidgets('integration section intro pauses time until acknowledged',
@@ -1463,6 +1548,91 @@ void main() {
         .tap(find.byKey(const ValueKey('flame-integration-stage-intro-next')));
     await tester.pump();
     expect(session.phase, GameSessionPhase.playing);
+  });
+
+  testWidgets('endless integration saves result once and restarts one game',
+      (tester) async {
+    ProgressStorage.advanceNextPlayableStage(31);
+    ProgressStorage.addCoins(500);
+    final metrics = FlameIntegrationMetrics();
+    late PoppopGame game;
+    late GameSessionState session;
+    var saveCalls = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: FlameIntegrationGamePage(
+        initialStage: 1,
+        skin: FlamePreviewSkin.basic,
+        sessionId: 77,
+        endlessMode: true,
+        metrics: metrics,
+        onFeedback: (_) {},
+        onStageCompleted: (_) {},
+        onEndlessFinished: (score) {
+          saveCalls++;
+          final isNew = ProgressStorage.saveEndlessBestScore(score);
+          return EndlessRecordResult(
+            score: score,
+            bestScore: ProgressStorage.endlessBestScore(),
+            isNewBest: isNew,
+          );
+        },
+        gameFactory: (created, skin, stage, onFeedback) {
+          session = created;
+          return game = PoppopGame(
+            created,
+            initialSkin: skin,
+            endlessMode: true,
+            showDiagnostics: false,
+            onGameplayFeedback: onFeedback,
+          );
+        },
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await game.loaded;
+    await tester.pump();
+
+    final notificationsBeforeMovement = metrics.sessionNotificationCount;
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(metrics.sessionNotificationCount, notificationsBeforeMovement);
+
+    while (session.endlessMistakes < EndlessModeRules.mistakeLimit) {
+      var fakes = game.balloonComponents.where((item) => item.isFake).toList();
+      while (fakes.isEmpty) {
+        final target =
+            game.balloonComponents.firstWhere((item) => !item.isFake);
+        while (session.balloonHpFor(target.balloonId) > 0) {
+          target.requestHit();
+        }
+        await tester.pump();
+        fakes = game.balloonComponents.where((item) => item.isFake).toList();
+      }
+      fakes.first.requestHit();
+      await tester.pump();
+    }
+
+    expect(find.byKey(const ValueKey('endless-current-score')), findsOneWidget);
+    expect(find.byKey(const ValueKey('endless-best-score')), findsOneWidget);
+    expect(saveCalls, 1);
+    expect(ProgressStorage.coinBalance(), 500);
+    expect(ProgressStorage.nextPlayableStage(), 31);
+    await tester.tap(find.byKey(const ValueKey('endless-restart')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byKey(const ValueKey('endless-current-score')), findsNothing);
+    expect(session.score, 0);
+    expect(session.endlessMistakes, 0);
+    expect(game.activeBalloonCount, EndlessModeRules.activeBalloonLimit);
+    expect(metrics.activeGameInstances, 1);
+    expect(metrics.activeGameWidgetInstances, 1);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    expect(game.isShutdown, isTrue);
+    expect(metrics.activeGameInstances, 0);
+    expect(metrics.activeGameWidgetInstances, 0);
+    expect(metrics.lifecycleObserverCount, 0);
   });
 
   testWidgets(
@@ -2611,6 +2781,63 @@ void main() {
     expect(harness.game.isComponentStateSynchronized, isTrue);
   });
 
+  testWidgets(
+      'endless game keeps bounded slots and cleans restart and terminal state',
+      (tester) async {
+    final harness = await _pumpEndless(tester);
+    expect(
+        harness.game.activeBalloonCount, EndlessModeRules.activeBalloonLimit);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+
+    for (var pop = 0; pop < 65; pop++) {
+      final target = harness.game.balloonComponents.firstWhere(
+        (balloon) => !balloon.isFake,
+      );
+      while (harness.session.balloonHpFor(target.balloonId) > 0) {
+        expect(target.requestHit(), isTrue);
+      }
+      await tester.pump();
+      expect(
+          harness.game.activeBalloonCount, EndlessModeRules.activeBalloonLimit);
+      expect(harness.session.fakeCount,
+          lessThanOrEqualTo(EndlessModeRules.activeFakeLimit));
+      expect(harness.game.activeEffectCount, lessThanOrEqualTo(12));
+      expect(harness.game.isComponentStateSynchronized, isTrue);
+    }
+    expect(harness.session.score, 65);
+
+    while (harness.session.endlessMistakes < EndlessModeRules.mistakeLimit) {
+      var fakes = harness.game.balloonComponents
+          .where((balloon) => balloon.isFake)
+          .toList();
+      while (fakes.isEmpty) {
+        final target = harness.game.balloonComponents.firstWhere(
+          (balloon) => !balloon.isFake,
+        );
+        while (harness.session.balloonHpFor(target.balloonId) > 0) {
+          target.requestHit();
+        }
+        await tester.pump();
+        fakes = harness.game.balloonComponents
+            .where((balloon) => balloon.isFake)
+            .toList();
+      }
+      expect(fakes.first.requestHit(), isTrue);
+      await tester.pump();
+    }
+
+    expect(harness.session.phase, GameSessionPhase.endlessComplete);
+    expect(harness.game.activeBalloonCount, 0);
+    expect(harness.game.activeEffectCount, 0);
+    await harness.game.restartEndless();
+    await tester.pump();
+    expect(harness.session.score, 0);
+    expect(harness.session.endlessMistakes, 0);
+    expect(
+        harness.game.activeBalloonCount, EndlessModeRules.activeBalloonLimit);
+    expect(harness.game.isComponentStateSynchronized, isTrue);
+  });
+
   testWidgets('dispose stops Flame and removes every component',
       (tester) async {
     final harness = await _pumpPreview(tester, initialStage: 30);
@@ -2653,6 +2880,25 @@ Future<_Harness> _pumpPreview(
             legendaryImageLoader: _testLegendaryImageLoader,
             stage30SwapRoll: swapRoll);
       },
+    ),
+  ));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+  await game.loaded;
+  await tester.pump();
+  return _Harness(game, session);
+}
+
+Future<_Harness> _pumpEndless(WidgetTester tester) async {
+  final session = GameSessionState();
+  final game = PoppopGame(
+    session,
+    endlessMode: true,
+    showDiagnostics: false,
+  );
+  await tester.pumpWidget(MaterialApp(
+    home: Scaffold(
+      body: GameWidget<PoppopGame>(game: game),
     ),
   ));
   await tester.pump();

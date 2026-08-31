@@ -341,6 +341,7 @@ class _PreviewHud extends StatelessWidget {
       GameSessionPhase.stageClear => 'STAGE CLEAR',
       GameSessionPhase.bossClear => 'BOSS CLEAR',
       GameSessionPhase.coreClear => 'CORE CLEAR',
+      GameSessionPhase.endlessComplete => 'ENDLESS COMPLETE',
       GameSessionPhase.failed => 'TIME UP',
       GameSessionPhase.paused => 'PAUSED',
       GameSessionPhase.disposed => 'STOPPED',

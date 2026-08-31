@@ -12,6 +12,7 @@ import 'components/boss_balloon_component.dart';
 import 'components/game_diagnostics_component.dart';
 import 'components/legendary_background_component.dart';
 import 'components/legendary_burst_effect.dart';
+import 'endless/endless_mode.dart';
 import 'game_session_state.dart';
 import 'integration/flame_integration_contract.dart';
 import 'legendary/flame_preview_skin.dart';
@@ -37,6 +38,7 @@ class PoppopGame extends FlameGame {
     this.renderLegendaryBackground = true,
     this.showDiagnostics = true,
     this.diagnosticsTextProvider,
+    this.endlessMode = false,
     BasicBalloonSpriteCache? spriteCache,
   })  : stageDefinitions = stageDefinitions ?? flamePreviewStages,
         spriteCache = spriteCache ?? BasicBalloonSpriteCache(),
@@ -59,9 +61,11 @@ class PoppopGame extends FlameGame {
   final bool renderLegendaryBackground;
   final bool showDiagnostics;
   final DiagnosticsTextProvider? diagnosticsTextProvider;
+  final bool endlessMode;
   final BasicBalloonSpriteCache spriteCache;
   final Map<int, BalloonComponent> _balloons = <int, BalloonComponent>{};
   final Map<int, BossBalloonComponent> _bosses = <int, BossBalloonComponent>{};
+  final Map<int, int> _endlessSlotByBalloonId = <int, int>{};
   final Set<BasicPopEffect> _popEffects = <BasicPopEffect>{};
   final Set<LegendaryBurstEffect> _legendaryEffects = <LegendaryBurstEffect>{};
   final Set<LegendaryBackgroundPulseComponent> _backgroundPulses =
@@ -86,6 +90,7 @@ class PoppopGame extends FlameGame {
   int _componentGeneration = 0;
   int _updateCallCount = 0;
   int _updateCallsAfterShutdown = 0;
+  int _endlessSpawnOrdinal = 0;
   Vector2? _lastEffectOrigin;
 
   bool get isShutdown => _shutdown;
@@ -119,6 +124,7 @@ class PoppopGame extends FlameGame {
   bool get isComponentStateSynchronized =>
       sessionState.matchesActiveComponentIds(_balloons.keys) &&
       sessionState.matchesActiveBossComponentIds(_bosses.keys);
+  int get endlessActiveLimit => EndlessModeRules.activeBalloonLimit;
 
   @override
   Color backgroundColor() => renderLegendaryBackground
@@ -137,11 +143,15 @@ class PoppopGame extends FlameGame {
         textProvider: diagnosticsTextProvider ?? _diagnosticsText,
       ));
     }
-    final requested = stageDefinitions.where((d) => d.stage == initialStage);
-    final definition =
-        requested.isEmpty ? stageDefinitions.first : requested.first;
-    await _installStage(definition,
-        operation: ++_operationEpoch, resetSession: true);
+    if (endlessMode) {
+      await _installEndless(operation: ++_operationEpoch);
+    } else {
+      final requested = stageDefinitions.where((d) => d.stage == initialStage);
+      final definition =
+          requested.isEmpty ? stageDefinitions.first : requested.first;
+      await _installStage(definition,
+          operation: ++_operationEpoch, resetSession: true);
+    }
     _applyHostRunIntent();
   }
 
@@ -176,6 +186,7 @@ class PoppopGame extends FlameGame {
           }
         }
       case GameSessionPhase.coreClear:
+      case GameSessionPhase.endlessComplete:
         if (_popEffects.isNotEmpty ||
             _legendaryEffects.isNotEmpty ||
             _backgroundPulses.isNotEmpty) {
@@ -317,6 +328,102 @@ class PoppopGame extends FlameGame {
     }
   }
 
+  Future<void> _installEndless({required int operation}) async {
+    pauseEngine();
+    sessionState.beginLoading();
+    _removeGameplayComponents();
+    _transitionElapsed = 0;
+    _endlessSpawnOrdinal = 0;
+    final generation = ++_componentGeneration;
+    try {
+      await skinRuntime.prepareForStage(
+        endlessPreparationStage,
+        bossInitialSize: 0,
+      );
+    } catch (_) {
+      if (_shutdown || operation != _operationEpoch) return;
+      rethrow;
+    }
+    if (_shutdown || operation != _operationEpoch) return;
+    _installLegendaryBackground();
+    final balloons = <BalloonComponent>[];
+    for (var slot = 0; slot < EndlessModeRules.activeBalloonLimit; slot++) {
+      balloons.add(_createEndlessBalloon(
+        slot: slot,
+        generation: generation,
+        record: 0,
+        forceReal: true,
+      ));
+    }
+    await world.addAll(balloons);
+    if (_shutdown || operation != _operationEpoch) {
+      for (final balloon in balloons) {
+        balloon.removeFromParent();
+      }
+      processLifecycleEvents();
+      return;
+    }
+    _balloons.addEntries(balloons.map((b) => MapEntry(b.balloonId, b)));
+    sessionState.startEndless(
+      <int, int>{for (final b in balloons) b.balloonId: b.maxHp},
+      generation: generation,
+    );
+  }
+
+  BalloonComponent _createEndlessBalloon({
+    required int slot,
+    required int generation,
+    required int record,
+    bool forceReal = false,
+  }) {
+    final id = generation * 100000 + _endlessSpawnOrdinal++;
+    final profile = EndlessModeRules.profileFor(
+      record: record,
+      spawnOrdinal: _endlessSpawnOrdinal,
+      activeFakeCount: sessionState.fakeCount,
+      forceReal: forceReal,
+    );
+    final balloon = stageSpawner.createEndless(
+      profile: profile,
+      slot: slot,
+      id: id,
+      generation: generation,
+      playfieldSize: () => size,
+      onHitRequested: _handleBalloonHitRequest,
+      readHp: sessionState.balloonHpFor,
+      spriteResolver: skinRuntime.balloonFrame,
+      palette: skinRuntime.palette,
+      preserveSpriteAspectRatio: skinRuntime.preserveSpriteAspectRatio,
+      useSourceAspectGeometry: skinRuntime.usesSourceAspectGeometry,
+      breatheIdle: skinRuntime.breathes,
+      ghostIdle: skinRuntime.ghostIdle,
+      baseSpriteOpacity: skinRuntime.baseSpriteOpacity,
+      fakeSpriteOpacity: skinRuntime.fakeOpacity,
+      visualVariantCount: skinRuntime.visualVariantCount,
+    );
+    _endlessSlotByBalloonId[id] = slot;
+    return balloon;
+  }
+
+  void _replaceEndlessBalloon(BalloonComponent removed) {
+    if (_shutdown || !endlessMode || !sessionState.isPlaying) return;
+    final slot = _endlessSlotByBalloonId.remove(removed.balloonId);
+    if (slot == null) return;
+    final replacement = _createEndlessBalloon(
+      slot: slot,
+      generation: sessionState.generation,
+      record: sessionState.score,
+      forceReal: removed.isFake,
+    );
+    _balloons[replacement.balloonId] = replacement;
+    sessionState.addEndlessBalloon(
+      replacement.balloonId,
+      hp: replacement.maxHp,
+      isFake: replacement.isFake,
+    );
+    world.add(replacement);
+  }
+
   void _installLegendaryBackground() {
     if (!renderLegendaryBackground) return;
     final cache = skinRuntime.legendaryCache;
@@ -366,6 +473,15 @@ class PoppopGame extends FlameGame {
     _balloons.remove(balloon.balloonId);
     balloon.markRemoved();
     balloon.removeFromParent();
+    if (endlessMode) {
+      if (sessionState.phase == GameSessionPhase.endlessComplete) {
+        _removeGameplayComponents();
+        pauseEngine();
+      } else {
+        _replaceEndlessBalloon(balloon);
+      }
+      return true;
+    }
     if (result == BalloonHitResult.stageCleared) _removeFakeBalloons();
     if (sessionState.phase == GameSessionPhase.failed) {
       _removeGameplayComponents();
@@ -507,6 +623,11 @@ class PoppopGame extends FlameGame {
   }
 
   void _addEffect(Vector2 center, Color color) {
+    while (_popEffects.length >= 12) {
+      final oldest = _popEffects.first;
+      _popEffects.remove(oldest);
+      oldest.removeFromParent();
+    }
     final effect = BasicPopEffect(
         center: center, color: color, onFinished: _handleEffectFinished);
     _popEffects.add(effect);
@@ -626,6 +747,10 @@ class PoppopGame extends FlameGame {
     _balloons.remove(balloon.balloonId);
     balloon.markRemoved();
     balloon.removeFromParent();
+    if (endlessMode) {
+      _replaceEndlessBalloon(balloon);
+      return;
+    }
     if (result == BalloonHitResult.stageCleared) _removeFakeBalloons();
   }
 
@@ -692,8 +817,23 @@ class PoppopGame extends FlameGame {
     }
   }
 
-  Future<void> restartGame({bool resume = true}) =>
-      jumpToStage(1, resume: resume);
+  Future<void> restartGame({bool resume = true}) => endlessMode
+      ? restartEndless(resume: resume)
+      : jumpToStage(1, resume: resume);
+  Future<void> restartEndless({bool resume = true}) async {
+    if (_shutdown || _restartInFlight) return;
+    _restartInFlight = true;
+    _hostWantsRunning = resume;
+    _transitionInFlight = false;
+    final operation = ++_operationEpoch;
+    try {
+      await _installEndless(operation: operation);
+      _applyHostRunIntent();
+    } finally {
+      if (operation == _operationEpoch) _restartInFlight = false;
+    }
+  }
+
   Future<void> restartStageOne({bool resume = true}) =>
       restartGame(resume: resume);
 
@@ -710,15 +850,19 @@ class PoppopGame extends FlameGame {
     try {
       _removeGameplayComponents();
       await skinRuntime.switchSkin(skin);
-      final definition = stageDefinitions.firstWhere(
-        (candidate) => candidate.stage == stage,
-        orElse: () => stageDefinitions.first,
-      );
-      await _installStage(
-        definition,
-        operation: operation,
-        resetSession: true,
-      );
+      if (endlessMode) {
+        await _installEndless(operation: operation);
+      } else {
+        final definition = stageDefinitions.firstWhere(
+          (candidate) => candidate.stage == stage,
+          orElse: () => stageDefinitions.first,
+        );
+        await _installStage(
+          definition,
+          operation: operation,
+          resetSession: true,
+        );
+      }
       _applyHostRunIntent();
     } finally {
       if (operation == _operationEpoch) _restartInFlight = false;
@@ -746,6 +890,7 @@ class PoppopGame extends FlameGame {
     _legendaryBackground?.removeFromParent();
     _legendaryBackground = null;
     _balloons.clear();
+    _endlessSlotByBalloonId.clear();
     _bosses.clear();
     _popEffects.clear();
     _legendaryEffects.clear();
@@ -785,6 +930,7 @@ class PoppopGame extends FlameGame {
     if (_shutdown) return;
     _hostWantsRunning = true;
     if (sessionState.phase == GameSessionPhase.coreClear ||
+        sessionState.phase == GameSessionPhase.endlessComplete ||
         sessionState.phase == GameSessionPhase.failed ||
         sessionState.phase == GameSessionPhase.bossReady ||
         sessionState.phase == GameSessionPhase.loading) {

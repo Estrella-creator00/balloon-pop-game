@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import 'session/game_session_snapshot.dart';
+import 'endless/endless_mode.dart';
 import 'stages/flame_stage_definition.dart';
 
 enum BalloonHitResult { ignored, hit, popped, fakeHit, stageCleared }
@@ -25,6 +26,8 @@ class GameSessionState extends ChangeNotifier {
   int _generation = 0;
   int? _stage30RealBossId;
   int _stage30SharedHp = 0;
+  bool _isEndless = false;
+  int _endlessMistakes = 0;
   bool _disposed = false;
 
   GameSessionPhase get phase => _phase;
@@ -52,6 +55,8 @@ class GameSessionState extends ChangeNotifier {
   int? get stage30RealBossId => _stage30RealBossId;
   bool get isPlaying => _phase == GameSessionPhase.playing;
   bool get isDisposed => _disposed;
+  bool get isEndless => _isEndless;
+  int get endlessMistakes => _endlessMistakes;
   Set<int> get activeBalloonIds =>
       Set<int>.unmodifiable(<int>{..._targetHp.keys, ..._fakeIds});
   Set<int> get targetBalloonIds => Set<int>.unmodifiable(_targetHp.keys);
@@ -72,7 +77,40 @@ class GameSessionState extends ChangeNotifier {
         fakeCount: fakeCount,
         stage30RealBossId: stage30RealBossId,
         generation: generation,
+        isEndless: isEndless,
+        endlessMistakes: endlessMistakes,
       );
+
+  void startEndless(
+    Map<int, int> targetHp, {
+    Set<int> fakeIds = const <int>{},
+    int generation = 0,
+  }) {
+    if (_disposed) return;
+    _score = 0;
+    _stageClearCount = 0;
+    _lastClearBonus = 0;
+    _updateCount = 0;
+    _isEndless = true;
+    _endlessMistakes = 0;
+    _beginStage(
+      endlessPreparationStage,
+      targetHp,
+      fakeIds,
+      const <int, int>{},
+      generation,
+    );
+  }
+
+  void addEndlessBalloon(int id, {required int hp, required bool isFake}) {
+    if (_disposed || !_isEndless || _phase != GameSessionPhase.playing) return;
+    if (isFake) {
+      _fakeIds.add(id);
+    } else {
+      _targetHp[id] = hp;
+    }
+    notifyListeners();
+  }
 
   void startNewGame(
     FlameStageDefinition definition,
@@ -119,6 +157,10 @@ class GameSessionState extends ChangeNotifier {
     Map<int, int> bossHpById,
     int generation,
   ) {
+    if (definition.stage != 0) {
+      _isEndless = false;
+      _endlessMistakes = 0;
+    }
     _definition = definition;
     _generation = generation;
     _targetHp
@@ -159,6 +201,15 @@ class GameSessionState extends ChangeNotifier {
       return BalloonHitResult.ignored;
     }
     if (_fakeIds.remove(id)) {
+      if (_isEndless) {
+        _endlessMistakes++;
+        if (_endlessMistakes >= EndlessModeRules.mistakeLimit) {
+          _phase = GameSessionPhase.endlessComplete;
+          _clearLogicalObjects();
+        }
+        notifyListeners();
+        return BalloonHitResult.fakeHit;
+      }
       _applyTimePenalty(definition.balloonRule.fakePenaltySeconds);
       notifyListeners();
       return BalloonHitResult.fakeHit;
@@ -172,6 +223,10 @@ class GameSessionState extends ChangeNotifier {
     }
     _targetHp.remove(id);
     _score += definition.scoreRule.pointsPerBalloon;
+    if (_isEndless) {
+      notifyListeners();
+      return BalloonHitResult.popped;
+    }
     if (_targetHp.isNotEmpty) {
       notifyListeners();
       return BalloonHitResult.popped;
@@ -290,6 +345,7 @@ class GameSessionState extends ChangeNotifier {
   void recordUpdate(double dt) {
     if (_disposed || !isPlaying || dt <= 0) return;
     _updateCount++;
+    if (_isEndless) return;
     _preciseSecondsLeft = max(0, _preciseSecondsLeft - dt);
     final displayed = _preciseSecondsLeft.ceil();
     if (displayed == _secondsLeft) return;
@@ -318,6 +374,8 @@ class GameSessionState extends ChangeNotifier {
     if (_disposed) return;
     _clearLogicalObjects();
     _phase = GameSessionPhase.ready;
+    _isEndless = false;
+    _endlessMistakes = 0;
     notifyListeners();
   }
 

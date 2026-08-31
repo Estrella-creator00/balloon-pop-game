@@ -30,7 +30,19 @@ class FlameStageCompletionEvent {
   final int generation;
 }
 
-enum FlameIntegrationOutcome { completed, failed, exited }
+enum FlameIntegrationOutcome { completed, failed, endlessFinished, exited }
+
+class EndlessRecordResult {
+  const EndlessRecordResult({
+    required this.score,
+    required this.bestScore,
+    required this.isNewBest,
+  });
+
+  final int score;
+  final int bestScore;
+  final bool isNewBest;
+}
 
 class FlameIntegrationResult {
   const FlameIntegrationResult({
@@ -45,7 +57,9 @@ class FlameIntegrationResult {
   final int score;
   final int sessionId;
 
-  bool get recordsResult => outcome != FlameIntegrationOutcome.exited;
+  bool get recordsResult =>
+      outcome == FlameIntegrationOutcome.completed ||
+      outcome == FlameIntegrationOutcome.failed;
 }
 
 typedef FlameGameplayFeedbackCallback = void Function(
@@ -54,3 +68,4 @@ typedef FlameGameplayFeedbackCallback = void Function(
 typedef FlameStageCompletionCallback = void Function(
   FlameStageCompletionEvent event,
 );
+typedef EndlessRecordCallback = EndlessRecordResult Function(int score);

@@ -10,6 +10,10 @@ class GameHeaderData {
     required this.remaining,
     required this.secondsLeft,
     required this.controlsEnabled,
+    this.stageLabel,
+    this.scoreText,
+    this.remainingText,
+    this.timeText,
   });
 
   final int stage;
@@ -17,6 +21,10 @@ class GameHeaderData {
   final int remaining;
   final int secondsLeft;
   final bool controlsEnabled;
+  final String? stageLabel;
+  final String? scoreText;
+  final String? remainingText;
+  final String? timeText;
 
   @override
   bool operator ==(Object other) =>
@@ -26,11 +34,15 @@ class GameHeaderData {
           score == other.score &&
           remaining == other.remaining &&
           secondsLeft == other.secondsLeft &&
-          controlsEnabled == other.controlsEnabled;
+          controlsEnabled == other.controlsEnabled &&
+          stageLabel == other.stageLabel &&
+          scoreText == other.scoreText &&
+          remainingText == other.remainingText &&
+          timeText == other.timeText;
 
   @override
-  int get hashCode =>
-      Object.hash(stage, score, remaining, secondsLeft, controlsEnabled);
+  int get hashCode => Object.hash(stage, score, remaining, secondsLeft,
+      controlsEnabled, stageLabel, scoreText, remainingText, timeText);
 }
 
 class GameHeader extends StatelessWidget {
@@ -71,7 +83,8 @@ class GameHeader extends StatelessWidget {
                           ),
                           Expanded(
                             child: Text(
-                              'STAGE ${value.stage.toString().padLeft(2, '0')}',
+                              value.stageLabel ??
+                                  'STAGE ${value.stage.toString().padLeft(2, '0')}',
                               key: const ValueKey('game-stage-label'),
                               textAlign: TextAlign.center,
                               maxLines: 1,
@@ -144,21 +157,22 @@ class GameHeader extends StatelessWidget {
                           _HudMetric(
                             key: const ValueKey('hud-score'),
                             icon: Icons.star_rounded,
-                            text: '점수  ${value.score}',
+                            text: value.scoreText ?? '점수  ${value.score}',
                             color: const Color(0xFFE59A00),
                           ),
                           const _HudDivider(),
                           _HudMetric(
                             key: const ValueKey('hud-remaining'),
                             icon: Icons.bubble_chart_rounded,
-                            text: '남은 풍선  ${value.remaining}',
+                            text: value.remainingText ??
+                                '남은 풍선  ${value.remaining}',
                             color: const Color(0xFF7354E8),
                           ),
                           const _HudDivider(),
                           _HudMetric(
                             key: const ValueKey('hud-time'),
                             icon: Icons.timer_rounded,
-                            text: '시간  ${value.secondsLeft}',
+                            text: value.timeText ?? '시간  ${value.secondsLeft}',
                             color: value.secondsLeft <= 5
                                 ? const Color(0xFFE53E62)
                                 : const Color(0xFF236B9A),

@@ -34,6 +34,8 @@ class FlameIntegrationGamePage extends StatefulWidget {
     this.gameFactory,
     this.debugConfig = const FlameIntegrationDebugConfig(),
     this.metrics,
+    this.endlessMode = false,
+    this.onEndlessFinished,
   });
 
   final int initialStage;
@@ -47,6 +49,8 @@ class FlameIntegrationGamePage extends StatefulWidget {
 
   @visibleForTesting
   final FlameIntegrationMetrics? metrics;
+  final bool endlessMode;
+  final EndlessRecordCallback? onEndlessFinished;
 
   @override
   State<FlameIntegrationGamePage> createState() =>
@@ -66,6 +70,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
   bool _resultReturned = false;
   bool _sectionIntroVisible = false;
   final Set<int> _shownSectionIntroGenerations = <int>{};
+  EndlessRecordResult? _endlessResult;
 
   @override
   void initState() {
@@ -93,6 +98,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
           showDiagnostics: widget.debugConfig.enabled,
           diagnosticsTextProvider:
               widget.debugConfig.enabled ? _diagnosticsText : null,
+          endlessMode: widget.endlessMode,
         );
     _metrics.activeGameInstances++;
   }
@@ -133,6 +139,11 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
             : session.remainingBalloons,
         secondsLeft: session.secondsLeft,
         controlsEnabled: session.phase == GameSessionPhase.playing,
+        stageLabel: widget.endlessMode ? '무한 팝' : null,
+        scoreText: widget.endlessMode ? '기록  ${session.score}' : null,
+        remainingText:
+            widget.endlessMode ? '실수  ${session.endlessMistakes}/3' : null,
+        timeText: widget.endlessMode ? '시간  ∞' : null,
       );
 
   void _onSessionChanged() {
@@ -168,6 +179,20 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
       }
     }
     _lastPhase = phase;
+
+    if (phase == GameSessionPhase.endlessComplete && phaseChanged) {
+      final callback = widget.onEndlessFinished;
+      _endlessResult = callback?.call(_session.score) ??
+          EndlessRecordResult(
+            score: _session.score,
+            bestScore: _session.score,
+            isNewBest: true,
+          );
+      widget.onAudioPause?.call();
+      _game.pausePreview();
+      setState(() {});
+      return;
+    }
 
     if (phase == GameSessionPhase.coreClear ||
         phase == GameSessionPhase.failed) {
@@ -209,6 +234,16 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     if (!_manualPause) return;
     setState(() => _manualPause = false);
     if (!_backgroundPause) _game.resumePreview();
+  }
+
+  Future<void> _restartEndless() async {
+    if (!widget.endlessMode || _endlessResult == null) return;
+    setState(() => _endlessResult = null);
+    await _game.restartEndless();
+  }
+
+  void _finishEndless() {
+    _returnResult(FlameIntegrationOutcome.endlessFinished);
   }
 
   void _dismissSectionIntro() {
@@ -332,6 +367,12 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
                           _PauseOverlay(
                             onResume: _resume,
                             onExit: _confirmExit,
+                          ),
+                        if (_endlessResult case final result?)
+                          _EndlessResultOverlay(
+                            result: result,
+                            onRestart: _restartEndless,
+                            onHome: _finishEndless,
                           ),
                       ],
                     ),
@@ -505,6 +546,70 @@ class _PauseOverlay extends StatelessWidget {
               child: const Text('계속하기'),
             ),
             TextButton(onPressed: onExit, child: const Text('시작 화면으로')),
+          ],
+        ),
+      );
+}
+
+class _EndlessResultOverlay extends StatelessWidget {
+  const _EndlessResultOverlay({
+    required this.result,
+    required this.onRestart,
+    required this.onHome,
+  });
+
+  final EndlessRecordResult result;
+  final VoidCallback onRestart;
+  final VoidCallback onHome;
+
+  @override
+  Widget build(BuildContext context) => _StatusOverlay(
+        title: '무한 팝 종료',
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '현재 기록  ${result.score}',
+              key: const ValueKey('endless-current-score'),
+              style: const TextStyle(
+                color: Color(0xFF25385F),
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'BEST ${result.bestScore}',
+              key: const ValueKey('endless-best-score'),
+              style: const TextStyle(
+                color: Color(0xFFFF4F7B),
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (result.isNewBest)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  'NEW BEST!',
+                  key: ValueKey('endless-new-best'),
+                  style: TextStyle(
+                    color: Color(0xFFE59A00),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 14),
+            FilledButton(
+              key: const ValueKey('endless-restart'),
+              onPressed: onRestart,
+              child: const Text('다시 도전'),
+            ),
+            TextButton(
+              key: const ValueKey('endless-home'),
+              onPressed: onHome,
+              child: const Text('홈으로'),
+            ),
           ],
         ),
       );

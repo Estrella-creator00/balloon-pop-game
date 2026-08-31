@@ -9,6 +9,7 @@ enum GameSessionPhase {
   stageClear,
   bossClear,
   coreClear,
+  endlessComplete,
   failed,
   disposed,
 }
@@ -29,6 +30,8 @@ class GameSessionSnapshot {
     required this.fakeCount,
     required this.stage30RealBossId,
     required this.generation,
+    required this.isEndless,
+    required this.endlessMistakes,
   });
 
   final int stage;
@@ -44,4 +47,6 @@ class GameSessionSnapshot {
   final int fakeCount;
   final int? stage30RealBossId;
   final int generation;
+  final bool isEndless;
+  final int endlessMistakes;
 }

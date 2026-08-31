@@ -11,6 +11,8 @@ abstract final class ProgressStorage {
   static bool _nicknameOnboardingCompleted = false;
   static bool _soundEnabled = true;
   static bool _hapticEnabled = true;
+  static int _endlessBestScore = 0;
+  static bool _endlessIntroSeen = false;
   static final Set<String> _ownedProductIds = <String>{};
   static final Map<String, String> _equippedProductIds = <String, String>{};
 
@@ -36,6 +38,23 @@ abstract final class ProgressStorage {
   static int bestScore() => _bestScore;
 
   static int lastScore() => _lastScore;
+
+  static int endlessBestScore() => _endlessBestScore;
+
+  static bool saveEndlessBestScore(int score) {
+    _hasStoredData = true;
+    if (score < 0) return false;
+    if (score <= _endlessBestScore) return false;
+    _endlessBestScore = score;
+    return true;
+  }
+
+  static bool endlessIntroSeen() => _endlessIntroSeen;
+
+  static void setEndlessIntroSeen(bool seen) {
+    _hasStoredData = true;
+    _endlessIntroSeen = seen;
+  }
 
   static int coinBalance() => _coinBalance;
 
@@ -122,6 +141,8 @@ abstract final class ProgressStorage {
     _nicknameOnboardingCompleted = false;
     _soundEnabled = true;
     _hapticEnabled = true;
+    _endlessBestScore = 0;
+    _endlessIntroSeen = false;
     _ownedProductIds.clear();
     _equippedProductIds.clear();
   }

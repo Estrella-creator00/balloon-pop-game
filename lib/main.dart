@@ -2098,6 +2098,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   bool _devCoinDialogOpen = false;
   bool _isNewBest = false;
   bool _resultSaved = false;
+  int _endlessBestScore = 0;
+  bool _endlessIntroSeen = false;
   bool _flameRouteActive = false;
   int _flameSessionId = 0;
   final Set<String> _persistedFlameClears = <String>{};
@@ -2129,6 +2131,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _secondSectionUnlocked = ProgressStorage.isSecondSectionUnlocked();
     _bestScore = ProgressStorage.bestScore();
     _lastScore = ProgressStorage.lastScore();
+    _endlessBestScore = ProgressStorage.endlessBestScore();
+    _endlessIntroSeen = ProgressStorage.endlessIntroSeen();
     _coinBalance = CoinService.balance;
     SettingsService.applyStoredPreferences();
     BooIdleMotion.prepare();
@@ -2342,7 +2346,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     return 1;
   }
 
-  Future<void> _startFlameIntegration(int startStage) async {
+  Future<void> _startFlameIntegration(
+    int startStage, {
+    bool endlessMode = false,
+  }) async {
     if (!mounted || _flameRouteActive) return;
     _stopGameLoop();
     _stageTimer?.cancel();
@@ -2355,8 +2362,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _earnedCoins = 0;
     final debugConfig = widget.integrationDebugConfig;
     final effectiveStartStage =
-        debugConfig.enabled ? debugConfig.stage : startStage;
-    final skin = debugConfig.enabled
+        !endlessMode && debugConfig.enabled ? debugConfig.stage : startStage;
+    final skin = !endlessMode && debugConfig.enabled
         ? debugConfig.skin
         : flamePreviewSkinFromValue(_equippedBalloonSkin.id);
     final soundDefinition = skin.catalogDefinition;
@@ -2385,6 +2392,19 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             gameFactory: widget.integrationGameFactory,
             debugConfig: debugConfig,
             metrics: widget.integrationMetrics,
+            endlessMode: endlessMode,
+            onEndlessFinished: endlessMode
+                ? (score) {
+                    final isNewBest =
+                        ProgressStorage.saveEndlessBestScore(score);
+                    _endlessBestScore = ProgressStorage.endlessBestScore();
+                    return EndlessRecordResult(
+                      score: score,
+                      bestScore: _endlessBestScore,
+                      isNewBest: isNewBest,
+                    );
+                  }
+                : null,
             onAudioPause: () =>
                 PopSound.pauseGameplayAssets(gameplaySoundPaths),
             onFeedback: (event) {
@@ -2406,6 +2426,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       PopSound.releaseGameplayAssets(gameplaySoundPaths);
     }
     if (!mounted || sessionId != _flameSessionId) return;
+    if (endlessMode) {
+      _flameRouteActive = false;
+      _returnToMenu();
+      return;
+    }
     if (debugConfig.enabled) {
       _flameRouteActive = false;
       _returnToMenu();
@@ -2439,6 +2464,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondSectionUnlocked = true;
       ProgressStorage.unlockSecondSection();
     }
+    if (event.stage == 30) {
+      ProgressStorage.advanceNextPlayableStage(31);
+    }
     final nextStage = StageConfig.nextStageAfter(event.stage);
     if (nextStage != null) ProgressStorage.advanceNextPlayableStage(nextStage);
   }
@@ -2468,6 +2496,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final stagePage = homeStagePageForProgress(
       ProgressStorage.nextPlayableStage(),
     );
+    _endlessBestScore = ProgressStorage.endlessBestScore();
+    _endlessIntroSeen = ProgressStorage.endlessIntroSeen();
     setState(() {
       _score = 0;
       _stage = 1;
@@ -3123,6 +3153,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final nextStage = StageConfig.nextStageAfter(_stage);
     if (nextStage != null) {
       ProgressStorage.advanceNextPlayableStage(nextStage);
+    } else if (_stage == StageConfig.lastImplementedStage) {
+      ProgressStorage.advanceNextPlayableStage(_stage + 1);
     }
   }
 
@@ -3565,6 +3597,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _secondSectionUnlocked = false;
       _bestScore = 0;
       _lastScore = 0;
+      _endlessBestScore = 0;
+      _endlessIntroSeen = false;
       _coinBalance = 0;
       _earnedCoins = 0;
       _ownedProductIds = <String>{};
@@ -3708,13 +3742,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           ),
                         ),
                         Positioned(
-                          top: 727,
-                          left: 0,
-                          right: 0,
-                          child: _pageIndicator(),
+                          top: 718,
+                          left: 104,
+                          right: 104,
+                          height: 50,
+                          child: _endlessModeButton(),
                         ),
                         Positioned(
-                          top: 758,
+                          top: 768,
                           left: 39,
                           right: 39,
                           height: 86,
@@ -3753,28 +3788,127 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     );
   }
 
-  Widget _pageIndicator() => Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(
-          3,
-          (index) => AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            width: index == _stagePage ? 11 : 8,
-            height: index == _stagePage ? 11 : 8,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              color: index == _stagePage
-                  ? const Color(0xFFFF416C)
-                  : Colors.white.withValues(alpha: 0.82),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0x33004669)),
-              boxShadow: const [
-                BoxShadow(color: Color(0x33004669), offset: Offset(0, 2)),
-              ],
+  bool get _endlessModeUnlocked => ProgressStorage.nextPlayableStage() > 30;
+
+  Widget _endlessModeButton() {
+    final unlocked = _endlessModeUnlocked;
+    return Material(
+      key: const ValueKey('endless-mode-entry'),
+      color: unlocked ? const Color(0xEFFFFFFF) : const Color(0xDDE5EAF0),
+      elevation: unlocked ? 4 : 1,
+      shadowColor: const Color(0x33002F4D),
+      borderRadius: BorderRadius.circular(18),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              key: const ValueKey('endless-mode-start'),
+              borderRadius: BorderRadius.circular(18),
+              onTap: _onEndlessModePressed,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      unlocked ? '∞ 무한 팝' : '🔒 무한 팝',
+                      style: TextStyle(
+                        color: unlocked
+                            ? const Color(0xFF7354E8)
+                            : const Color(0xFF738392),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      unlocked && _endlessBestScore > 0
+                          ? 'BEST $_endlessBestScore'
+                          : unlocked
+                              ? '최고 기록에 도전'
+                              : 'Stage 30 완료 후 해제',
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: Color(0xFF607485),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
+          Semantics(
+            label: '무한 팝 설명',
+            button: true,
+            child: IconButton(
+              key: const ValueKey('endless-mode-info'),
+              onPressed: unlocked
+                  ? () {
+                      PopSound.playUiClick();
+                      unawaited(
+                        _showEndlessModeInfo(startOnConfirm: false),
+                      );
+                    }
+                  : null,
+              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.info_outline_rounded, size: 21),
+              color: const Color(0xFF7354E8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onEndlessModePressed() {
+    PopSound.playUiClick();
+    if (!_endlessModeUnlocked) {
+      _showComingSoon('Stage 30 완료 후 해제됩니다.');
+      return;
+    }
+    if (!_endlessIntroSeen) {
+      unawaited(_showEndlessModeInfo(startOnConfirm: true));
+      return;
+    }
+    unawaited(_startFlameIntegration(1, endlessMode: true));
+  }
+
+  Future<void> _showEndlessModeInfo({required bool startOnConfirm}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('무한 팝'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('풍선을 계속 터뜨려 최고 기록에 도전하세요.'),
+            SizedBox(height: 10),
+            Text('가짜 풍선을 3번 누르면 도전이 끝나요.'),
+          ],
         ),
-      );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('닫기'),
+          ),
+          if (startOnConfirm)
+            FilledButton(
+              key: const ValueKey('endless-intro-start'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('도전 시작'),
+            ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true || !startOnConfirm) return;
+    ProgressStorage.setEndlessIntroSeen(true);
+    _endlessIntroSeen = true;
+    await _startFlameIntegration(1, endlessMode: true);
+  }
 
   Widget _mainTopOverlay({
     bool enableDevCoinTap = false,

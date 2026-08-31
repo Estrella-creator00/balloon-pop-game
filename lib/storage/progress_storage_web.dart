@@ -24,6 +24,8 @@ abstract final class ProgressStorage {
       'poppop_nickname_onboarding_completed';
   static const _soundEnabledKey = 'poppop_sound_enabled';
   static const _hapticEnabledKey = 'poppop_haptic_enabled';
+  static const _endlessBestKey = 'poppop_endless_best';
+  static const _endlessIntroSeenKey = 'poppop_endless_intro_seen';
 
   static bool isSecondSectionUnlocked() {
     try {
@@ -61,6 +63,29 @@ abstract final class ProgressStorage {
 
   static int lastScore() => _readInt(_lastKey);
 
+  static int endlessBestScore() {
+    final stored = _readInt(_endlessBestKey);
+    return stored < 0 ? 0 : stored;
+  }
+
+  static bool saveEndlessBestScore(int score) {
+    if (score < 0) return false;
+    if (score <= endlessBestScore()) return false;
+    try {
+      _localStorage.setItem(_endlessBestKey.toJS, '$score'.toJS);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool endlessIntroSeen() =>
+      _readBool(_endlessIntroSeenKey, defaultValue: false);
+
+  static void setEndlessIntroSeen(bool seen) {
+    _writeBool(_endlessIntroSeenKey, seen);
+  }
+
   static int coinBalance() => _readInt(_coinKey);
 
   static int initializeNewUserCoins() {
@@ -77,6 +102,8 @@ abstract final class ProgressStorage {
         _nicknameOnboardingCompletedKey,
         _soundEnabledKey,
         _hapticEnabledKey,
+        _endlessBestKey,
+        _endlessIntroSeenKey,
       ].any((key) => _localStorage.getItem(key.toJS) != null);
       if (hasStoredData) return coinBalance();
       _localStorage.setItem(_coinKey.toJS, '$initialCoinBalance'.toJS);
@@ -226,12 +253,12 @@ abstract final class ProgressStorage {
     }
   }
 
-  static bool _readBool(String key) {
+  static bool _readBool(String key, {bool defaultValue = true}) {
     try {
       final stored = _localStorage.getItem(key.toJS)?.toDart;
-      return stored == null ? true : stored == 'true';
+      return stored == null ? defaultValue : stored == 'true';
     } catch (_) {
-      return true;
+      return defaultValue;
     }
   }
 
@@ -256,6 +283,8 @@ abstract final class ProgressStorage {
       _localStorage.removeItem(_nicknameOnboardingCompletedKey.toJS);
       _localStorage.removeItem(_soundEnabledKey.toJS);
       _localStorage.removeItem(_hapticEnabledKey.toJS);
+      _localStorage.removeItem(_endlessBestKey.toJS);
+      _localStorage.removeItem(_endlessIntroSeenKey.toJS);
     } catch (_) {
       // The menu still resets even if storage is unavailable.
     }
