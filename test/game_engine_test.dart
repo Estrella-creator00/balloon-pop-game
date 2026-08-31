@@ -10,6 +10,7 @@ import 'package:balloon_pop_game/game_engine/flame_game_page.dart';
 import 'package:balloon_pop_game/game_engine/game_session_state.dart';
 import 'package:balloon_pop_game/game_engine/integration/flame_integration_contract.dart';
 import 'package:balloon_pop_game/game_engine/integration/flame_integration_debug.dart';
+import 'package:balloon_pop_game/game_engine/integration/flame_integration_game_page.dart';
 import 'package:balloon_pop_game/game_engine/legendary/flame_preview_skin.dart';
 import 'package:balloon_pop_game/game_engine/legendary/flame_skin_runtime.dart';
 import 'package:balloon_pop_game/game_engine/legendary/legendary_skin_definition.dart';
@@ -28,6 +29,7 @@ import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/haptic_service.dart';
 import 'package:balloon_pop_game/services/settings_service.dart';
 import 'package:balloon_pop_game/storage/progress_storage.dart';
+import 'package:balloon_pop_game/widgets/poppop_logo.dart';
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
@@ -112,6 +114,65 @@ void main() {
       isFalse,
     );
   });
+
+  test('home and gameplay POPPOP typography share the production source', () {
+    final home = PoppopLogoStyle.base(
+      fontSize: 114,
+      letterSpacing: -3,
+      height: .88,
+    );
+    final gameplay = PoppopLogoStyle.base(
+      fontSize: 11,
+      letterSpacing: -.6,
+      height: .9,
+    );
+
+    expect(home.fontFamily, PoppopLogoStyle.fontFamily);
+    expect(gameplay.fontFamily, home.fontFamily);
+    expect(gameplay.fontFamilyFallback, home.fontFamilyFallback);
+    expect(gameplay.fontWeight, home.fontWeight);
+    expect(PoppopLogoStyle.goldColors, hasLength(3));
+    expect(PoppopLogoStyle.pinkColors, hasLength(3));
+  });
+
+  for (final skin in FlamePreviewSkin.values) {
+    testWidgets('${skin.label} background follows catalog rarity',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: SizedBox.expand(child: FlameIntegrationBackground(skin: skin)),
+      ));
+
+      final legendary =
+          skin.catalogDefinition.rarity == BalloonRarity.legendary;
+      expect(
+        find.byType(GameplaySkyBackground),
+        legendary ? findsNothing : findsOneWidget,
+      );
+      expect(
+        find.byType(BalloonBackgroundRenderer),
+        legendary ? findsOneWidget : findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('gameplay-sky-background-image')),
+        legendary ? findsNothing : findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('flame-integration-legendary-background')),
+        legendary ? findsOneWidget : findsNothing,
+      );
+      if (!legendary) {
+        final image = tester.widget<Image>(
+          find.byKey(const ValueKey('gameplay-sky-background-image')),
+        );
+        expect(
+          (image.image as AssetImage).assetName,
+          BalloonBackgroundRegistry.gameplaySkyAssetPath,
+        );
+        expect(image.fit, BoxFit.cover);
+        expect(image.alignment, Alignment.center);
+      }
+    });
+  }
 
   test('every production catalog skin has an exact Flame preview mapping', () {
     expect(FlamePreviewSkin.values,
@@ -633,11 +694,31 @@ void main() {
     expect(find.byKey(const ValueKey('pause-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('end-button')), findsOneWidget);
     final headerBefore = tester.widget<GameHeader>(find.byType(GameHeader));
+    final skyBackground = tester
+        .widget<GameplaySkyBackground>(find.byType(GameplaySkyBackground));
+    expect(game.hasLegendaryBackground, isFalse);
+    expect(
+      find.byKey(const ValueKey('flame-integration-fullscreen-background')),
+      findsOneWidget,
+    );
+    expect(find.byType(BalloonBackgroundRenderer), findsNothing);
+    expect(
+      tester.getRect(
+        find.byKey(const ValueKey('flame-integration-fullscreen-background')),
+      ),
+      tester.getRect(
+        find.byKey(const ValueKey('flame-integration-gameplay')),
+      ),
+    );
     final positionBefore = game.balloonComponents.first.position.clone();
     await tester.pump(const Duration(milliseconds: 100));
     expect(game.balloonComponents.first.position, isNot(positionBefore));
     expect(
         tester.widget<GameHeader>(find.byType(GameHeader)), same(headerBefore));
+    expect(
+      tester.widget<GameplaySkyBackground>(find.byType(GameplaySkyBackground)),
+      same(skyBackground),
+    );
 
     await tester.tap(find.byKey(const ValueKey('end-button')));
     await tester.pump();
@@ -782,11 +863,13 @@ void main() {
     expect(text, contains('SHELL'));
     expect(text, contains('AUDIO'));
     expect(text, contains('CACHE'));
-    expect(text, contains('BG 0'));
+    expect(text, contains('BG 1'));
     expect(
       find.byKey(const ValueKey('flame-integration-fullscreen-background')),
-      findsNothing,
+      findsOneWidget,
     );
+    expect(find.byType(GameplaySkyBackground), findsOneWidget);
+    expect(find.byType(BalloonBackgroundRenderer), findsNothing);
     expect(ProgressStorage.nextPlayableStage(), progressBefore);
     expect(ProgressStorage.equippedProductId('balloon'), definition.id);
 
@@ -926,6 +1009,7 @@ void main() {
   for (final viewport in <Size>[
     const Size(360, 640),
     const Size(390, 844),
+    const Size(768, 1024),
     const Size(1365, 932),
   ]) {
     testWidgets(
@@ -953,6 +1037,11 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('STAGE 01'), findsOneWidget);
+      expect(find.byType(PoppopCompactLogo), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('game-poppop-logo'))).height,
+        lessThan(20),
+      );
       expect(find.byKey(const ValueKey('game-hud-panel')), findsOneWidget);
       expect(find.byKey(const ValueKey('hud-score')), findsOneWidget);
       expect(find.byKey(const ValueKey('hud-remaining')), findsOneWidget);
@@ -1053,6 +1142,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(BalloonBackgroundRenderer), findsOneWidget);
+      expect(find.byType(GameplaySkyBackground), findsNothing);
       expect(find.byKey(const ValueKey('pause-button')), findsOneWidget);
       expect(find.byKey(const ValueKey('end-button')), findsOneWidget);
       expect(

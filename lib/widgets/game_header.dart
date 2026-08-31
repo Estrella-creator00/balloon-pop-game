@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'poppop_logo.dart';
+
 class GameHeaderData {
   const GameHeaderData({
     required this.stage,
@@ -62,20 +64,9 @@ class GameHeader extends StatelessWidget {
                         children: [
                           const SizedBox(
                             width: 92,
-                            child: Text(
-                              'POPPOP',
-                              style: TextStyle(
-                                color: Color(0xFFFF4F7B),
-                                fontSize: 11,
-                                letterSpacing: 1.4,
-                                fontWeight: FontWeight.w900,
-                                shadows: [
-                                  Shadow(
-                                    color: Color(0x99FFFFFF),
-                                    blurRadius: 2,
-                                  ),
-                                ],
-                              ),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: PoppopCompactLogo(),
                             ),
                           ),
                           Expanded(

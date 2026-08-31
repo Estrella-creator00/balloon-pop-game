@@ -19,6 +19,8 @@ class BalloonBackgroundSpec {
 }
 
 abstract final class BalloonBackgroundRegistry {
+  static const gameplaySkyAssetPath =
+      'assets/images/gameplay_sky_background.png';
   static const crystalGameplayAssetSize = Size(720, 1280);
   static const crystalImpactGlowAssetPath =
       'assets/images/gemi_crack_glow_runtime.png';
@@ -52,6 +54,25 @@ abstract final class BalloonBackgroundRegistry {
           'assets/images/shushu_background_mobile.png',
         _ => definitionFor(type).assetPath,
       };
+}
+
+/// One static, full-route background for every non-legendary gameplay skin.
+/// It lives in Flutter's retained layer tree rather than Flame's render loop.
+class GameplaySkyBackground extends StatelessWidget {
+  const GameplaySkyBackground({super.key});
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+        key: const ValueKey('gameplay-sky-background-boundary'),
+        child: Image.asset(
+          BalloonBackgroundRegistry.gameplaySkyAssetPath,
+          key: const ValueKey('gameplay-sky-background-image'),
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          filterQuality: FilterQuality.high,
+          gaplessPlayback: true,
+        ),
+      );
 }
 
 /// Shared static renderer for preview and gameplay. Legendary themes are

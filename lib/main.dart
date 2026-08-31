@@ -34,6 +34,7 @@ import 'services/settings_service.dart';
 import 'settings_page.dart';
 import 'storage/progress_storage.dart';
 import 'widgets/game_header.dart';
+import 'widgets/poppop_logo.dart';
 
 export 'widgets/game_header.dart';
 export 'gameplay/stage_intro_definition.dart';
@@ -4026,13 +4027,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     Color depthColor, {
     required bool isLowerLine,
   }) {
-    const style = TextStyle(
+    final style = PoppopLogoStyle.base(
       height: 0.88,
       letterSpacing: -3,
       fontSize: 114,
-      fontWeight: FontWeight.w900,
-      fontFamily: 'Arial Rounded MT Bold',
-      fontFamilyFallback: ['Arial', 'sans-serif'],
     );
     return SizedBox(
       width: 380,

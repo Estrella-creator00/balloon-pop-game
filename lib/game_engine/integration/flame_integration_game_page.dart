@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../audio/pop_sound.dart';
 import '../../balloon_background.dart';
+import '../../balloon_skin_catalog.dart';
 import '../../widgets/game_header.dart';
 import '../../gameplay/stage_intro_definition.dart';
 import '../game_session_state.dart';
@@ -113,7 +114,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
         'PENDING ${PopSound.gameplayPendingPrepareCount}\n'
         'AUDIO-LISTENER ${PopSound.gameplayListenerCount}  '
         'CACHE ${_game.activeCacheImageCount}  '
-        'BG ${_hasDedicatedBackground ? 1 : 0}\n'
+        'BG 1\n'
         'HUD ${_metrics.hudRebuildCount}  '
         'SESSION ${_metrics.sessionNotificationCount}  '
         'SHELL ${_metrics.shellRebuildCount}\n'
@@ -133,9 +134,6 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
         secondsLeft: session.secondsLeft,
         controlsEnabled: session.phase == GameSessionPhase.playing,
       );
-
-  bool get _hasDedicatedBackground =>
-      widget.skin.catalogDefinition.background != BalloonBackgroundType.none;
 
   void _onSessionChanged() {
     if (!mounted || _resultReturned) return;
@@ -290,22 +288,14 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          if (_hasDedicatedBackground)
-            Positioned.fill(
-              key: const ValueKey(
-                'flame-integration-fullscreen-background',
-              ),
-              child: IgnorePointer(
-                child: BalloonBackgroundRenderer(
-                  background: widget.skin.catalogDefinition.background,
-                  assetPathOverride:
-                      BalloonBackgroundRegistry.gameplayAssetPathFor(
-                    widget.skin.catalogDefinition.background,
-                  ),
-                  fallback: const ColoredBox(color: Color(0xFFAEE7FF)),
-                ),
-              ),
+          Positioned.fill(
+            key: const ValueKey(
+              'flame-integration-fullscreen-background',
             ),
+            child: IgnorePointer(
+              child: FlameIntegrationBackground(skin: widget.skin),
+            ),
+          ),
           SafeArea(
             child: Column(
               children: [
@@ -352,6 +342,33 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
           ),
         ],
       ),
+    );
+  }
+}
+
+class FlameIntegrationBackground extends StatelessWidget {
+  const FlameIntegrationBackground({super.key, required this.skin});
+
+  final FlamePreviewSkin skin;
+
+  bool get usesLegendaryBackground =>
+      skin.catalogDefinition.rarity == BalloonRarity.legendary;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!usesLegendaryBackground) {
+      return const GameplaySkyBackground(
+        key: ValueKey('flame-integration-sky-background'),
+      );
+    }
+    final background = skin.catalogDefinition.background;
+    return BalloonBackgroundRenderer(
+      key: const ValueKey('flame-integration-legendary-background'),
+      background: background,
+      assetPathOverride: BalloonBackgroundRegistry.gameplayAssetPathFor(
+        background,
+      ),
+      fallback: const ColoredBox(color: Color(0xFFAEE7FF)),
     );
   }
 }
