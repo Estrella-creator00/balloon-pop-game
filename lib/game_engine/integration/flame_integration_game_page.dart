@@ -71,6 +71,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
   bool _sectionIntroVisible = false;
   final Set<int> _shownSectionIntroGenerations = <int>{};
   EndlessRecordResult? _endlessResult;
+  EndlessRecordResult? _reportedEndlessRecord;
 
   @override
   void initState() {
@@ -181,13 +182,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     _lastPhase = phase;
 
     if (phase == GameSessionPhase.endlessComplete && phaseChanged) {
-      final callback = widget.onEndlessFinished;
-      _endlessResult = callback?.call(_session.score) ??
-          EndlessRecordResult(
-            score: _session.score,
-            bestScore: _session.score,
-            isNewBest: true,
-          );
+      _endlessResult = _reportEndlessRunOnce();
       widget.onAudioPause?.call();
       _game.pausePreview();
       setState(() {});
@@ -238,8 +233,22 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
 
   Future<void> _restartEndless() async {
     if (!widget.endlessMode || _endlessResult == null) return;
-    setState(() => _endlessResult = null);
+    setState(() {
+      _endlessResult = null;
+      _reportedEndlessRecord = null;
+    });
     await _game.restartEndless();
+  }
+
+  EndlessRecordResult _reportEndlessRunOnce() {
+    if (_reportedEndlessRecord case final result?) return result;
+    final callback = widget.onEndlessFinished;
+    return _reportedEndlessRecord = callback?.call(_session.score) ??
+        EndlessRecordResult(
+          score: _session.score,
+          bestScore: _session.score,
+          isNewBest: true,
+        );
   }
 
   void _finishEndless() {
@@ -277,6 +286,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     );
     if (!mounted) return;
     if (confirmed == true) {
+      if (widget.endlessMode) _reportEndlessRunOnce();
       _returnResult(FlameIntegrationOutcome.exited);
     } else if (!wasPaused && !_backgroundPause) {
       _game.resumePreview();

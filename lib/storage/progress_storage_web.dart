@@ -25,6 +25,7 @@ abstract final class ProgressStorage {
   static const _soundEnabledKey = 'poppop_sound_enabled';
   static const _hapticEnabledKey = 'poppop_haptic_enabled';
   static const _endlessBestKey = 'poppop_endless_best';
+  static const _endlessLastKey = 'poppop_endless_last';
   static const _endlessIntroSeenKey = 'poppop_endless_intro_seen';
 
   static bool isSecondSectionUnlocked() {
@@ -79,6 +80,21 @@ abstract final class ProgressStorage {
     }
   }
 
+  static int endlessLastScore() {
+    final stored = _readInt(_endlessLastKey);
+    return stored < 0 ? 0 : stored;
+  }
+
+  static bool saveEndlessLastScore(int score) {
+    if (score < 0) return false;
+    try {
+      _localStorage.setItem(_endlessLastKey.toJS, '$score'.toJS);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static bool endlessIntroSeen() =>
       _readBool(_endlessIntroSeenKey, defaultValue: false);
 
@@ -103,6 +119,7 @@ abstract final class ProgressStorage {
         _soundEnabledKey,
         _hapticEnabledKey,
         _endlessBestKey,
+        _endlessLastKey,
         _endlessIntroSeenKey,
       ].any((key) => _localStorage.getItem(key.toJS) != null);
       if (hasStoredData) return coinBalance();
@@ -284,6 +301,7 @@ abstract final class ProgressStorage {
       _localStorage.removeItem(_soundEnabledKey.toJS);
       _localStorage.removeItem(_hapticEnabledKey.toJS);
       _localStorage.removeItem(_endlessBestKey.toJS);
+      _localStorage.removeItem(_endlessLastKey.toJS);
       _localStorage.removeItem(_endlessIntroSeenKey.toJS);
     } catch (_) {
       // The menu still resets even if storage is unavailable.

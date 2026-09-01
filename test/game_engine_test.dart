@@ -473,16 +473,20 @@ void main() {
     expect(session.hitBalloon(6), BalloonHitResult.ignored);
   });
 
-  test('endless best and intro storage are isolated and monotonic', () {
+  test('endless best last and intro storage are isolated', () {
     ProgressStorage.addCoins(321);
     ProgressStorage.advanceNextPlayableStage(31);
     expect(ProgressStorage.endlessBestScore(), 0);
+    expect(ProgressStorage.endlessLastScore(), 0);
     expect(ProgressStorage.endlessIntroSeen(), isFalse);
     expect(ProgressStorage.saveEndlessBestScore(128), isTrue);
     expect(ProgressStorage.saveEndlessBestScore(64), isFalse);
+    expect(ProgressStorage.saveEndlessLastScore(72), isTrue);
+    expect(ProgressStorage.saveEndlessLastScore(12), isTrue);
     ProgressStorage.setEndlessIntroSeen(true);
 
     expect(ProgressStorage.endlessBestScore(), 128);
+    expect(ProgressStorage.endlessLastScore(), 12);
     expect(ProgressStorage.endlessIntroSeen(), isTrue);
     expect(ProgressStorage.coinBalance(), 321);
     expect(ProgressStorage.nextPlayableStage(), 31);
@@ -1569,6 +1573,7 @@ void main() {
         onStageCompleted: (_) {},
         onEndlessFinished: (score) {
           saveCalls++;
+          ProgressStorage.saveEndlessLastScore(score);
           final isNew = ProgressStorage.saveEndlessBestScore(score);
           return EndlessRecordResult(
             score: score,
@@ -1615,6 +1620,7 @@ void main() {
     expect(find.byKey(const ValueKey('endless-current-score')), findsOneWidget);
     expect(find.byKey(const ValueKey('endless-best-score')), findsOneWidget);
     expect(saveCalls, 1);
+    expect(ProgressStorage.endlessLastScore(), session.score);
     expect(ProgressStorage.coinBalance(), 500);
     expect(ProgressStorage.nextPlayableStage(), 31);
     await tester.tap(find.byKey(const ValueKey('endless-restart')));
@@ -1626,6 +1632,27 @@ void main() {
     expect(game.activeBalloonCount, EndlessModeRules.activeBalloonLimit);
     expect(metrics.activeGameInstances, 1);
     expect(metrics.activeGameWidgetInstances, 1);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(saveCalls, 1);
+
+    final exitTarget = game.balloonComponents.firstWhere(
+      (item) => !item.isFake,
+    );
+    while (session.balloonHpFor(exitTarget.balloonId) > 0) {
+      exitTarget.requestHit();
+    }
+    await tester.pump();
+    final exitScore = session.score;
+    await tester.tap(find.byKey(const ValueKey('end-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '끝내기'));
+    await tester.pump();
+    expect(saveCalls, 2);
+    expect(ProgressStorage.endlessLastScore(), exitScore);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();

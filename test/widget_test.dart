@@ -2203,11 +2203,28 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const ValueKey('endless-mode-entry')), findsOneWidget);
-    expect(find.text('🔒 무한 팝'), findsOneWidget);
-    expect(find.text('Stage 30 완료 후 해제'), findsOneWidget);
+    expect(find.text('∞ (무한 팝)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('endless-mode-lock')), findsOneWidget);
+    expect(find.text('Stage 30 완료 후 해제'), findsNothing);
+    final cardSize = tester.widget<SizedBox>(
+      find.byKey(const ValueKey('endless-mode-card-size')),
+    );
+    expect(cardSize.width, 225);
+    expect(cardSize.height, 46);
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('endless-mode-card-size'))).dx,
+      tester.getCenter(find.byType(PageView)).dx,
+    );
     await tester.tap(find.byKey(const ValueKey('endless-mode-start')));
     await tester.pump();
-    expect(find.text('Stage 30 완료 후 해제됩니다.'), findsOneWidget);
+    expect(find.byType(FlameIntegrationGamePage), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('endless-mode-info')));
+    await tester.pump();
+    expect(find.text('Stage 30 완료 후 이용할 수 있어요.'), findsOneWidget);
+    expect(find.byType(FlameIntegrationGamePage), findsNothing);
+    await tester.tap(find.text('닫기'));
+    await tester.pump();
 
     await tester.drag(find.byType(PageView), const Offset(-500, 0));
     await tester.pump(const Duration(milliseconds: 350));
@@ -2219,11 +2236,22 @@ void main() {
       (tester) async {
     ProgressStorage.advanceNextPlayableStage(31);
     ProgressStorage.saveEndlessBestScore(128);
+    ProgressStorage.saveEndlessLastScore(72);
     await tester.pumpWidget(const BalloonPopApp(useFlameGameplay: true));
     await tester.pump();
 
-    expect(find.text('∞ 무한 팝'), findsOneWidget);
-    expect(find.text('BEST 128'), findsOneWidget);
+    expect(find.text('∞ (무한 팝)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('endless-mode-lock')), findsNothing);
+    final stageRow = find.byKey(const ValueKey('stage-record-row'));
+    final endlessRow = find.byKey(const ValueKey('endless-record-row'));
+    expect(find.descendant(of: stageRow, matching: find.text('STAGE')),
+        findsOneWidget);
+    expect(find.descendant(of: endlessRow, matching: find.text('∞ 무한')),
+        findsOneWidget);
+    expect(find.descendant(of: endlessRow, matching: find.text('128')),
+        findsOneWidget);
+    expect(find.descendant(of: endlessRow, matching: find.text('72')),
+        findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('endless-mode-info')));
     await tester.pump();
     expect(find.text('풍선을 계속 터뜨려 최고 기록에 도전하세요.'), findsOneWidget);
@@ -2246,6 +2274,52 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('endless home records fit mobile and tablet fixed card geometry',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    ProgressStorage.saveScore(987);
+    ProgressStorage.saveScore(321);
+    ProgressStorage.saveEndlessBestScore(128);
+    ProgressStorage.saveEndlessLastScore(72);
+    ProgressStorage.advanceNextPlayableStage(31);
+
+    for (final size in <Size>[const Size(390, 844), const Size(768, 1024)]) {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
+
+      final board = find.byKey(const ValueKey('home-record-board'));
+      final positioned = tester.widget<Positioned>(
+        find.ancestor(of: board, matching: find.byType(Positioned)).first,
+      );
+      expect(positioned.left, 54);
+      expect(positioned.right, 54);
+      expect(positioned.height, 88);
+      final cardSize = tester.widget<SizedBox>(
+        find.byKey(const ValueKey('endless-mode-card-size')),
+      );
+      expect(cardSize.width, 225);
+      expect(cardSize.height, 46);
+      expect(find.text('최고 기록'), findsOneWidget);
+      expect(find.text('최근 기록'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('stage-record-row')),
+          matching: find.text('STAGE'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('endless-record-row')),
+          matching: find.text('∞ 무한'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('integration debug stage override does not unlock endless mode',
       (tester) async {
     await tester.pumpWidget(const PoppopAppEntry(
@@ -2258,7 +2332,7 @@ void main() {
     await tester.pump();
 
     expect(ProgressStorage.nextPlayableStage(), 1);
-    expect(find.text('🔒 무한 팝'), findsOneWidget);
+    expect(find.byKey(const ValueKey('endless-mode-lock')), findsOneWidget);
   });
 
   test(

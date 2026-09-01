@@ -2099,6 +2099,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   bool _isNewBest = false;
   bool _resultSaved = false;
   int _endlessBestScore = 0;
+  int _endlessLastScore = 0;
   bool _endlessIntroSeen = false;
   bool _flameRouteActive = false;
   int _flameSessionId = 0;
@@ -2132,6 +2133,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _bestScore = ProgressStorage.bestScore();
     _lastScore = ProgressStorage.lastScore();
     _endlessBestScore = ProgressStorage.endlessBestScore();
+    _endlessLastScore = ProgressStorage.endlessLastScore();
     _endlessIntroSeen = ProgressStorage.endlessIntroSeen();
     _coinBalance = CoinService.balance;
     SettingsService.applyStoredPreferences();
@@ -2395,9 +2397,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             endlessMode: endlessMode,
             onEndlessFinished: endlessMode
                 ? (score) {
+                    ProgressStorage.saveEndlessLastScore(score);
                     final isNewBest =
                         ProgressStorage.saveEndlessBestScore(score);
                     _endlessBestScore = ProgressStorage.endlessBestScore();
+                    _endlessLastScore = ProgressStorage.endlessLastScore();
                     return EndlessRecordResult(
                       score: score,
                       bestScore: _endlessBestScore,
@@ -2497,6 +2501,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       ProgressStorage.nextPlayableStage(),
     );
     _endlessBestScore = ProgressStorage.endlessBestScore();
+    _endlessLastScore = ProgressStorage.endlessLastScore();
     _endlessIntroSeen = ProgressStorage.endlessIntroSeen();
     setState(() {
       _score = 0;
@@ -3598,6 +3603,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       _bestScore = 0;
       _lastScore = 0;
       _endlessBestScore = 0;
+      _endlessLastScore = 0;
       _endlessIntroSeen = false;
       _coinBalance = 0;
       _earnedCoins = 0;
@@ -3743,10 +3749,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                         ),
                         Positioned(
                           top: 718,
-                          left: 104,
-                          right: 104,
+                          left: 0,
+                          right: 0,
                           height: 50,
-                          child: _endlessModeButton(),
+                          child: Center(
+                            child: SizedBox(
+                              key: const ValueKey('endless-mode-card-size'),
+                              width: 225,
+                              height: 46,
+                              child: _endlessModeButton(),
+                            ),
+                          ),
                         ),
                         Positioned(
                           top: 768,
@@ -3794,48 +3807,42 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final unlocked = _endlessModeUnlocked;
     return Material(
       key: const ValueKey('endless-mode-entry'),
-      color: unlocked ? const Color(0xEFFFFFFF) : const Color(0xDDE5EAF0),
-      elevation: unlocked ? 4 : 1,
-      shadowColor: const Color(0x33002F4D),
-      borderRadius: BorderRadius.circular(18),
+      color: const Color(0xFFF8F5FF),
+      elevation: 2,
+      shadowColor: const Color(0x247354E8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFB9AAED)),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Row(
         children: [
           Expanded(
             child: InkWell(
               key: const ValueKey('endless-mode-start'),
-              borderRadius: BorderRadius.circular(18),
-              onTap: _onEndlessModePressed,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 14),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      unlocked ? '∞ 무한 팝' : '🔒 무한 팝',
-                      style: TextStyle(
-                        color: unlocked
-                            ? const Color(0xFF7354E8)
-                            : const Color(0xFF738392),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
+              borderRadius: BorderRadius.circular(16),
+              onTap: unlocked ? _onEndlessModePressed : null,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (!unlocked) ...[
+                    const Icon(
+                      Icons.lock_rounded,
+                      key: ValueKey('endless-mode-lock'),
+                      size: 16,
+                      color: Color(0xFF776F91),
                     ),
-                    Text(
-                      unlocked && _endlessBestScore > 0
-                          ? 'BEST $_endlessBestScore'
-                          : unlocked
-                              ? '최고 기록에 도전'
-                              : 'Stage 30 완료 후 해제',
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: Color(0xFF607485),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                    const SizedBox(width: 6),
                   ],
-                ),
+                  const Text(
+                    '∞ (무한 팝)',
+                    style: TextStyle(
+                      color: Color(0xFF5F43B5),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -3844,17 +3851,31 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             button: true,
             child: IconButton(
               key: const ValueKey('endless-mode-info'),
-              onPressed: unlocked
-                  ? () {
-                      PopSound.playUiClick();
-                      unawaited(
-                        _showEndlessModeInfo(startOnConfirm: false),
-                      );
-                    }
-                  : null,
+              tooltip: '무한 팝 설명',
+              onPressed: () {
+                PopSound.playUiClick();
+                unawaited(_showEndlessModeInfo(startOnConfirm: false));
+              },
               constraints: const BoxConstraints.tightFor(width: 44, height: 44),
               padding: EdgeInsets.zero,
-              icon: const Icon(Icons.info_outline_rounded, size: 21),
+              icon: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF7354E8)),
+                ),
+                alignment: Alignment.center,
+                child: const Text(
+                  '!',
+                  style: TextStyle(
+                    color: Color(0xFF7354E8),
+                    fontSize: 14,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
               color: const Color(0xFF7354E8),
             ),
           ),
@@ -3865,10 +3886,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   void _onEndlessModePressed() {
     PopSound.playUiClick();
-    if (!_endlessModeUnlocked) {
-      _showComingSoon('Stage 30 완료 후 해제됩니다.');
-      return;
-    }
+    if (!_endlessModeUnlocked) return;
     if (!_endlessIntroSeen) {
       unawaited(_showEndlessModeInfo(startOnConfirm: true));
       return;
@@ -3881,13 +3899,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('무한 팝'),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('풍선을 계속 터뜨려 최고 기록에 도전하세요.'),
-            SizedBox(height: 10),
-            Text('가짜 풍선을 3번 누르면 도전이 끝나요.'),
+            const Text('풍선을 계속 터뜨려 최고 기록에 도전하세요.'),
+            const SizedBox(height: 10),
+            const Text('가짜 풍선을 3번 누르면 도전이 끝나요.'),
+            if (!_endlessModeUnlocked) ...[
+              const SizedBox(height: 10),
+              const Text('Stage 30 완료 후 이용할 수 있어요.'),
+            ],
           ],
         ),
         actions: [
@@ -4559,7 +4581,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   }
 
   Widget _recordBoard() => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        key: const ValueKey('home-record-board'),
+        padding: const EdgeInsets.fromLTRB(14, 7, 14, 7),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topCenter,
@@ -4576,111 +4599,125 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             ),
           ],
         ),
-        child: Row(
+        child: Column(
           children: [
-            _recordTile('최고 기록', _bestScore, _isNewBest, isBest: true),
-            Container(width: 1.5, height: 54, color: const Color(0xFFE6D8CB)),
-            _recordTile('최근 기록', _lastScore, false, isBest: false),
+            const SizedBox(
+              height: 15,
+              child: Row(
+                children: [
+                  SizedBox(width: 78),
+                  Expanded(
+                    child: Text(
+                      '최고 기록',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF607485),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '최근 기록',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF607485),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 5, thickness: 1, color: Color(0xFFE8DED7)),
+            _recordBoardRow(
+              key: const ValueKey('stage-record-row'),
+              mode: 'STAGE',
+              best: _bestScore,
+              last: _lastScore,
+              isNew: _isNewBest,
+            ),
+            const SizedBox(height: 2),
+            _recordBoardRow(
+              key: const ValueKey('endless-record-row'),
+              mode: '∞ 무한',
+              best: _endlessBestScore,
+              last: _endlessLastScore,
+            ),
           ],
         ),
       );
 
-  Widget _recordTile(
-    String label,
-    int score,
-    bool isNew, {
-    required bool isBest,
+  Widget _recordBoardRow({
+    required Key key,
+    required String mode,
+    required int best,
+    required int last,
+    bool isNew = false,
   }) =>
-      Expanded(
-        child: Stack(
-          clipBehavior: Clip.none,
+      SizedBox(
+        key: key,
+        height: 23,
+        child: Row(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 48,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: isBest
-                          ? const [Color(0xFFFFED58), Color(0xFFFF9800)]
-                          : const [Color(0xFF8DEBFF), Color(0xFF2688E8)],
+            SizedBox(
+              width: 78,
+              child: Row(
+                children: [
+                  Text(
+                    mode,
+                    style: const TextStyle(
+                      color: Color(0xFF654DB0),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
                     ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x44003D63),
-                        blurRadius: 4,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
                   ),
-                  child: Icon(
-                    isBest
-                        ? Icons.emoji_events_rounded
-                        : Icons.assignment_rounded,
-                    color: Colors.white,
-                    size: 34,
-                  ),
-                ),
-                const SizedBox(width: 9),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Color(0xFF244C67),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      '$score',
-                      style: const TextStyle(
-                        fontSize: 30,
-                        height: 1.05,
-                        color: Color(0xFF244C67),
+                  if (isNew) ...[
+                    const SizedBox(width: 3),
+                    const Text(
+                      'NEW',
+                      style: TextStyle(
+                        color: Color(0xFFFF416C),
+                        fontSize: 7,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                   ],
-                ),
-              ],
+                ],
+              ),
             ),
-            if (isNew)
-              Positioned(
-                top: -5,
-                right: -5,
-                child: Transform.rotate(
-                  angle: -0.08,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF416C),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x443A1230),
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Text(
-                      'NEW!',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
+            Expanded(
+              child: Text(
+                '$best',
+                key: ValueKey('${key.toString()}-best'),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF244C67),
+                  fontSize: 17,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
+            ),
+            Expanded(
+              child: Text(
+                '$last',
+                key: ValueKey('${key.toString()}-last'),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF244C67),
+                  fontSize: 17,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
           ],
         ),
       );
