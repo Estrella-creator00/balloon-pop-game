@@ -2148,36 +2148,40 @@ void main() {
     final firstDecoration = tester
         .widget<Ink>(
           find.byKey(
-            const ValueKey('stage-keycap-face-decoration-1 ~ 10'),
+            const ValueKey('stage-scenic-decoration-1 ~ 10'),
           ),
         )
         .decoration as BoxDecoration;
     final secondDecoration = tester
         .widget<Ink>(
           find.byKey(
-            const ValueKey('stage-keycap-face-decoration-11 ~ 20'),
+            const ValueKey('stage-scenic-decoration-11 ~ 20'),
           ),
         )
         .decoration as BoxDecoration;
     expect(
       (firstDecoration.gradient! as LinearGradient).colors,
       <Color>[
-        Color.lerp(const Color(0xFFFF4F7B), Colors.white, 0.91)!,
-        Color.lerp(const Color(0xFFFF4F7B), Colors.white, 0.78)!,
+        Color.lerp(const Color(0xFFFF4F7B), Colors.white, 0.84)!,
+        Color.lerp(const Color(0xFFFF4F7B), Colors.white, 0.60)!,
       ],
     );
-    expect(firstDecoration.boxShadow, hasLength(4));
+    expect(firstDecoration.boxShadow, isNull);
     expect(
-      (firstDecoration.border! as Border).top.color,
-      Color.lerp(const Color(0xFFFF4F7B), Colors.black, 0.10),
+      find.byKey(const ValueKey('stage-landscape-1 ~ 10')),
+      findsOneWidget,
     );
     expect(
       (secondDecoration.gradient! as LinearGradient).colors,
-      <Color>[
-        Color.lerp(const Color(0xFF4D8EF7), Colors.white, 0.91)!,
-        Color.lerp(const Color(0xFF4D8EF7), Colors.white, 0.78)!,
-      ],
+      const <Color>[Color(0xFFE5EDF6), Color(0xFFB5C7D8)],
     );
+    final stageContainer = tester.widget<Container>(
+      find.byKey(const ValueKey('stage-card-1 ~ 10')),
+    );
+    final stageFrame = stageContainer.decoration! as BoxDecoration;
+    expect((stageFrame.border! as Border).top.color, Colors.white);
+    expect((stageFrame.border! as Border).top.width, 2);
+    expect(stageFrame.boxShadow, hasLength(1));
     expect(
       tester
           .widget<InkWell>(
@@ -2225,25 +2229,19 @@ void main() {
     final decoration = tester
         .widget<Ink>(
           find.byKey(
-            const ValueKey('stage-keycap-face-decoration-21 ~ 30'),
+            const ValueKey('stage-scenic-decoration-21 ~ 30'),
           ),
         )
         .decoration as BoxDecoration;
-    final border = decoration.border! as Border;
-    expect(border.top.width, 1.2);
-    expect(
-      border.top.color,
-      Color.lerp(const Color(0xFF7354E8), Colors.black, 0.10),
-    );
     expect(
       (decoration.gradient! as LinearGradient).colors,
       <Color>[
-        Color.lerp(const Color(0xFF7354E8), Colors.white, 0.91)!,
-        Color.lerp(const Color(0xFF7354E8), Colors.white, 0.78)!,
+        Color.lerp(const Color(0xFF42B883), Colors.white, 0.84)!,
+        Color.lerp(const Color(0xFF42B883), Colors.white, 0.60)!,
       ],
     );
-    expect(decoration.boxShadow, hasLength(4));
-    expect(tester.getSize(stageCard).height, 275);
+    expect(decoration.boxShadow, isNull);
+    expect(tester.getSize(stageCard).height, closeTo(275 * 0.91, 0.01));
     expect(
       find.descendant(of: stageCard, matching: find.text('COMING SOON')),
       findsNothing,
@@ -2264,8 +2262,7 @@ void main() {
     expect(find.text('1~10'), findsOneWidget);
   });
 
-  testWidgets('stage keycap press cancels for swipe and short tap starts once',
-      (
+  testWidgets('stage scenic card keeps swipe priority and starts once', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -2276,26 +2273,17 @@ void main() {
     await tester.pump();
 
     final card = find.byKey(const ValueKey('stage-card-1 ~ 10'));
-    final facePosition = find.byKey(
-      const ValueKey('stage-keycap-face-1 ~ 10'),
-    );
     final gesture = await tester.startGesture(tester.getCenter(card));
-    await tester.pump();
-    expect(tester.widget<AnimatedPositioned>(facePosition).top, 4);
-    await tester.pump(const Duration(milliseconds: 80));
-
     await gesture.moveBy(const Offset(-220, 0));
     await tester.pump();
-    expect(tester.widget<AnimatedPositioned>(facePosition).top, 0);
-    await tester.pump(const Duration(milliseconds: 80));
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 350));
     expect(find.byType(FlameIntegrationGamePage), findsNothing);
-    final startAction = tester
-        .widget<InkWell>(find.byKey(const ValueKey('start-section-1')))
-        .onTap!;
+    expect(
+        find.byKey(const ValueKey('stage-page-indicator-1')), findsOneWidget);
+    await tester.drag(find.byType(PageView), const Offset(220, 0));
+    await tester.pump(const Duration(milliseconds: 350));
     await tester.tap(find.byKey(const ValueKey('start-section-1')));
-    startAction();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 150));
     expect(find.byType(FlameIntegrationGamePage), findsOneWidget);
@@ -2319,6 +2307,34 @@ void main() {
       tester.getCenter(find.byKey(const ValueKey('endless-mode-card-size'))).dx,
       tester.getCenter(find.byType(PageView)).dx,
     );
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('endless-mode-title'))).dx,
+      closeTo(
+        tester
+            .getCenter(find.byKey(const ValueKey('endless-mode-card-size')))
+            .dx,
+        0.01,
+      ),
+    );
+    expect(
+      tester
+          .widget<Container>(
+            find.byKey(const ValueKey('stage-page-indicator-0')),
+          )
+          .constraints!
+          .maxWidth,
+      8,
+    );
+    expect(
+      tester
+          .widget<Container>(
+            find.byKey(const ValueKey('stage-page-indicator-1')),
+          )
+          .constraints!
+          .maxWidth,
+      7,
+    );
+    final stagePageElement = tester.element(find.byType(PageView));
     await tester.tap(find.byKey(const ValueKey('endless-mode-start')));
     await tester.pump();
     expect(find.byType(FlameIntegrationGamePage), findsNothing);
@@ -2330,9 +2346,28 @@ void main() {
     await tester.tap(find.text('닫기'));
     await tester.pump();
 
-    await tester.drag(find.byType(PageView), const Offset(-500, 0));
-    await tester.pump(const Duration(milliseconds: 350));
+    await tester.drag(find.byType(PageView), const Offset(-200, 0));
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text('21~30'), findsOneWidget);
+    expect(
+      tester
+          .widget<Container>(
+            find.byKey(const ValueKey('stage-page-indicator-0')),
+          )
+          .constraints!
+          .maxWidth,
+      7,
+    );
+    expect(
+      tester
+          .widget<Container>(
+            find.byKey(const ValueKey('stage-page-indicator-1')),
+          )
+          .constraints!
+          .maxWidth,
+      8,
+    );
+    expect(tester.element(find.byType(PageView)), same(stagePageElement));
     expect(find.byKey(const ValueKey('endless-mode-entry')), findsOneWidget);
   });
 
@@ -2369,17 +2404,18 @@ void main() {
       (endlessDecoration.border! as Border).top.color,
       const Color(0xFF6E2FC1),
     );
-    final endlessFace = tester.widget<AnimatedPositioned>(
-      find.byKey(const ValueKey('endless-mode-face-position')),
-    );
-    expect(endlessFace.top, 0);
-    expect(endlessFace.bottom, 4);
-    final endlessBase = tester.widget<DecoratedBox>(
-      find.byKey(const ValueKey('endless-mode-base')),
-    );
+    expect(endlessDecoration.borderRadius, BorderRadius.circular(22));
+    expect(endlessDecoration.boxShadow, hasLength(1));
+    expect(find.byKey(const ValueKey('endless-mode-base')), findsNothing);
     expect(
-      (endlessBase.decoration as BoxDecoration).color,
-      const Color(0xFF6E2FC1),
+      find.byKey(const ValueKey('endless-mode-face-position')),
+      findsNothing,
+    );
+    final endlessCard = find.byKey(const ValueKey('endless-mode-card-size'));
+    final endlessTitle = find.byKey(const ValueKey('endless-mode-title'));
+    expect(
+      tester.getCenter(endlessTitle).dx,
+      closeTo(tester.getCenter(endlessCard).dx, 0.01),
     );
     final endlessBadge = tester.widget<Container>(
       find.byKey(const ValueKey('record-badge-∞ 무한')),
@@ -2410,7 +2446,7 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('home control group uses responsive keycap geometry',
+  testWidgets('home control group uses responsive scenic card geometry',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     ProgressStorage.saveScore(987);
@@ -2434,7 +2470,9 @@ void main() {
         const Size(390, 844) => 34.0,
         _ => 60.0,
       };
-      final expectedStageHeight = 335 - expectedRibbonGap;
+      final previousStageHeight = 335 - expectedRibbonGap;
+      final expectedStageHeight = previousStageHeight * 0.91;
+      final expectedStageTop = 413 + expectedRibbonGap;
 
       final board = find.byKey(const ValueKey('home-record-board'));
       final positioned = tester.widget<Positioned>(
@@ -2452,12 +2490,23 @@ void main() {
             )
             .first,
       );
-      expect(stagePage.bottom, 202);
-      expect(stagePage.height, expectedStageHeight);
+      expect(stagePage.top, expectedStageTop);
+      expect(stagePage.bottom, isNull);
+      expect(stagePage.height, closeTo(expectedStageHeight, 0.01));
       final firstCard = find.byKey(const ValueKey('stage-card-21 ~ 30'));
       final secondCard = find.byKey(const ValueKey('stage-card-31 ~ 40'));
-      expect(tester.getSize(firstCard).height, expectedStageHeight);
-      expect(tester.getSize(secondCard).height, expectedStageHeight);
+      expect(
+        tester.getSize(firstCard).height,
+        closeTo(expectedStageHeight, 0.01),
+      );
+      expect(
+        tester.getSize(secondCard).height,
+        closeTo(expectedStageHeight, 0.01),
+      );
+      expect(
+        tester.getSize(firstCard).height / previousStageHeight,
+        closeTo(0.91, 0.001),
+      );
       expect(tester.getSize(firstCard).width, tester.getSize(secondCard).width);
       final stagePair = tester.widget<Row>(
         find.ancestor(of: firstCard, matching: find.byType(Row)).first,
@@ -2471,26 +2520,32 @@ void main() {
               ),
             )
             .height,
-        32,
+        36,
       );
       expect(
         tester.getSize(find.byKey(const ValueKey('start-section-3'))).height,
         greaterThan(44),
       );
-      final stageFace = tester.widget<AnimatedPositioned>(
-        find.byKey(
-          const ValueKey('stage-keycap-face-21 ~ 30'),
-        ),
-      );
-      expect(stageFace.bottom, 6);
       final stageDecoration = tester
           .widget<Ink>(
             find.byKey(
-              const ValueKey('stage-keycap-face-decoration-21 ~ 30'),
+              const ValueKey('stage-scenic-decoration-21 ~ 30'),
             ),
           )
           .decoration as BoxDecoration;
-      expect(stageDecoration.boxShadow, hasLength(4));
+      expect(stageDecoration.boxShadow, isNull);
+      expect(
+        find.byKey(const ValueKey('stage-keycap-base-21 ~ 30')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('stage-keycap-face-21 ~ 30')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('stage-landscape-21 ~ 30')),
+        findsOneWidget,
+      );
       expect(
         find.descendant(
           of: firstCard,
@@ -2537,6 +2592,10 @@ void main() {
             )
             .first,
       );
+      final indicator = find.byKey(const ValueKey('stage-page-indicator'));
+      final indicatorPositioned = tester.widget<Positioned>(
+        find.ancestor(of: indicator, matching: find.byType(Positioned)).first,
+      );
       final menuPositioned = tester.widget<Positioned>(
         find.byKey(const ValueKey('home-bottom-menu-position')),
       );
@@ -2548,15 +2607,30 @@ void main() {
             )
             .first,
       );
-      final stageTop = 950 - stagePage.bottom! - stagePage.height!;
-      expect(stageTop - (positioned.top! + positioned.height!), 14);
-      expect(stagePage.bottom! - (endlessPositioned.bottom! + 44), 14);
-      expect(endlessPositioned.bottom! - (menuPositioned.bottom! + 86), 14);
+      final stageBottom = stagePage.top! + stagePage.height!;
+      expect(stagePage.top! - (positioned.top! + positioned.height!), 14);
+      expect(indicatorPositioned.top! - stageBottom, closeTo(9, 0.01));
+      expect(
+        endlessPositioned.top! -
+            (indicatorPositioned.top! + indicatorPositioned.height!),
+        closeTo(11, 0.01),
+      );
+      expect(
+        (950 - menuPositioned.bottom! - 86) -
+            (endlessPositioned.top! + endlessPositioned.height!),
+        inInclusiveRange(20, 32),
+      );
       expect(
           menuPositioned.bottom! -
               (versionPositioned.bottom! + versionPositioned.height!),
           12);
       expect(find.byType(Spacer), findsNothing);
+      expect(
+          find.byKey(const ValueKey('stage-page-indicator-0')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('stage-page-indicator-1')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('stage-page-indicator-2')), findsOneWidget);
       expect(find.text('최고 기록'), findsNWidgets(2));
       expect(find.text('최근 기록'), findsNWidgets(2));
       expect(
