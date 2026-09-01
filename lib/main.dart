@@ -4183,23 +4183,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               child: CustomPaint(
                 key: const ValueKey('home-tagline-ribbon'),
                 painter: const RibbonPainter(),
-                child: const Center(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: 5),
-                    child: Text(
-                      '터치해서 터뜨려!',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.6,
-                        shadows: [
-                          Shadow(
-                            color: Color(0xAA3E116F),
-                            offset: Offset(0, 3),
-                            blurRadius: 2,
-                          ),
-                        ],
+                child: Semantics(
+                  label: '터치해서 터뜨려!',
+                  child: ExcludeSemantics(
+                    child: CustomPaint(
+                      key: const ValueKey('home-tagline-arched-text'),
+                      painter: RibbonTextPainter(
+                        textScaler: MediaQuery.textScalerOf(context),
                       ),
                     ),
                   ),
@@ -9202,6 +9192,101 @@ class RibbonPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+@immutable
+class RibbonGlyphLayout {
+  const RibbonGlyphLayout({
+    required this.glyph,
+    required this.offset,
+    required this.size,
+  });
+
+  final String glyph;
+  final Offset offset;
+  final Size size;
+}
+
+class RibbonTextPainter extends CustomPainter {
+  const RibbonTextPainter({this.textScaler = TextScaler.noScaling});
+
+  static const String text = '터치해서 터뜨려!';
+  static const double maxLift = 6;
+  static const TextStyle textStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 22,
+    fontWeight: FontWeight.w900,
+    letterSpacing: -0.6,
+    shadows: [
+      Shadow(
+        color: Color(0xAA3E116F),
+        offset: Offset(0, 3),
+        blurRadius: 2,
+      ),
+    ],
+  );
+
+  final TextScaler textScaler;
+
+  TextPainter _textPainter(String glyph) => TextPainter(
+        text: TextSpan(text: glyph, style: textStyle),
+        textDirection: TextDirection.ltr,
+        textScaler: textScaler,
+      )..layout();
+
+  @visibleForTesting
+  List<RibbonGlyphLayout> layoutGlyphs(Size size) {
+    final glyphs = text.runes.map(String.fromCharCode).toList(growable: false);
+    final painters = glyphs.map(_textPainter).toList(growable: false);
+    final totalWidth = painters.fold<double>(
+      0,
+      (width, painter) => width + painter.width,
+    );
+    final startX = (size.width - totalWidth) / 2;
+    final firstCenterX = startX + painters.first.width / 2;
+    final lastCenterX = startX + totalWidth - painters.last.width / 2;
+    final phraseCenterX = size.width / 2;
+    final leftCurveRadius = phraseCenterX - firstCenterX;
+    final rightCurveRadius = lastCenterX - phraseCenterX;
+    final baseCenterY = size.height / 2 - 2.5;
+    var x = startX;
+
+    return List<RibbonGlyphLayout>.generate(glyphs.length, (index) {
+      final painter = painters[index];
+      final glyphCenterX = x + painter.width / 2;
+      final curveRadius =
+          glyphCenterX <= phraseCenterX ? leftCurveRadius : rightCurveRadius;
+      final normalizedDistance = curveRadius == 0
+          ? 0.0
+          : ((glyphCenterX - phraseCenterX).abs() / curveRadius)
+              .clamp(0.0, 1.0);
+      final lift = maxLift * (1 - normalizedDistance * normalizedDistance);
+      final layout = RibbonGlyphLayout(
+        glyph: glyphs[index],
+        offset: Offset(
+          x,
+          baseCenterY - painter.height / 2 + maxLift / 2 - lift,
+        ),
+        size: painter.size,
+      );
+      x += painter.width;
+      return layout;
+    });
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final glyph in layoutGlyphs(size)) {
+      if (glyph.glyph.trim().isEmpty) {
+        continue;
+      }
+      _textPainter(glyph.glyph).paint(canvas, glyph.offset);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant RibbonTextPainter oldDelegate) =>
+      oldDelegate.textScaler != textScaler;
 }
 
 class NatureLeftLayer extends StatefulWidget {

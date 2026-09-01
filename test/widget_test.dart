@@ -2112,7 +2112,8 @@ void main() {
 
     expect(find.text('P'), findsAtLeastNWidgets(4));
     expect(find.text('O'), findsAtLeastNWidgets(2));
-    expect(find.text('터치해서 터뜨려!'), findsOneWidget);
+    expect(find.text('터치해서 터뜨려!'), findsNothing);
+    expect(find.bySemanticsLabel('터치해서 터뜨려!'), findsOneWidget);
     expect(find.text('최고 기록'), findsNWidgets(2));
     expect(find.text('최근 기록'), findsNWidgets(2));
     expect(find.text('BEST SCORE'), findsNothing);
@@ -2232,11 +2233,58 @@ void main() {
     expect(ribbonPosition.bottom, 7);
     expect(ribbonPosition.width, 278);
     expect(ribbonPosition.height, 55);
-    final title = tester.widget<Text>(find.text('터치해서 터뜨려!'));
-    expect(title.style!.fontSize, 22);
-    expect(title.textAlign, isNull);
-    expect(tester.getCenter(find.text('터치해서 터뜨려!')).dx,
-        closeTo(tester.getCenter(ribbon).dx, 0.01));
+    expect(find.text('터치해서 터뜨려!'), findsNothing);
+    expect(find.bySemanticsLabel('터치해서 터뜨려!'), findsOneWidget);
+
+    final archedText = find.byKey(const ValueKey('home-tagline-arched-text'));
+    expect(archedText, findsOneWidget);
+    expect(
+      find.descendant(of: archedText, matching: find.byType(Transform)),
+      findsNothing,
+    );
+    final textPaint = tester.widget<CustomPaint>(archedText);
+    expect(textPaint.painter, isA<RibbonTextPainter>());
+    final textPainter = textPaint.painter! as RibbonTextPainter;
+    expect(
+      textPainter.shouldRepaint(
+        RibbonTextPainter(textScaler: textPainter.textScaler),
+      ),
+      isFalse,
+    );
+    expect(RibbonTextPainter.textStyle.fontSize, 22);
+    expect(RibbonTextPainter.textStyle.fontWeight, FontWeight.w900);
+    expect(RibbonTextPainter.textStyle.color, Colors.white);
+    expect(RibbonTextPainter.textStyle.letterSpacing, -0.6);
+    expect(
+      RibbonTextPainter.textStyle.shadows,
+      const [
+        Shadow(
+          color: Color(0xAA3E116F),
+          offset: Offset(0, 3),
+          blurRadius: 2,
+        ),
+      ],
+    );
+
+    final glyphs = textPainter.layoutGlyphs(const Size(278, 55));
+    expect(glyphs.map((glyph) => glyph.glyph).join(), '터치해서 터뜨려!');
+    expect(glyphs.where((glyph) => glyph.glyph == ' '), hasLength(1));
+    final left = glyphs.first.offset.dx;
+    final right = glyphs.last.offset.dx + glyphs.last.size.width;
+    expect((left + right) / 2, closeTo(139, 0.01));
+    final endY = (glyphs.first.offset.dy + glyphs.last.offset.dy) / 2;
+    final middleGlyphY = glyphs
+        .where((glyph) => glyph.glyph.trim().isNotEmpty)
+        .map((glyph) => glyph.offset.dy)
+        .reduce(min);
+    expect(endY - middleGlyphY, inInclusiveRange(5, 7));
+    final paintedGlyphs =
+        glyphs.where((glyph) => glyph.glyph.trim().isNotEmpty);
+    final top = paintedGlyphs.map((glyph) => glyph.offset.dy).reduce(min);
+    final bottom = paintedGlyphs
+        .map((glyph) => glyph.offset.dy + glyph.size.height)
+        .reduce(max);
+    expect((top + bottom) / 2, closeTo(25, 0.5));
 
     final path = RibbonPainter.bodyPath(const Size(278, 55));
     expect(path.contains(const Offset(139, 9)), isTrue);
