@@ -50,12 +50,27 @@ const _poppopRibbonGradient = LinearGradient(
   colors: [_poppopRibbonTopColor, _poppopRibbonBottomColor],
 );
 
+double _homeRibbonRecordGap(BoxConstraints constraints) {
+  final viewportWidth = constraints.maxWidth + 8;
+  return (16 + ((viewportWidth - 360) * 18 / 30)).clamp(16.0, 60.0).toDouble();
+}
+
 double _homeStageCardHeight(BoxConstraints constraints) {
+  const stageBottom = 950 - 202;
+  const ribbonBottom = 311.0;
+  const recordHeight = 88.0;
+  const recordStageGap = 14.0;
+  final recordTop = ribbonBottom + _homeRibbonRecordGap(constraints);
+  return stageBottom - recordTop - recordHeight - recordStageGap;
+}
+
+double _homeStagePreviewWidth(BoxConstraints constraints) {
   final viewportWidth = constraints.maxWidth + 8;
   final viewportHeight = constraints.maxHeight + 8;
-  final widthDriven = 170 + ((viewportWidth - 360) * 40 / 408);
-  final heightDriven = 170 + ((viewportHeight - 640) * 20 / 204);
-  return max(widthDriven, heightDriven).clamp(170.0, 210.0).toDouble();
+  return max(
+    52 + ((viewportWidth - 360) * 10 / 408),
+    52 + ((viewportHeight - 640) * 10 / 384),
+  ).clamp(52.0, 62.0).toDouble();
 }
 
 void main() {
@@ -3716,14 +3731,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           child: IgnorePointer(child: _buildPoppopLogo()),
                         ),
                         Positioned(
-                          bottom: 208 + _homeStageCardHeight(constraints),
+                          top: 311 + _homeRibbonRecordGap(constraints),
                           left: 54,
                           right: 54,
                           height: 88,
                           child: _recordBoard(),
                         ),
                         Positioned(
-                          bottom: 196,
+                          bottom: 202,
                           left: 45,
                           right: 45,
                           height: _homeStageCardHeight(constraints),
@@ -3733,6 +3748,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 setState(() => _stagePage = page),
                             children: [
                               _stagePair(
+                                previewWidth:
+                                    _homeStagePreviewWidth(constraints),
                                 leftTitle: '1 ~ 10',
                                 rightTitle: '11 ~ 20',
                                 leftColor: const Color(0xFFFF4F7B),
@@ -3744,6 +3761,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 rightLocked: !_secondSectionUnlocked,
                               ),
                               _stagePair(
+                                previewWidth:
+                                    _homeStagePreviewWidth(constraints),
                                 leftTitle: '21 ~ 30',
                                 rightTitle: '31 ~ 40',
                                 leftColor: const Color(0xFF7354E8),
@@ -3754,6 +3773,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                                 rightLocked: true,
                               ),
                               _stagePair(
+                                previewWidth:
+                                    _homeStagePreviewWidth(constraints),
                                 leftTitle: '41 ~ 50',
                                 rightTitle: '51 ~ 60',
                                 leftColor: const Color(0xFFFF9F43),
@@ -3767,7 +3788,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           ),
                         ),
                         Positioned(
-                          bottom: 140,
+                          bottom: 144,
                           left: 0,
                           right: 0,
                           height: 44,
@@ -3782,7 +3803,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                         ),
                         Positioned(
                           key: const ValueKey('home-bottom-menu-position'),
-                          bottom: 42,
+                          bottom: 44,
                           left: 39,
                           right: 39,
                           height: 86,
@@ -3792,7 +3813,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           bottom: 12,
                           left: 0,
                           right: 0,
-                          height: 18,
+                          height: 20,
                           child: Text(
                             key: ValueKey('home-version-label'),
                             'v0.6 UI REFRESH',
@@ -4287,6 +4308,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
 
   Widget _stagePair({
+    required double previewWidth,
     required String leftTitle,
     required String rightTitle,
     required Color leftColor,
@@ -4307,11 +4329,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                       ? '가짜 풍선을 터뜨리지 마세요!'
                       : 'COMING SOON',
               color: leftColor,
+              previewWidth: previewWidth,
               locked: leftLocked,
               onTap: leftTap,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: _stagePanel(
               title: rightTitle,
@@ -4319,6 +4342,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                   ? '2회 터치 풍선 · 더블 보스!'
                   : 'COMING SOON',
               color: rightColor,
+              previewWidth: previewWidth,
               locked: rightLocked,
               onTap: rightTap,
             ),
@@ -4330,6 +4354,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     required String title,
     required String subtitle,
     required Color color,
+    required double previewWidth,
     required VoidCallback? onTap,
     bool locked = false,
   }) {
@@ -4353,6 +4378,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       title: title,
       subtitle: subtitle,
       accentColor: panelColor,
+      previewWidth: previewWidth,
       locked: locked,
       actionKey: buttonKey,
       onTap: action,
@@ -8583,6 +8609,7 @@ class _StageKeycap extends StatefulWidget {
     required this.title,
     required this.subtitle,
     required this.accentColor,
+    required this.previewWidth,
     required this.locked,
     required this.actionKey,
     required this.onTap,
@@ -8591,6 +8618,7 @@ class _StageKeycap extends StatefulWidget {
   final String title;
   final String subtitle;
   final Color accentColor;
+  final double previewWidth;
   final bool locked;
   final Key actionKey;
   final VoidCallback? onTap;
@@ -8632,10 +8660,13 @@ class _StageKeycapState extends State<_StageKeycap> {
   @override
   Widget build(BuildContext context) {
     final accent = widget.accentColor;
-    final faceColor = Color.lerp(accent, Colors.white, 0.87)!;
+    final faceTopColor = Color.lerp(accent, Colors.white, 0.91)!;
+    final faceBottomColor = Color.lerp(accent, Colors.white, 0.78)!;
     final baseColor = Color.lerp(accent, Colors.black, 0.24)!;
     final edgeColor = Color.lerp(accent, Colors.black, 0.10)!;
     final highlightColor = Color.lerp(accent, Colors.white, 0.58)!;
+    final brightRimColor = Color.lerp(accent, Colors.white, 0.48)!;
+    final previewHeight = widget.previewWidth * 128 / 102;
     final labelColor = widget.locked
         ? Color.lerp(accent, const Color(0xFF53616D), 0.52)!
         : accent;
@@ -8689,15 +8720,34 @@ class _StageKeycapState extends State<_StageKeycap> {
                     key: ValueKey(
                         'stage-keycap-face-decoration-${widget.title}'),
                     decoration: BoxDecoration(
-                      color: faceColor,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [faceTopColor, faceBottomColor],
+                      ),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: accent, width: 1.6),
+                      border: Border.all(color: edgeColor, width: 1.2),
                       boxShadow: [
+                        BoxShadow(
+                          color: baseColor,
+                          blurRadius: 0,
+                          spreadRadius: 4.5,
+                        ),
+                        BoxShadow(
+                          color: brightRimColor,
+                          blurRadius: 0,
+                          spreadRadius: 3,
+                        ),
+                        BoxShadow(
+                          color: accent,
+                          blurRadius: 0,
+                          spreadRadius: 1.4,
+                        ),
                         BoxShadow(
                           color:
                               accent.withValues(alpha: _pressed ? 0.12 : 0.24),
-                          blurRadius: _pressed ? 2 : 5,
-                          offset: Offset(0, _pressed ? 1 : 3),
+                          blurRadius: _pressed ? 3 : 8,
+                          offset: Offset(0, _pressed ? 2 : 6),
                         ),
                       ],
                     ),
@@ -8732,8 +8782,22 @@ class _StageKeycapState extends State<_StageKeycap> {
                             left: 10,
                             right: 7,
                             bottom: 1,
-                            height: 2,
-                            child: ColoredBox(color: edgeColor),
+                            height: 12,
+                            child: DecoratedBox(
+                              key: ValueKey(
+                                'stage-keycap-inner-shadow-${widget.title}',
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    edgeColor.withValues(alpha: 0.28),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(13, 13, 12, 9),
@@ -8797,8 +8861,8 @@ class _StageKeycapState extends State<_StageKeycap> {
                                       ),
                                       const SizedBox(width: 5),
                                       SizedBox(
-                                        width: 52,
-                                        height: 66,
+                                        width: widget.previewWidth,
+                                        height: previewHeight,
                                         child: widget.locked
                                             ? DecoratedBox(
                                                 decoration: BoxDecoration(
@@ -8844,14 +8908,14 @@ class _StageKeycapState extends State<_StageKeycap> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        Icon(
-                                          widget.locked
-                                              ? Icons.lock_rounded
-                                              : Icons.play_arrow_rounded,
-                                          size: 18,
-                                          color: labelColor,
-                                        ),
-                                        const SizedBox(width: 3),
+                                        if (widget.locked) ...[
+                                          Icon(
+                                            Icons.lock_rounded,
+                                            size: 18,
+                                            color: labelColor,
+                                          ),
+                                          const SizedBox(width: 3),
+                                        ],
                                         Text(
                                           widget.locked ? '잠김' : '시작하기',
                                           style: TextStyle(

@@ -2160,17 +2160,23 @@ void main() {
         )
         .decoration as BoxDecoration;
     expect(
-      firstDecoration.color,
-      Color.lerp(const Color(0xFFFF4F7B), Colors.white, 0.87),
+      (firstDecoration.gradient! as LinearGradient).colors,
+      <Color>[
+        Color.lerp(const Color(0xFFFF4F7B), Colors.white, 0.91)!,
+        Color.lerp(const Color(0xFFFF4F7B), Colors.white, 0.78)!,
+      ],
     );
-    expect(firstDecoration.gradient, isNull);
+    expect(firstDecoration.boxShadow, hasLength(4));
     expect(
       (firstDecoration.border! as Border).top.color,
-      const Color(0xFFFF4F7B),
+      Color.lerp(const Color(0xFFFF4F7B), Colors.black, 0.10),
     );
     expect(
-      (secondDecoration.border! as Border).top.color,
-      const Color(0xFF4D8EF7),
+      (secondDecoration.gradient! as LinearGradient).colors,
+      <Color>[
+        Color.lerp(const Color(0xFF4D8EF7), Colors.white, 0.91)!,
+        Color.lerp(const Color(0xFF4D8EF7), Colors.white, 0.78)!,
+      ],
     );
     expect(
       tester
@@ -2224,17 +2230,20 @@ void main() {
         )
         .decoration as BoxDecoration;
     final border = decoration.border! as Border;
-    expect(border.top.width, 1.6);
+    expect(border.top.width, 1.2);
     expect(
       border.top.color,
-      const Color(0xFF7354E8),
+      Color.lerp(const Color(0xFF7354E8), Colors.black, 0.10),
     );
     expect(
-      decoration.color,
-      Color.lerp(const Color(0xFF7354E8), Colors.white, 0.87),
+      (decoration.gradient! as LinearGradient).colors,
+      <Color>[
+        Color.lerp(const Color(0xFF7354E8), Colors.white, 0.91)!,
+        Color.lerp(const Color(0xFF7354E8), Colors.white, 0.78)!,
+      ],
     );
-    expect(decoration.gradient, isNull);
-    expect(tester.getSize(stageCard).height, 210);
+    expect(decoration.boxShadow, hasLength(4));
+    expect(tester.getSize(stageCard).height, 275);
     expect(
       find.descendant(of: stageCard, matching: find.text('COMING SOON')),
       findsNothing,
@@ -2420,11 +2429,12 @@ void main() {
       await tester.pumpWidget(const BalloonPopApp());
       await tester.pump();
 
-      final expectedStageHeight = switch (size) {
-        const Size(360, 640) => 170.0,
-        const Size(390, 844) => 190.0,
-        _ => 210.0,
+      final expectedRibbonGap = switch (size) {
+        const Size(360, 640) => 16.0,
+        const Size(390, 844) => 34.0,
+        _ => 60.0,
       };
+      final expectedStageHeight = 335 - expectedRibbonGap;
 
       final board = find.byKey(const ValueKey('home-record-board'));
       final positioned = tester.widget<Positioned>(
@@ -2433,7 +2443,7 @@ void main() {
       expect(positioned.left, 54);
       expect(positioned.right, 54);
       expect(positioned.height, 88);
-      expect(positioned.bottom, 208 + expectedStageHeight);
+      expect(positioned.top, 311 + expectedRibbonGap);
       final stagePage = tester.widget<Positioned>(
         find
             .ancestor(
@@ -2442,18 +2452,17 @@ void main() {
             )
             .first,
       );
-      expect(stagePage.bottom, 196);
+      expect(stagePage.bottom, 202);
       expect(stagePage.height, expectedStageHeight);
       final firstCard = find.byKey(const ValueKey('stage-card-21 ~ 30'));
       final secondCard = find.byKey(const ValueKey('stage-card-31 ~ 40'));
       expect(tester.getSize(firstCard).height, expectedStageHeight);
       expect(tester.getSize(secondCard).height, expectedStageHeight);
-      expect(expectedStageHeight, inInclusiveRange(165, 216));
       expect(tester.getSize(firstCard).width, tester.getSize(secondCard).width);
       final stagePair = tester.widget<Row>(
         find.ancestor(of: firstCard, matching: find.byType(Row)).first,
       );
-      expect((stagePair.children[1] as SizedBox).width, 12);
+      expect((stagePair.children[1] as SizedBox).width, 14);
       expect(
         tester
             .getSize(
@@ -2474,10 +2483,38 @@ void main() {
         ),
       );
       expect(stageFace.bottom, 6);
+      final stageDecoration = tester
+          .widget<Ink>(
+            find.byKey(
+              const ValueKey('stage-keycap-face-decoration-21 ~ 30'),
+            ),
+          )
+          .decoration as BoxDecoration;
+      expect(stageDecoration.boxShadow, hasLength(4));
+      expect(
+        find.descendant(
+          of: firstCard,
+          matching: find.byIcon(Icons.play_arrow_rounded),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: firstCard, matching: find.text('시작하기')),
+        findsOneWidget,
+      );
       final stageBalloon = find.byKey(
         const ValueKey('stage-default-balloon-uniform-21 ~ 30'),
       );
-      expect(tester.getSize(stageBalloon), const Size(52, 66));
+      final expectedBalloonWidth = max(
+        52 + ((size.width - 360) * 10 / 408),
+        52 + ((size.height - 640) * 10 / 384),
+      ).clamp(52.0, 62.0);
+      expect(tester.getSize(stageBalloon).width,
+          closeTo(expectedBalloonWidth, 0.01));
+      expect(
+        tester.getSize(stageBalloon).height,
+        closeTo(expectedBalloonWidth * 128 / 102, 0.01),
+      );
       final stageBalloonRenderer = find.descendant(
         of: firstCard,
         matching: find.byType(BalloonSkinRenderer),
@@ -2511,9 +2548,10 @@ void main() {
             )
             .first,
       );
-      expect(positioned.bottom! - (stagePage.bottom! + stagePage.height!), 12);
-      expect(stagePage.bottom! - (endlessPositioned.bottom! + 44), 12);
-      expect(endlessPositioned.bottom! - (menuPositioned.bottom! + 86), 12);
+      final stageTop = 950 - stagePage.bottom! - stagePage.height!;
+      expect(stageTop - (positioned.top! + positioned.height!), 14);
+      expect(stagePage.bottom! - (endlessPositioned.bottom! + 44), 14);
+      expect(endlessPositioned.bottom! - (menuPositioned.bottom! + 86), 14);
       expect(
           menuPositioned.bottom! -
               (versionPositioned.bottom! + versionPositioned.height!),
