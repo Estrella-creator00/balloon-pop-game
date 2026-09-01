@@ -2225,7 +2225,7 @@ void main() {
     );
     expect(decoration.color, Colors.white);
     expect(decoration.gradient, isNull);
-    expect(tester.getSize(stageCard).height, 160);
+    expect(tester.getSize(stageCard).height, 144);
     expect(
       find.descendant(of: stageCard, matching: find.text('COMING SOON')),
       findsNothing,
@@ -2301,6 +2301,26 @@ void main() {
         findsOneWidget);
     expect(find.descendant(of: endlessRow, matching: find.text('72')),
         findsOneWidget);
+    final endlessDecoration = tester
+        .widget<DecoratedBox>(
+          find.byKey(const ValueKey('endless-mode-visual')),
+        )
+        .decoration as BoxDecoration;
+    expect(
+      (endlessDecoration.gradient! as LinearGradient).colors,
+      const <Color>[Color(0xFFB75AEE), Color(0xFF7132CC)],
+    );
+    expect(
+      (endlessDecoration.border! as Border).top.color,
+      const Color(0xFF6E2FC1),
+    );
+    final endlessBadge = tester.widget<Container>(
+      find.byKey(const ValueKey('record-badge-∞ 무한')),
+    );
+    expect(
+      (endlessBadge.decoration! as BoxDecoration).color,
+      const Color(0xFFB75AEE),
+    );
     await tester.tap(find.byKey(const ValueKey('endless-mode-info')));
     await tester.pump();
     expect(find.text('풍선을 계속 터뜨려 최고 기록에 도전하세요.'), findsOneWidget);
@@ -2323,7 +2343,7 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('endless home records fit mobile and tablet fixed card geometry',
+  testWidgets('endless home records use responsive compact card geometry',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     ProgressStorage.saveScore(987);
@@ -2342,6 +2362,10 @@ void main() {
       await tester.pumpWidget(const BalloonPopApp());
       await tester.pump();
 
+      final compactLayout = size.width <= 430;
+      final expectedStageHeight = compactLayout ? 128.0 : 144.0;
+      final expectedMenuGap = size.height <= 700 ? 20.0 : 24.0;
+
       final board = find.byKey(const ValueKey('home-record-board'));
       final positioned = tester.widget<Positioned>(
         find.ancestor(of: board, matching: find.byType(Positioned)).first,
@@ -2349,6 +2373,7 @@ void main() {
       expect(positioned.left, 54);
       expect(positioned.right, 54);
       expect(positioned.height, 88);
+      expect(positioned.top, 331);
       final stagePage = tester.widget<Positioned>(
         find
             .ancestor(
@@ -2357,12 +2382,19 @@ void main() {
             )
             .first,
       );
-      expect(stagePage.top, 416);
-      expect(stagePage.height, 160);
+      expect(stagePage.top, 431);
+      expect(stagePage.height, expectedStageHeight);
       final firstCard = find.byKey(const ValueKey('stage-card-21 ~ 30'));
       final secondCard = find.byKey(const ValueKey('stage-card-31 ~ 40'));
-      expect(tester.getSize(firstCard).height, 160);
-      expect(tester.getSize(secondCard).height, 160);
+      expect(tester.getSize(firstCard).height, expectedStageHeight);
+      expect(tester.getSize(secondCard).height, expectedStageHeight);
+      expect(expectedStageHeight, inInclusiveRange(122, 145));
+      if (!compactLayout) {
+        expect(
+          tester.getSize(firstCard).width / expectedStageHeight,
+          closeTo(1.45, 0.06),
+        );
+      }
       expect(tester.getSize(firstCard).width, tester.getSize(secondCard).width);
       final stagePair = tester.widget<Row>(
         find.ancestor(of: firstCard, matching: find.byType(Row)).first,
@@ -2376,7 +2408,7 @@ void main() {
               ),
             )
             .height,
-        40,
+        35,
       );
       expect(
         tester.getSize(find.byKey(const ValueKey('start-section-3'))).height,
@@ -2387,6 +2419,24 @@ void main() {
       );
       expect(cardSize.width, 225);
       expect(cardSize.height, 44);
+      final endlessPositioned = tester.widget<Positioned>(
+        find
+            .ancestor(
+              of: find.byKey(const ValueKey('endless-mode-card-size')),
+              matching: find.byType(Positioned),
+            )
+            .first,
+      );
+      final menuPositioned = tester.widget<Positioned>(
+        find.byKey(const ValueKey('home-bottom-menu-position')),
+      );
+      expect(positioned.top! - 311, 20);
+      expect(stagePage.top! - (positioned.top! + positioned.height!), 12);
+      expect(endlessPositioned.top! + 2 - (stagePage.top! + stagePage.height!),
+          12);
+      expect(
+          menuPositioned.top! - (endlessPositioned.top! + 42), expectedMenuGap);
+      expect(find.byType(Spacer), findsNothing);
       expect(find.text('최고 기록'), findsNWidgets(2));
       expect(find.text('최근 기록'), findsNWidgets(2));
       expect(
@@ -3179,12 +3229,13 @@ void main() {
               (id) => tester.getRect(find.byKey(ValueKey('store-product-$id'))),
             )
             .toList();
-    expect(
-      tester.getSize(
-        find.byKey(const ValueKey('store-default-balloon-uniform')),
-      ),
-      const Size(48, 56),
+    final defaultPreviewSize = tester.getSize(
+      find.byKey(const ValueKey('store-default-balloon-uniform')),
     );
+    expect(defaultPreviewSize.width, closeTo(34.56, 0.01));
+    expect(defaultPreviewSize.height, closeTo(40.32, 0.01));
+    expect(defaultPreviewSize.width / defaultPreviewSize.height,
+        closeTo(48 / 56, 0.001));
     final defaultRenderer = find.descendant(
       of: find.byKey(const ValueKey('store-product-balloon-default')),
       matching: find.byType(BalloonSkinRenderer),

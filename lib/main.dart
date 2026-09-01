@@ -40,6 +40,20 @@ import 'widgets/poppop_logo.dart';
 export 'widgets/game_header.dart';
 export 'gameplay/stage_intro_definition.dart';
 
+const _poppopRibbonTopColor = Color(0xFFB75AEE);
+const _poppopRibbonBottomColor = Color(0xFF7132CC);
+const _poppopRibbonOutlineColor = Color(0xFF6E2FC1);
+const _poppopRibbonGradient = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [_poppopRibbonTopColor, _poppopRibbonBottomColor],
+);
+
+double _homeStageCardHeight(BoxConstraints constraints) {
+  final responsiveCardWidth = (constraints.maxWidth - 90 - 12) / 2;
+  return (responsiveCardWidth / 1.4).clamp(128.0, 144.0).toDouble();
+}
+
 void main() {
   final uri = Uri.base;
   runApp(PoppopAppEntry(
@@ -3698,17 +3712,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           child: IgnorePointer(child: _buildPoppopLogo()),
                         ),
                         Positioned(
-                          top: 316,
+                          top: 331,
                           left: 54,
                           right: 54,
                           height: 88,
                           child: _recordBoard(),
                         ),
                         Positioned(
-                          top: 416,
+                          top: 431,
                           left: 45,
                           right: 45,
-                          height: 160,
+                          height: _homeStageCardHeight(constraints),
                           child: PageView(
                             controller: _stagePageController,
                             onPageChanged: (page) =>
@@ -3749,7 +3763,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           ),
                         ),
                         Positioned(
-                          top: 586,
+                          top: 441 + _homeStageCardHeight(constraints),
                           left: 0,
                           right: 0,
                           height: 44,
@@ -3763,7 +3777,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           ),
                         ),
                         Positioned(
-                          top: 640,
+                          key: const ValueKey('home-bottom-menu-position'),
+                          top: 483 +
+                              _homeStageCardHeight(constraints) +
+                              (constraints.maxHeight <= 700 ? 20 : 24),
                           left: 39,
                           right: 39,
                           height: 86,
@@ -3806,7 +3823,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   Widget _endlessModeButton() {
     final unlocked = _endlessModeUnlocked;
-    final foreground = unlocked ? Colors.white : const Color(0xFF654DB0);
+    final foreground = unlocked ? Colors.white : _poppopRibbonOutlineColor;
+    final lockedTop = Color.lerp(_poppopRibbonTopColor, Colors.white, 0.78)!;
+    final lockedBottom =
+        Color.lerp(_poppopRibbonBottomColor, Colors.white, 0.78)!;
+    final borderColor = unlocked
+        ? _poppopRibbonOutlineColor
+        : Color.lerp(_poppopRibbonOutlineColor, Colors.white, 0.62)!;
     return Stack(
       key: const ValueKey('endless-mode-entry'),
       children: [
@@ -3815,17 +3838,25 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           bottom: 2,
           left: 0,
           right: 0,
-          child: Material(
-            color: unlocked ? const Color(0xFF7354E8) : Colors.white,
-            elevation: 2,
-            shadowColor: const Color(0x247354E8),
-            shape: RoundedRectangleBorder(
+          child: DecoratedBox(
+            key: const ValueKey('endless-mode-visual'),
+            decoration: BoxDecoration(
+              gradient: unlocked
+                  ? _poppopRibbonGradient
+                  : LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [lockedTop, lockedBottom],
+                    ),
               borderRadius: BorderRadius.circular(15),
-              side: BorderSide(
-                color: unlocked
-                    ? const Color(0xFF7354E8)
-                    : const Color(0xFFC8BDEB),
-              ),
+              border: Border.all(color: borderColor),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x247132CC),
+                  blurRadius: 3,
+                  offset: Offset(0, 2),
+                ),
+              ],
             ),
           ),
         ),
@@ -4421,7 +4452,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           };
     return Container(
       key: ValueKey('stage-card-$title'),
-      padding: const EdgeInsets.fromLTRB(10, 9, 10, 7),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -4448,8 +4479,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 4,
+                          horizontal: 7,
+                          vertical: 3,
                         ),
                         decoration: BoxDecoration(
                           color: panelColor.withValues(alpha: 0.12),
@@ -4459,13 +4490,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           title.replaceAll(' ', ''),
                           style: TextStyle(
                             color: panelColor,
-                            fontSize: 20,
+                            fontSize: 17,
                             height: 1,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         'STAGE',
                         style: TextStyle(
@@ -4475,7 +4506,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           letterSpacing: 0.8,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         subtitle,
                         maxLines: 2,
@@ -4490,9 +4521,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     ],
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 3),
                 SizedBox.square(
-                  dimension: 48,
+                  dimension: 40,
                   child: locked
                       ? Container(
                           decoration: BoxDecoration(
@@ -4502,7 +4533,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           child: const Icon(
                             Icons.lock_rounded,
                             color: Color(0xFF607485),
-                            size: 27,
+                            size: 23,
                           ),
                         )
                       : CustomPaint(
@@ -4512,7 +4543,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               ],
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           Semantics(
             button: true,
             enabled: action != null,
@@ -4530,7 +4561,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     child: Container(
                       key: ValueKey('stage-card-action-visual-$title'),
                       width: double.infinity,
-                      height: 40,
+                      height: 35,
                       decoration: BoxDecoration(
                         color: action == null
                             ? const Color(0xFFE8EDF2)
@@ -4545,7 +4576,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                             locked
                                 ? Icons.lock_rounded
                                 : Icons.play_arrow_rounded,
-                            size: 20,
+                            size: 18,
                             color: action == null
                                 ? const Color(0xFF718290)
                                 : Colors.white,
@@ -4557,7 +4588,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                               color: action == null
                                   ? const Color(0xFF718290)
                                   : Colors.white,
-                              fontSize: 14,
+                              fontSize: 12.5,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -4607,7 +4638,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             _recordBoardRow(
               key: const ValueKey('endless-record-row'),
               mode: '∞ 무한',
-              badgeColor: const Color(0xFF7354E8),
+              badgeColor: _poppopRibbonTopColor,
               best: _endlessBestScore,
               last: _endlessLastScore,
             ),
@@ -4629,6 +4660,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         child: Row(
           children: [
             Container(
+              key: ValueKey('record-badge-$mode'),
               width: 72,
               height: 25,
               alignment: Alignment.center,
@@ -7016,6 +7048,7 @@ class StoreProductCard extends StatelessWidget {
             child: _shopBalloonRenderer(
               definition: definition,
               color: definition.previewColor,
+              defaultPreviewScale: 0.72,
               defaultPreviewKey: const ValueKey(
                 'store-default-balloon-uniform',
               ),
@@ -7094,6 +7127,7 @@ Widget _shopBalloonRenderer({
   bool specialVisual = false,
   double animationPhase = 0,
   Key? defaultPreviewKey,
+  double defaultPreviewScale = 1,
 }) {
   final renderer = BalloonSkinRenderer(
     definition: definition,
@@ -7103,13 +7137,21 @@ Widget _shopBalloonRenderer({
     animationPhase: animationPhase,
   );
   if (definition.id != BalloonSkinCatalog.defaultSkin.id) return renderer;
-  return FittedBox(
+  final preview = FittedBox(
     key: defaultPreviewKey,
     fit: BoxFit.contain,
     child: SizedBox(
       width: BasicBalloonSpriteCache.logicalWidth,
       height: BasicBalloonSpriteCache.logicalHeight,
       child: renderer,
+    ),
+  );
+  if (defaultPreviewScale == 1) return preview;
+  return Center(
+    child: FractionallySizedBox(
+      widthFactor: defaultPreviewScale,
+      heightFactor: defaultPreviewScale,
+      child: preview,
     ),
   );
 }
@@ -8804,8 +8846,8 @@ class RibbonPainter extends CustomPainter {
       ..close();
     canvas.drawPath(leftTail.shift(const Offset(0, 4)), shadow);
     canvas.drawPath(rightTail.shift(const Offset(0, 4)), shadow);
-    canvas.drawPath(leftTail, Paint()..color = const Color(0xFF6E2FC1));
-    canvas.drawPath(rightTail, Paint()..color = const Color(0xFF6E2FC1));
+    canvas.drawPath(leftTail, Paint()..color = _poppopRibbonOutlineColor);
+    canvas.drawPath(rightTail, Paint()..color = _poppopRibbonOutlineColor);
 
     final center = RRect.fromRectAndRadius(
       Rect.fromLTWH(25, 4, size.width - 50, 43),
@@ -8814,12 +8856,7 @@ class RibbonPainter extends CustomPainter {
     canvas.drawRRect(center.shift(const Offset(0, 5)), shadow);
     canvas.drawRRect(
       center,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFB75AEE), Color(0xFF7132CC)],
-        ).createShader(center.outerRect),
+      Paint()..shader = _poppopRibbonGradient.createShader(center.outerRect),
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(
