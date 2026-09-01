@@ -2145,31 +2145,37 @@ void main() {
     expect(find.text('업적'), findsNothing);
     expect(find.text('도움말'), findsNothing);
 
-    final firstCard = find.byKey(const ValueKey('stage-card-1 ~ 10'));
-    final secondCard = find.byKey(const ValueKey('stage-card-11 ~ 20'));
-    final firstDecoration =
-        tester.widget<Container>(firstCard).decoration! as BoxDecoration;
-    final secondDecoration =
-        tester.widget<Container>(secondCard).decoration! as BoxDecoration;
-    expect(firstDecoration.color, Colors.white);
+    final firstDecoration = tester
+        .widget<Ink>(
+          find.byKey(
+            const ValueKey('stage-keycap-face-decoration-1 ~ 10'),
+          ),
+        )
+        .decoration as BoxDecoration;
+    final secondDecoration = tester
+        .widget<Ink>(
+          find.byKey(
+            const ValueKey('stage-keycap-face-decoration-11 ~ 20'),
+          ),
+        )
+        .decoration as BoxDecoration;
+    expect(
+      firstDecoration.color,
+      Color.lerp(const Color(0xFFFF4F7B), Colors.white, 0.87),
+    );
     expect(firstDecoration.gradient, isNull);
     expect(
       (firstDecoration.border! as Border).top.color,
-      const Color(0xFFFF4F7B).withValues(alpha: 0.58),
+      const Color(0xFFFF4F7B),
     );
     expect(
       (secondDecoration.border! as Border).top.color,
-      const Color(0xFF4D8EF7).withValues(alpha: 0.58),
+      const Color(0xFF4D8EF7),
     );
     expect(
       tester
           .widget<InkWell>(
-            find
-                .descendant(
-                  of: find.byKey(const ValueKey('start-section-1')),
-                  matching: find.byType(InkWell),
-                )
-                .first,
+            find.byKey(const ValueKey('start-section-1')),
           )
           .onTap,
       isNotNull,
@@ -2177,12 +2183,7 @@ void main() {
     expect(
       tester
           .widget<InkWell>(
-            find
-                .descendant(
-                  of: find.byKey(const ValueKey('start-section-2')),
-                  matching: find.byType(InkWell),
-                )
-                .first,
+            find.byKey(const ValueKey('start-section-2')),
           )
           .onTap,
       isNull,
@@ -2215,17 +2216,25 @@ void main() {
     expect(find.text('추천!'), findsNothing);
 
     final stageCard = find.byKey(const ValueKey('stage-card-21 ~ 30'));
-    final decoration =
-        tester.widget<Container>(stageCard).decoration! as BoxDecoration;
+    final decoration = tester
+        .widget<Ink>(
+          find.byKey(
+            const ValueKey('stage-keycap-face-decoration-21 ~ 30'),
+          ),
+        )
+        .decoration as BoxDecoration;
     final border = decoration.border! as Border;
-    expect(border.top.width, 1.5);
+    expect(border.top.width, 1.6);
     expect(
       border.top.color,
-      const Color(0xFF7354E8).withValues(alpha: 0.58),
+      const Color(0xFF7354E8),
     );
-    expect(decoration.color, Colors.white);
+    expect(
+      decoration.color,
+      Color.lerp(const Color(0xFF7354E8), Colors.white, 0.87),
+    );
     expect(decoration.gradient, isNull);
-    expect(tester.getSize(stageCard).height, 144);
+    expect(tester.getSize(stageCard).height, 210);
     expect(
       find.descendant(of: stageCard, matching: find.text('COMING SOON')),
       findsNothing,
@@ -2244,6 +2253,43 @@ void main() {
     final pageView = tester.widget<PageView>(find.byType(PageView));
     expect(pageView.controller!.initialPage, 0);
     expect(find.text('1~10'), findsOneWidget);
+  });
+
+  testWidgets('stage keycap press cancels for swipe and short tap starts once',
+      (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const BalloonPopApp(useFlameGameplay: true));
+    await tester.pump();
+
+    final card = find.byKey(const ValueKey('stage-card-1 ~ 10'));
+    final facePosition = find.byKey(
+      const ValueKey('stage-keycap-face-1 ~ 10'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(card));
+    await tester.pump();
+    expect(tester.widget<AnimatedPositioned>(facePosition).top, 4);
+    await tester.pump(const Duration(milliseconds: 80));
+
+    await gesture.moveBy(const Offset(-220, 0));
+    await tester.pump();
+    expect(tester.widget<AnimatedPositioned>(facePosition).top, 0);
+    await tester.pump(const Duration(milliseconds: 80));
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byType(FlameIntegrationGamePage), findsNothing);
+    final startAction = tester
+        .widget<InkWell>(find.byKey(const ValueKey('start-section-1')))
+        .onTap!;
+    await tester.tap(find.byKey(const ValueKey('start-section-1')));
+    startAction();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(find.byType(FlameIntegrationGamePage), findsOneWidget);
   });
 
   testWidgets('endless entry is locked while stage swipe remains available',
@@ -2314,6 +2360,18 @@ void main() {
       (endlessDecoration.border! as Border).top.color,
       const Color(0xFF6E2FC1),
     );
+    final endlessFace = tester.widget<AnimatedPositioned>(
+      find.byKey(const ValueKey('endless-mode-face-position')),
+    );
+    expect(endlessFace.top, 0);
+    expect(endlessFace.bottom, 4);
+    final endlessBase = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('endless-mode-base')),
+    );
+    expect(
+      (endlessBase.decoration as BoxDecoration).color,
+      const Color(0xFF6E2FC1),
+    );
     final endlessBadge = tester.widget<Container>(
       find.byKey(const ValueKey('record-badge-∞ 무한')),
     );
@@ -2343,7 +2401,7 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('endless home records use responsive compact card geometry',
+  testWidgets('home control group uses responsive keycap geometry',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     ProgressStorage.saveScore(987);
@@ -2362,9 +2420,11 @@ void main() {
       await tester.pumpWidget(const BalloonPopApp());
       await tester.pump();
 
-      final compactLayout = size.width <= 430;
-      final expectedStageHeight = compactLayout ? 128.0 : 144.0;
-      final expectedMenuGap = size.height <= 700 ? 20.0 : 24.0;
+      final expectedStageHeight = switch (size) {
+        const Size(360, 640) => 170.0,
+        const Size(390, 844) => 190.0,
+        _ => 210.0,
+      };
 
       final board = find.byKey(const ValueKey('home-record-board'));
       final positioned = tester.widget<Positioned>(
@@ -2373,7 +2433,7 @@ void main() {
       expect(positioned.left, 54);
       expect(positioned.right, 54);
       expect(positioned.height, 88);
-      expect(positioned.top, 331);
+      expect(positioned.bottom, 208 + expectedStageHeight);
       final stagePage = tester.widget<Positioned>(
         find
             .ancestor(
@@ -2382,19 +2442,13 @@ void main() {
             )
             .first,
       );
-      expect(stagePage.top, 431);
+      expect(stagePage.bottom, 196);
       expect(stagePage.height, expectedStageHeight);
       final firstCard = find.byKey(const ValueKey('stage-card-21 ~ 30'));
       final secondCard = find.byKey(const ValueKey('stage-card-31 ~ 40'));
       expect(tester.getSize(firstCard).height, expectedStageHeight);
       expect(tester.getSize(secondCard).height, expectedStageHeight);
-      expect(expectedStageHeight, inInclusiveRange(122, 145));
-      if (!compactLayout) {
-        expect(
-          tester.getSize(firstCard).width / expectedStageHeight,
-          closeTo(1.45, 0.06),
-        );
-      }
+      expect(expectedStageHeight, inInclusiveRange(165, 216));
       expect(tester.getSize(firstCard).width, tester.getSize(secondCard).width);
       final stagePair = tester.widget<Row>(
         find.ancestor(of: firstCard, matching: find.byType(Row)).first,
@@ -2408,11 +2462,30 @@ void main() {
               ),
             )
             .height,
-        35,
+        32,
       );
       expect(
         tester.getSize(find.byKey(const ValueKey('start-section-3'))).height,
-        44,
+        greaterThan(44),
+      );
+      final stageFace = tester.widget<AnimatedPositioned>(
+        find.byKey(
+          const ValueKey('stage-keycap-face-21 ~ 30'),
+        ),
+      );
+      expect(stageFace.bottom, 6);
+      final stageBalloon = find.byKey(
+        const ValueKey('stage-default-balloon-uniform-21 ~ 30'),
+      );
+      expect(tester.getSize(stageBalloon), const Size(52, 66));
+      final stageBalloonRenderer = find.descendant(
+        of: firstCard,
+        matching: find.byType(BalloonSkinRenderer),
+      );
+      expect(tester.getSize(stageBalloonRenderer), const Size(102, 128));
+      expect(
+        tester.getSize(stageBalloonRenderer).aspectRatio,
+        closeTo(102 / 128, 0.001),
       );
       final cardSize = tester.widget<SizedBox>(
         find.byKey(const ValueKey('endless-mode-card-size')),
@@ -2430,12 +2503,21 @@ void main() {
       final menuPositioned = tester.widget<Positioned>(
         find.byKey(const ValueKey('home-bottom-menu-position')),
       );
-      expect(positioned.top! - 311, 20);
-      expect(stagePage.top! - (positioned.top! + positioned.height!), 12);
-      expect(endlessPositioned.top! + 2 - (stagePage.top! + stagePage.height!),
-          12);
+      final versionPositioned = tester.widget<Positioned>(
+        find
+            .ancestor(
+              of: find.byKey(const ValueKey('home-version-label')),
+              matching: find.byType(Positioned),
+            )
+            .first,
+      );
+      expect(positioned.bottom! - (stagePage.bottom! + stagePage.height!), 12);
+      expect(stagePage.bottom! - (endlessPositioned.bottom! + 44), 12);
+      expect(endlessPositioned.bottom! - (menuPositioned.bottom! + 86), 12);
       expect(
-          menuPositioned.top! - (endlessPositioned.top! + 42), expectedMenuGap);
+          menuPositioned.bottom! -
+              (versionPositioned.bottom! + versionPositioned.height!),
+          12);
       expect(find.byType(Spacer), findsNothing);
       expect(find.text('최고 기록'), findsNWidgets(2));
       expect(find.text('최근 기록'), findsNWidgets(2));

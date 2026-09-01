@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
@@ -50,8 +51,11 @@ const _poppopRibbonGradient = LinearGradient(
 );
 
 double _homeStageCardHeight(BoxConstraints constraints) {
-  final responsiveCardWidth = (constraints.maxWidth - 90 - 12) / 2;
-  return (responsiveCardWidth / 1.4).clamp(128.0, 144.0).toDouble();
+  final viewportWidth = constraints.maxWidth + 8;
+  final viewportHeight = constraints.maxHeight + 8;
+  final widthDriven = 170 + ((viewportWidth - 360) * 40 / 408);
+  final heightDriven = 170 + ((viewportHeight - 640) * 20 / 204);
+  return max(widthDriven, heightDriven).clamp(170.0, 210.0).toDouble();
 }
 
 void main() {
@@ -3712,14 +3716,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           child: IgnorePointer(child: _buildPoppopLogo()),
                         ),
                         Positioned(
-                          top: 331,
+                          bottom: 208 + _homeStageCardHeight(constraints),
                           left: 54,
                           right: 54,
                           height: 88,
                           child: _recordBoard(),
                         ),
                         Positioned(
-                          top: 431,
+                          bottom: 196,
                           left: 45,
                           right: 45,
                           height: _homeStageCardHeight(constraints),
@@ -3763,7 +3767,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           ),
                         ),
                         Positioned(
-                          top: 441 + _homeStageCardHeight(constraints),
+                          bottom: 140,
                           left: 0,
                           right: 0,
                           height: 44,
@@ -3778,9 +3782,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                         ),
                         Positioned(
                           key: const ValueKey('home-bottom-menu-position'),
-                          top: 483 +
-                              _homeStageCardHeight(constraints) +
-                              (constraints.maxHeight <= 700 ? 20 : 24),
+                          bottom: 42,
                           left: 39,
                           right: 39,
                           height: 86,
@@ -3790,7 +3792,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           bottom: 12,
                           left: 0,
                           right: 0,
+                          height: 18,
                           child: Text(
+                            key: ValueKey('home-version-label'),
                             'v0.6 UI REFRESH',
                             textAlign: TextAlign.center,
                             style: TextStyle(
@@ -3823,118 +3827,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   Widget _endlessModeButton() {
     final unlocked = _endlessModeUnlocked;
-    final foreground = unlocked ? Colors.white : _poppopRibbonOutlineColor;
-    final lockedTop = Color.lerp(_poppopRibbonTopColor, Colors.white, 0.78)!;
-    final lockedBottom =
-        Color.lerp(_poppopRibbonBottomColor, Colors.white, 0.78)!;
-    final borderColor = unlocked
-        ? _poppopRibbonOutlineColor
-        : Color.lerp(_poppopRibbonOutlineColor, Colors.white, 0.62)!;
-    return Stack(
-      key: const ValueKey('endless-mode-entry'),
-      children: [
-        Positioned(
-          top: 2,
-          bottom: 2,
-          left: 0,
-          right: 0,
-          child: DecoratedBox(
-            key: const ValueKey('endless-mode-visual'),
-            decoration: BoxDecoration(
-              gradient: unlocked
-                  ? _poppopRibbonGradient
-                  : LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [lockedTop, lockedBottom],
-                    ),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: borderColor),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x247132CC),
-                  blurRadius: 3,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Positioned.fill(
-          child: Row(
-            children: [
-              Expanded(
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    key: const ValueKey('endless-mode-start'),
-                    borderRadius: BorderRadius.circular(15),
-                    onTap: unlocked ? _onEndlessModePressed : null,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (!unlocked) ...[
-                          const Icon(
-                            Icons.lock_rounded,
-                            key: ValueKey('endless-mode-lock'),
-                            size: 15,
-                            color: Color(0xFF776F91),
-                          ),
-                          const SizedBox(width: 5),
-                        ],
-                        Text(
-                          '∞ (무한 팝)',
-                          style: TextStyle(
-                            color: foreground,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Semantics(
-                label: '무한 팝 설명',
-                button: true,
-                child: IconButton(
-                  key: const ValueKey('endless-mode-info'),
-                  tooltip: '무한 팝 설명',
-                  onPressed: () {
-                    PopSound.playUiClick();
-                    unawaited(_showEndlessModeInfo(startOnConfirm: false));
-                  },
-                  constraints:
-                      const BoxConstraints.tightFor(width: 44, height: 44),
-                  padding: EdgeInsets.zero,
-                  icon: Container(
-                    width: 21,
-                    height: 21,
-                    decoration: BoxDecoration(
-                      color: unlocked
-                          ? Colors.white.withValues(alpha: 0.12)
-                          : null,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: foreground),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '!',
-                      style: TextStyle(
-                        color: foreground,
-                        fontSize: 13,
-                        height: 1,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+    return _EndlessModeKeycap(
+      unlocked: unlocked,
+      onStart: unlocked ? _onEndlessModePressed : null,
+      onInfo: () {
+        PopSound.playUiClick();
+        unawaited(_showEndlessModeInfo(startOnConfirm: false));
+      },
     );
   }
 
@@ -4450,158 +4349,13 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             PopSound.playUiClick();
             onTap();
           };
-    return Container(
-      key: ValueKey('stage-card-$title'),
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: panelColor.withValues(alpha: 0.58),
-          width: 1.5,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x29204A5F),
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: panelColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          title.replaceAll(' ', ''),
-                          style: TextStyle(
-                            color: panelColor,
-                            fontSize: 17,
-                            height: 1,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'STAGE',
-                        style: TextStyle(
-                          color: panelColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF526B79),
-                          fontSize: 10.5,
-                          height: 1.15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 3),
-                SizedBox.square(
-                  dimension: 40,
-                  child: locked
-                      ? Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F3F6),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Icon(
-                            Icons.lock_rounded,
-                            color: Color(0xFF607485),
-                            size: 23,
-                          ),
-                        )
-                      : CustomPaint(
-                          painter: BalloonPainter(color: panelColor),
-                        ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 2),
-          Semantics(
-            button: true,
-            enabled: action != null,
-            label: locked ? '$title STAGE 잠김' : '$title STAGE 시작',
-            child: SizedBox(
-              key: buttonKey,
-              width: double.infinity,
-              height: 44,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: action,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Center(
-                    child: Container(
-                      key: ValueKey('stage-card-action-visual-$title'),
-                      width: double.infinity,
-                      height: 35,
-                      decoration: BoxDecoration(
-                        color: action == null
-                            ? const Color(0xFFE8EDF2)
-                            : panelColor,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      alignment: Alignment.center,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            locked
-                                ? Icons.lock_rounded
-                                : Icons.play_arrow_rounded,
-                            size: 18,
-                            color: action == null
-                                ? const Color(0xFF718290)
-                                : Colors.white,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            locked ? '잠김' : '시작하기',
-                            style: TextStyle(
-                              color: action == null
-                                  ? const Color(0xFF718290)
-                                  : Colors.white,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return _StageKeycap(
+      title: title,
+      subtitle: subtitle,
+      accentColor: panelColor,
+      locked: locked,
+      actionKey: buttonKey,
+      onTap: action,
     );
   }
 
@@ -8822,6 +8576,464 @@ class LogoFestivalPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant LogoFestivalPainter oldDelegate) =>
       oldDelegate.progress != progress;
+}
+
+class _StageKeycap extends StatefulWidget {
+  const _StageKeycap({
+    required this.title,
+    required this.subtitle,
+    required this.accentColor,
+    required this.locked,
+    required this.actionKey,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final Color accentColor;
+  final bool locked;
+  final Key actionKey;
+  final VoidCallback? onTap;
+
+  @override
+  State<_StageKeycap> createState() => _StageKeycapState();
+}
+
+class _StageKeycapState extends State<_StageKeycap> {
+  static const _travel = 4.0;
+  bool _pressed = false;
+  Offset? _pointerOrigin;
+
+  void _setPressed(bool value) {
+    if (_pressed == value || widget.onTap == null) return;
+    setState(() => _pressed = value);
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (widget.onTap == null) return;
+    _pointerOrigin = event.position;
+    _setPressed(true);
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    final origin = _pointerOrigin;
+    if (origin == null || (event.position - origin).distance <= kTouchSlop) {
+      return;
+    }
+    _pointerOrigin = null;
+    _setPressed(false);
+  }
+
+  void _finishPointer(PointerEvent event) {
+    _pointerOrigin = null;
+    _setPressed(false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = widget.accentColor;
+    final faceColor = Color.lerp(accent, Colors.white, 0.87)!;
+    final baseColor = Color.lerp(accent, Colors.black, 0.24)!;
+    final edgeColor = Color.lerp(accent, Colors.black, 0.10)!;
+    final highlightColor = Color.lerp(accent, Colors.white, 0.58)!;
+    final labelColor = widget.locked
+        ? Color.lerp(accent, const Color(0xFF53616D), 0.52)!
+        : accent;
+    return Semantics(
+      button: true,
+      enabled: widget.onTap != null,
+      label: widget.locked
+          ? '${widget.title} STAGE 잠김'
+          : '${widget.title} STAGE 시작',
+      child: Listener(
+        onPointerDown: _onPointerDown,
+        onPointerMove: _onPointerMove,
+        onPointerUp: _finishPointer,
+        onPointerCancel: _finishPointer,
+        child: SizedBox(
+          key: ValueKey('stage-card-${widget.title}'),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 1,
+                right: 1,
+                bottom: 0,
+                height: 11,
+                child: DecoratedBox(
+                  key: ValueKey('stage-keycap-base-${widget.title}'),
+                  decoration: BoxDecoration(
+                    color: baseColor,
+                    borderRadius: BorderRadius.circular(19),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x46204458),
+                        blurRadius: 7,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              AnimatedPositioned(
+                key: ValueKey('stage-keycap-face-${widget.title}'),
+                duration: const Duration(milliseconds: 80),
+                curve: Curves.easeOut,
+                left: 0,
+                right: 0,
+                top: _pressed ? _travel : 0,
+                bottom: _pressed ? 2 : 6,
+                child: Material(
+                  color: Colors.transparent,
+                  child: Ink(
+                    key: ValueKey(
+                        'stage-keycap-face-decoration-${widget.title}'),
+                    decoration: BoxDecoration(
+                      color: faceColor,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: accent, width: 1.6),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              accent.withValues(alpha: _pressed ? 0.12 : 0.24),
+                          blurRadius: _pressed ? 2 : 5,
+                          offset: Offset(0, _pressed ? 1 : 3),
+                        ),
+                      ],
+                    ),
+                    child: InkWell(
+                      key: widget.actionKey,
+                      onTap: widget.onTap,
+                      borderRadius: BorderRadius.circular(18),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            top: 2,
+                            left: 9,
+                            right: 12,
+                            height: 1.5,
+                            child: ColoredBox(color: highlightColor),
+                          ),
+                          Positioned(
+                            top: 9,
+                            bottom: 12,
+                            left: 2,
+                            width: 1.5,
+                            child: ColoredBox(color: highlightColor),
+                          ),
+                          Positioned(
+                            top: 12,
+                            bottom: 7,
+                            right: 1,
+                            width: 2,
+                            child: ColoredBox(color: edgeColor),
+                          ),
+                          Positioned(
+                            left: 10,
+                            right: 7,
+                            bottom: 1,
+                            height: 2,
+                            child: ColoredBox(color: edgeColor),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(13, 13, 12, 9),
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 9,
+                                                vertical: 5,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: accent.withValues(
+                                                    alpha: 0.13),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: Text(
+                                                widget.title
+                                                    .replaceAll(' ', ''),
+                                                style: TextStyle(
+                                                  color: accent,
+                                                  fontSize: 20,
+                                                  height: 1,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 5),
+                                            Text(
+                                              'STAGE',
+                                              style: TextStyle(
+                                                color: accent,
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: 0.9,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              widget.subtitle,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Color(0xFF526B79),
+                                                fontSize: 10.5,
+                                                height: 1.18,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      SizedBox(
+                                        width: 52,
+                                        height: 66,
+                                        child: widget.locked
+                                            ? DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  color: accent.withValues(
+                                                    alpha: 0.10,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(15),
+                                                ),
+                                                child: Icon(
+                                                  Icons.lock_rounded,
+                                                  color: labelColor,
+                                                  size: 30,
+                                                ),
+                                              )
+                                            : _shopBalloonRenderer(
+                                                definition: BalloonSkinCatalog
+                                                    .defaultSkin,
+                                                color: accent,
+                                                defaultPreviewKey: ValueKey(
+                                                  'stage-default-balloon-uniform-${widget.title}',
+                                                ),
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                SizedBox(
+                                  key: ValueKey(
+                                    'stage-card-action-visual-${widget.title}',
+                                  ),
+                                  height: 32,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        top: BorderSide(
+                                          color: accent.withValues(alpha: 0.20),
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          widget.locked
+                                              ? Icons.lock_rounded
+                                              : Icons.play_arrow_rounded,
+                                          size: 18,
+                                          color: labelColor,
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          widget.locked ? '잠김' : '시작하기',
+                                          style: TextStyle(
+                                            color: labelColor,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EndlessModeKeycap extends StatefulWidget {
+  const _EndlessModeKeycap({
+    required this.unlocked,
+    required this.onStart,
+    required this.onInfo,
+  });
+
+  final bool unlocked;
+  final VoidCallback? onStart;
+  final VoidCallback onInfo;
+
+  @override
+  State<_EndlessModeKeycap> createState() => _EndlessModeKeycapState();
+}
+
+class _EndlessModeKeycapState extends State<_EndlessModeKeycap> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value || widget.onStart == null) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lockedTop = Color.lerp(_poppopRibbonTopColor, Colors.white, 0.78)!;
+    final lockedBottom =
+        Color.lerp(_poppopRibbonBottomColor, Colors.white, 0.78)!;
+    final foreground =
+        widget.unlocked ? Colors.white : _poppopRibbonOutlineColor;
+    final borderColor = widget.unlocked
+        ? _poppopRibbonOutlineColor
+        : Color.lerp(_poppopRibbonOutlineColor, Colors.white, 0.48)!;
+    return Stack(
+      key: const ValueKey('endless-mode-entry'),
+      children: [
+        Positioned(
+          left: 1,
+          right: 1,
+          bottom: 0,
+          height: 8,
+          child: const DecoratedBox(
+            key: ValueKey('endless-mode-base'),
+            decoration: BoxDecoration(
+              color: _poppopRibbonOutlineColor,
+              borderRadius: BorderRadius.all(Radius.circular(15)),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x3D3A126F),
+                  blurRadius: 5,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedPositioned(
+          key: const ValueKey('endless-mode-face-position'),
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+          top: _pressed ? 3 : 0,
+          bottom: _pressed ? 1 : 4,
+          left: 0,
+          right: 0,
+          child: DecoratedBox(
+            key: const ValueKey('endless-mode-visual'),
+            decoration: BoxDecoration(
+              gradient: widget.unlocked
+                  ? _poppopRibbonGradient
+                  : LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [lockedTop, lockedBottom],
+                    ),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: borderColor),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      key: const ValueKey('endless-mode-start'),
+                      borderRadius: BorderRadius.circular(15),
+                      onTap: widget.onStart,
+                      onHighlightChanged:
+                          widget.onStart == null ? null : _setPressed,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (!widget.unlocked) ...[
+                            const Icon(
+                              Icons.lock_rounded,
+                              key: ValueKey('endless-mode-lock'),
+                              size: 15,
+                              color: Color(0xFF776F91),
+                            ),
+                            const SizedBox(width: 5),
+                          ],
+                          Text(
+                            '∞ (무한 팝)',
+                            style: TextStyle(
+                              color: foreground,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Semantics(
+                    label: '무한 팝 설명',
+                    button: true,
+                    child: IconButton(
+                      key: const ValueKey('endless-mode-info'),
+                      tooltip: '무한 팝 설명',
+                      onPressed: widget.onInfo,
+                      constraints:
+                          const BoxConstraints.tightFor(width: 44, height: 40),
+                      padding: EdgeInsets.zero,
+                      icon: Container(
+                        width: 21,
+                        height: 21,
+                        decoration: BoxDecoration(
+                          color: widget.unlocked
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : null,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: foreground),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '!',
+                          style: TextStyle(
+                            color: foreground,
+                            fontSize: 13,
+                            height: 1,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class RibbonPainter extends CustomPainter {
