@@ -352,7 +352,6 @@ class PoppopGame extends FlameGame {
         slot: slot,
         generation: generation,
         record: 0,
-        forceReal: true,
       ));
     }
     await world.addAll(balloons);
@@ -374,14 +373,11 @@ class PoppopGame extends FlameGame {
     required int slot,
     required int generation,
     required int record,
-    bool forceReal = false,
   }) {
     final id = generation * 100000 + _endlessSpawnOrdinal++;
     final profile = EndlessModeRules.profileFor(
       record: record,
       spawnOrdinal: _endlessSpawnOrdinal,
-      activeFakeCount: sessionState.fakeCount,
-      forceReal: forceReal,
     );
     final balloon = stageSpawner.createEndless(
       profile: profile,
@@ -413,14 +409,9 @@ class PoppopGame extends FlameGame {
       slot: slot,
       generation: sessionState.generation,
       record: sessionState.score,
-      forceReal: removed.isFake,
     );
     _balloons[replacement.balloonId] = replacement;
-    sessionState.addEndlessBalloon(
-      replacement.balloonId,
-      hp: replacement.maxHp,
-      isFake: replacement.isFake,
-    );
+    sessionState.addEndlessBalloon(replacement.balloonId);
     world.add(replacement);
   }
 
@@ -832,6 +823,12 @@ class PoppopGame extends FlameGame {
     } finally {
       if (operation == _operationEpoch) _restartInFlight = false;
     }
+  }
+
+  void finishEndless() {
+    if (_shutdown || !endlessMode || !sessionState.finishEndless()) return;
+    _removeGameplayComponents();
+    pauseEngine();
   }
 
   Future<void> restartStageOne({bool resume = true}) =>

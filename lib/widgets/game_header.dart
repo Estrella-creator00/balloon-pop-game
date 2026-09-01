@@ -161,14 +161,16 @@ class GameHeader extends StatelessWidget {
                             color: const Color(0xFFE59A00),
                           ),
                           const _HudDivider(),
-                          _HudMetric(
-                            key: const ValueKey('hud-remaining'),
-                            icon: Icons.bubble_chart_rounded,
-                            text: value.remainingText ??
-                                '남은 풍선  ${value.remaining}',
-                            color: const Color(0xFF7354E8),
-                          ),
-                          const _HudDivider(),
+                          if (value.remainingText != '') ...[
+                            _HudMetric(
+                              key: const ValueKey('hud-remaining'),
+                              icon: Icons.bubble_chart_rounded,
+                              text: value.remainingText ??
+                                  '남은 풍선  ${value.remaining}',
+                              color: const Color(0xFF7354E8),
+                            ),
+                            const _HudDivider(),
+                          ],
                           _HudMetric(
                             key: const ValueKey('hud-time'),
                             icon: Icons.timer_rounded,

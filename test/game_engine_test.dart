@@ -417,60 +417,46 @@ void main() {
     expect(session.score, 12);
   });
 
-  test('endless difficulty reuses bounded production mechanics', () {
-    final early = EndlessModeRules.profileFor(
-      record: 19,
-      spawnOrdinal: 3,
-      activeFakeCount: 0,
-    );
-    final middle = EndlessModeRules.profileFor(
-      record: 20,
-      spawnOrdinal: 4,
-      activeFakeCount: 0,
-    );
-    final late = EndlessModeRules.profileFor(
-      record: 40,
-      spawnOrdinal: 8,
-      activeFakeCount: 0,
-    );
-    final capped = EndlessModeRules.profileFor(
-      record: 10000,
-      spawnOrdinal: 12,
-      activeFakeCount: EndlessModeRules.activeFakeLimit,
-    );
+  test('endless profiles stay one-hit real at every score boundary', () {
+    final profiles = <EndlessBalloonProfile>[
+      EndlessModeRules.profileFor(record: 0, spawnOrdinal: 1),
+      EndlessModeRules.profileFor(record: 19, spawnOrdinal: 3),
+      EndlessModeRules.profileFor(record: 20, spawnOrdinal: 4),
+      EndlessModeRules.profileFor(record: 39, spawnOrdinal: 7),
+      EndlessModeRules.profileFor(record: 40, spawnOrdinal: 8),
+      EndlessModeRules.profileFor(record: 100, spawnOrdinal: 12),
+      EndlessModeRules.profileFor(record: 10000, spawnOrdinal: 15),
+    ];
 
-    expect(early.requiredHits, 1);
-    expect(early.isFake, isFalse);
-    expect(middle.requiredHits, 2);
-    expect(late.isFake, isTrue);
-    expect(capped.isFake, isFalse);
+    for (final profile in profiles) {
+      expect(profile.requiredHits, 1);
+      expect(profile.isFake, isFalse);
+    }
+    final capped = profiles.last;
     expect(capped.speed, EndlessModeRules.maximumSpeed);
     expect(EndlessModeRules.activeBalloonLimit, 6);
   });
 
-  test('endless session counts final real pops and ends on third fake', () {
+  test('endless session counts one per pop and only explicit finish ends it',
+      () {
     final session = GameSessionState();
     session.startEndless(
-      <int, int>{1: 1, 2: 2},
-      fakeIds: <int>{3, 4, 5},
+      <int, int>{1: 2, 2: 7},
       generation: 9,
     );
 
-    expect(session.hitBalloon(2), BalloonHitResult.hit);
-    expect(session.score, 0);
-    expect(session.hitBalloon(2), BalloonHitResult.popped);
+    expect(session.fakeCount, 0);
+    expect(session.hitBalloon(1), BalloonHitResult.popped);
     expect(session.score, 1);
-    session.addEndlessBalloon(6, hp: 1, isFake: false);
-    expect(session.hitBalloon(3), BalloonHitResult.fakeHit);
-    expect(session.endlessMistakes, 1);
+    session.addEndlessBalloon(3);
+    expect(session.balloonHpFor(3), 1);
+    expect(session.hitBalloon(2), BalloonHitResult.popped);
+    expect(session.score, 2);
     expect(session.phase, GameSessionPhase.playing);
-    expect(session.hitBalloon(4), BalloonHitResult.fakeHit);
-    expect(session.endlessMistakes, 2);
-    expect(session.phase, GameSessionPhase.playing);
-    expect(session.hitBalloon(5), BalloonHitResult.fakeHit);
-    expect(session.endlessMistakes, EndlessModeRules.mistakeLimit);
+    expect(session.finishEndless(), isTrue);
     expect(session.phase, GameSessionPhase.endlessComplete);
-    expect(session.hitBalloon(6), BalloonHitResult.ignored);
+    expect(session.finishEndless(), isFalse);
+    expect(session.hitBalloon(3), BalloonHitResult.ignored);
   });
 
   test('endless best last and intro storage are isolated', () {
@@ -1602,20 +1588,28 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(metrics.sessionNotificationCount, notificationsBeforeMovement);
 
-    while (session.endlessMistakes < EndlessModeRules.mistakeLimit) {
-      var fakes = game.balloonComponents.where((item) => item.isFake).toList();
-      while (fakes.isEmpty) {
-        final target =
-            game.balloonComponents.firstWhere((item) => !item.isFake);
-        while (session.balloonHpFor(target.balloonId) > 0) {
-          target.requestHit();
-        }
-        await tester.pump();
-        fakes = game.balloonComponents.where((item) => item.isFake).toList();
-      }
-      fakes.first.requestHit();
-      await tester.pump();
-    }
+    expect(find.textContaining('실수'), findsNothing);
+    expect(find.byKey(const ValueKey('hud-remaining')), findsNothing);
+    expect(find.text('무한 팝'), findsOneWidget);
+    expect(find.text('기록  0'), findsOneWidget);
+    expect(find.text('시간  ∞'), findsOneWidget);
+    final firstTarget = game.balloonComponents.first;
+    expect(firstTarget.maxHp, 1);
+    expect(firstTarget.isFake, isFalse);
+    expect(firstTarget.requestHit(), isTrue);
+    await tester.pump();
+    expect(session.score, 1);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(saveCalls, 0);
+
+    await tester.tap(find.byKey(const ValueKey('end-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '끝내기'));
+    await tester.pump();
 
     expect(find.byKey(const ValueKey('endless-current-score')), findsOneWidget);
     expect(find.byKey(const ValueKey('endless-best-score')), findsOneWidget);
@@ -1628,23 +1622,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.byKey(const ValueKey('endless-current-score')), findsNothing);
     expect(session.score, 0);
-    expect(session.endlessMistakes, 0);
     expect(game.activeBalloonCount, EndlessModeRules.activeBalloonLimit);
     expect(metrics.activeGameInstances, 1);
     expect(metrics.activeGameWidgetInstances, 1);
 
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    await tester.pump();
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump();
     expect(saveCalls, 1);
 
-    final exitTarget = game.balloonComponents.firstWhere(
-      (item) => !item.isFake,
-    );
-    while (session.balloonHpFor(exitTarget.balloonId) > 0) {
-      exitTarget.requestHit();
-    }
+    final exitTarget = game.balloonComponents.first;
+    expect(exitTarget.requestHit(), isTrue);
     await tester.pump();
     final exitScore = session.score;
     await tester.tap(find.byKey(const ValueKey('end-button')));
@@ -1653,6 +1638,7 @@ void main() {
     await tester.pump();
     expect(saveCalls, 2);
     expect(ProgressStorage.endlessLastScore(), exitScore);
+    expect(find.byKey(const ValueKey('endless-current-score')), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -2809,57 +2795,43 @@ void main() {
   });
 
   testWidgets(
-      'endless game keeps bounded slots and cleans restart and terminal state',
+      'endless game keeps six one-hit real slots through 200 pops and restart',
       (tester) async {
     final harness = await _pumpEndless(tester);
     expect(
         harness.game.activeBalloonCount, EndlessModeRules.activeBalloonLimit);
     expect(harness.game.isComponentStateSynchronized, isTrue);
 
-    for (var pop = 0; pop < 65; pop++) {
-      final target = harness.game.balloonComponents.firstWhere(
-        (balloon) => !balloon.isFake,
-      );
-      while (harness.session.balloonHpFor(target.balloonId) > 0) {
-        expect(target.requestHit(), isTrue);
-      }
+    for (var pop = 0; pop < 200; pop++) {
+      final target = harness.game.balloonComponents.first;
+      expect(target.isFake, isFalse);
+      expect(target.maxHp, 1);
+      expect(harness.session.balloonHpFor(target.balloonId), 1);
+      expect(target.requestHit(), isTrue);
       await tester.pump();
       expect(
           harness.game.activeBalloonCount, EndlessModeRules.activeBalloonLimit);
-      expect(harness.session.fakeCount,
-          lessThanOrEqualTo(EndlessModeRules.activeFakeLimit));
+      expect(harness.session.fakeCount, 0);
+      expect(
+        harness.game.balloonComponents.every(
+          (balloon) => !balloon.isFake && balloon.maxHp == 1,
+        ),
+        isTrue,
+      );
       expect(harness.game.activeEffectCount, lessThanOrEqualTo(12));
+      expect(harness.game.activeParticleCount, lessThanOrEqualTo(72));
       expect(harness.game.isComponentStateSynchronized, isTrue);
     }
-    expect(harness.session.score, 65);
+    expect(harness.session.score, 200);
+    expect(harness.session.phase, GameSessionPhase.playing);
 
-    while (harness.session.endlessMistakes < EndlessModeRules.mistakeLimit) {
-      var fakes = harness.game.balloonComponents
-          .where((balloon) => balloon.isFake)
-          .toList();
-      while (fakes.isEmpty) {
-        final target = harness.game.balloonComponents.firstWhere(
-          (balloon) => !balloon.isFake,
-        );
-        while (harness.session.balloonHpFor(target.balloonId) > 0) {
-          target.requestHit();
-        }
-        await tester.pump();
-        fakes = harness.game.balloonComponents
-            .where((balloon) => balloon.isFake)
-            .toList();
-      }
-      expect(fakes.first.requestHit(), isTrue);
-      await tester.pump();
-    }
-
+    harness.game.finishEndless();
     expect(harness.session.phase, GameSessionPhase.endlessComplete);
     expect(harness.game.activeBalloonCount, 0);
     expect(harness.game.activeEffectCount, 0);
     await harness.game.restartEndless();
     await tester.pump();
     expect(harness.session.score, 0);
-    expect(harness.session.endlessMistakes, 0);
     expect(
         harness.game.activeBalloonCount, EndlessModeRules.activeBalloonLimit);
     expect(harness.game.isComponentStateSynchronized, isTrue);

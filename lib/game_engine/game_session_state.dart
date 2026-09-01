@@ -27,7 +27,6 @@ class GameSessionState extends ChangeNotifier {
   int? _stage30RealBossId;
   int _stage30SharedHp = 0;
   bool _isEndless = false;
-  int _endlessMistakes = 0;
   bool _disposed = false;
 
   GameSessionPhase get phase => _phase;
@@ -56,7 +55,6 @@ class GameSessionState extends ChangeNotifier {
   bool get isPlaying => _phase == GameSessionPhase.playing;
   bool get isDisposed => _disposed;
   bool get isEndless => _isEndless;
-  int get endlessMistakes => _endlessMistakes;
   Set<int> get activeBalloonIds =>
       Set<int>.unmodifiable(<int>{..._targetHp.keys, ..._fakeIds});
   Set<int> get targetBalloonIds => Set<int>.unmodifiable(_targetHp.keys);
@@ -78,12 +76,10 @@ class GameSessionState extends ChangeNotifier {
         stage30RealBossId: stage30RealBossId,
         generation: generation,
         isEndless: isEndless,
-        endlessMistakes: endlessMistakes,
       );
 
   void startEndless(
     Map<int, int> targetHp, {
-    Set<int> fakeIds = const <int>{},
     int generation = 0,
   }) {
     if (_disposed) return;
@@ -92,23 +88,18 @@ class GameSessionState extends ChangeNotifier {
     _lastClearBonus = 0;
     _updateCount = 0;
     _isEndless = true;
-    _endlessMistakes = 0;
     _beginStage(
       endlessPreparationStage,
-      targetHp,
-      fakeIds,
+      <int, int>{for (final id in targetHp.keys) id: 1},
+      const <int>{},
       const <int, int>{},
       generation,
     );
   }
 
-  void addEndlessBalloon(int id, {required int hp, required bool isFake}) {
+  void addEndlessBalloon(int id) {
     if (_disposed || !_isEndless || _phase != GameSessionPhase.playing) return;
-    if (isFake) {
-      _fakeIds.add(id);
-    } else {
-      _targetHp[id] = hp;
-    }
+    _targetHp[id] = 1;
     notifyListeners();
   }
 
@@ -159,7 +150,6 @@ class GameSessionState extends ChangeNotifier {
   ) {
     if (definition.stage != 0) {
       _isEndless = false;
-      _endlessMistakes = 0;
     }
     _definition = definition;
     _generation = generation;
@@ -201,15 +191,6 @@ class GameSessionState extends ChangeNotifier {
       return BalloonHitResult.ignored;
     }
     if (_fakeIds.remove(id)) {
-      if (_isEndless) {
-        _endlessMistakes++;
-        if (_endlessMistakes >= EndlessModeRules.mistakeLimit) {
-          _phase = GameSessionPhase.endlessComplete;
-          _clearLogicalObjects();
-        }
-        notifyListeners();
-        return BalloonHitResult.fakeHit;
-      }
       _applyTimePenalty(definition.balloonRule.fakePenaltySeconds);
       notifyListeners();
       return BalloonHitResult.fakeHit;
@@ -375,8 +356,20 @@ class GameSessionState extends ChangeNotifier {
     _clearLogicalObjects();
     _phase = GameSessionPhase.ready;
     _isEndless = false;
-    _endlessMistakes = 0;
     notifyListeners();
+  }
+
+  bool finishEndless() {
+    if (_disposed ||
+        !_isEndless ||
+        (_phase != GameSessionPhase.playing &&
+            _phase != GameSessionPhase.paused)) {
+      return false;
+    }
+    _clearLogicalObjects();
+    _phase = GameSessionPhase.endlessComplete;
+    notifyListeners();
+    return true;
   }
 
   @override

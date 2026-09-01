@@ -142,8 +142,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
         controlsEnabled: session.phase == GameSessionPhase.playing,
         stageLabel: widget.endlessMode ? '무한 팝' : null,
         scoreText: widget.endlessMode ? '기록  ${session.score}' : null,
-        remainingText:
-            widget.endlessMode ? '실수  ${session.endlessMistakes}/3' : null,
+        remainingText: widget.endlessMode ? '' : null,
         timeText: widget.endlessMode ? '시간  ∞' : null,
       );
 
@@ -270,8 +269,10 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('게임 끝내기'),
-        content: const Text('현재 게임을 끝내고 홈으로 돌아갈까요?'),
+        title: Text(widget.endlessMode ? '무한 팝 끝내기' : '게임 끝내기'),
+        content: Text(widget.endlessMode
+            ? '현재 기록을 저장하고 도전을 끝낼까요?'
+            : '현재 게임을 끝내고 홈으로 돌아갈까요?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -286,8 +287,11 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     );
     if (!mounted) return;
     if (confirmed == true) {
-      if (widget.endlessMode) _reportEndlessRunOnce();
-      _returnResult(FlameIntegrationOutcome.exited);
+      if (widget.endlessMode) {
+        _game.finishEndless();
+      } else {
+        _returnResult(FlameIntegrationOutcome.exited);
+      }
     } else if (!wasPaused && !_backgroundPause) {
       _game.resumePreview();
     }

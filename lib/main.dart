@@ -3916,19 +3916,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('무한 팝'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('풍선을 계속 터뜨려 최고 기록에 도전하세요.'),
-            const SizedBox(height: 10),
-            const Text('가짜 풍선을 3번 누르면 도전이 끝나요.'),
-            if (!_endlessModeUnlocked) ...[
-              const SizedBox(height: 10),
-              const Text('Stage 30 완료 후 이용할 수 있어요.'),
-            ],
-          ],
-        ),
+        content: _endlessModeDescription(),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -3948,6 +3936,33 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _endlessIntroSeen = true;
     await _startFlameIntegration(1, endlessMode: true);
   }
+
+  Widget _endlessModeDescription() => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('모든 풍선은 한 번 터치하면 터져요.'),
+          const SizedBox(height: 7),
+          const Text('시간 제한과 게임오버 없이 계속 터뜨릴 수 있어요.'),
+          const SizedBox(height: 7),
+          const Text('풍선 1개마다 기록이 1 올라가요.'),
+          const SizedBox(height: 7),
+          const Text('끝내기를 누르면 현재 기록과 BEST가 저장돼요.'),
+          const SizedBox(height: 14),
+          const Text(
+            '랭킹',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            '랭킹은 추후 60초 동안 터뜨린 풍선 수로 도전할 수 있게 추가될 예정이에요.',
+          ),
+          if (!_endlessModeUnlocked) ...[
+            const SizedBox(height: 10),
+            const Text('Stage 30 완료 후 이용할 수 있어요.'),
+          ],
+        ],
+      );
 
   Widget _mainTopOverlay({
     bool enableDevCoinTap = false,
@@ -4166,6 +4181,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               width: 278,
               height: 55,
               child: CustomPaint(
+                key: const ValueKey('home-tagline-ribbon'),
                 painter: const RibbonPainter(),
                 child: const Center(
                   child: Padding(
@@ -9104,6 +9120,20 @@ class StageCardLandscapePainter extends CustomPainter {
 class RibbonPainter extends CustomPainter {
   const RibbonPainter();
 
+  @visibleForTesting
+  static Path bodyPath(Size size) {
+    final left = size.width * 0.09;
+    final right = size.width * 0.91;
+    final centerX = size.width / 2;
+    return Path()
+      ..moveTo(left, size.height * 0.25)
+      ..quadraticBezierTo(
+          centerX, size.height * 0.03, right, size.height * 0.25)
+      ..lineTo(right, size.height * 0.87)
+      ..quadraticBezierTo(centerX, size.height * 0.65, left, size.height * 0.87)
+      ..close();
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final shadow = Paint()..color = const Color(0x663A126F);
@@ -9126,21 +9156,47 @@ class RibbonPainter extends CustomPainter {
     canvas.drawPath(leftTail, Paint()..color = _poppopRibbonOutlineColor);
     canvas.drawPath(rightTail, Paint()..color = _poppopRibbonOutlineColor);
 
-    final center = RRect.fromRectAndRadius(
-      Rect.fromLTWH(25, 4, size.width - 50, 43),
-      const Radius.circular(15),
+    final body = bodyPath(size);
+    final bodyBounds = body.getBounds();
+    canvas.drawPath(body.shift(const Offset(0, 5)), shadow);
+    canvas.drawPath(
+      body,
+      Paint()..shader = _poppopRibbonGradient.createShader(bodyBounds),
     );
-    canvas.drawRRect(center.shift(const Offset(0, 5)), shadow);
-    canvas.drawRRect(
-      center,
-      Paint()..shader = _poppopRibbonGradient.createShader(center.outerRect),
+
+    final foldPaint = Paint()..color = const Color(0xFF54239A);
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width * 0.09, size.height * 0.25)
+        ..lineTo(size.width * 0.17, size.height * 0.34)
+        ..lineTo(size.width * 0.09, size.height * 0.48)
+        ..close(),
+      foldPaint,
     );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(40, 8, size.width - 80, 7),
-        const Radius.circular(5),
-      ),
-      Paint()..color = Colors.white.withValues(alpha: 0.22),
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width * 0.91, size.height * 0.25)
+        ..lineTo(size.width * 0.83, size.height * 0.34)
+        ..lineTo(size.width * 0.91, size.height * 0.48)
+        ..close(),
+      foldPaint,
+    );
+
+    final highlight = Path()
+      ..moveTo(size.width * 0.17, size.height * 0.23)
+      ..quadraticBezierTo(
+        size.width * 0.5,
+        size.height * 0.07,
+        size.width * 0.83,
+        size.height * 0.23,
+      );
+    canvas.drawPath(
+      highlight,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.22)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.height * 0.10
+        ..strokeCap = StrokeCap.round,
     );
   }
 

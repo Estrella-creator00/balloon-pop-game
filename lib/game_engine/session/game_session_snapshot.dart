@@ -31,7 +31,6 @@ class GameSessionSnapshot {
     required this.stage30RealBossId,
     required this.generation,
     required this.isEndless,
-    required this.endlessMistakes,
   });
 
   final int stage;
@@ -48,5 +47,4 @@ class GameSessionSnapshot {
   final int? stage30RealBossId;
   final int generation;
   final bool isEndless;
-  final int endlessMistakes;
 }

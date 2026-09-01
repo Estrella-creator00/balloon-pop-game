@@ -2212,6 +2212,44 @@ void main() {
     expect(find.byType(HomeFloatingBalloons), findsOneWidget);
   });
 
+  testWidgets('home tagline ribbon uses a static upward arch in place', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pump();
+
+    final ribbon = find.byKey(const ValueKey('home-tagline-ribbon'));
+    final customPaint = tester.widget<CustomPaint>(ribbon);
+    expect(customPaint.painter, isA<RibbonPainter>());
+    expect(
+        (customPaint.painter! as RibbonPainter).shouldRepaint(
+          const RibbonPainter(),
+        ),
+        isFalse);
+    final ribbonPosition = tester.widget<Positioned>(
+      find.ancestor(of: ribbon, matching: find.byType(Positioned)).first,
+    );
+    expect(ribbonPosition.bottom, 7);
+    expect(ribbonPosition.width, 278);
+    expect(ribbonPosition.height, 55);
+    final title = tester.widget<Text>(find.text('터치해서 터뜨려!'));
+    expect(title.style!.fontSize, 22);
+    expect(title.textAlign, isNull);
+    expect(tester.getCenter(find.text('터치해서 터뜨려!')).dx,
+        closeTo(tester.getCenter(ribbon).dx, 0.01));
+
+    final path = RibbonPainter.bodyPath(const Size(278, 55));
+    expect(path.contains(const Offset(139, 9)), isTrue);
+    expect(path.contains(const Offset(27, 9)), isFalse);
+    expect(path.contains(const Offset(139, 30)), isTrue);
+    expect(path.contains(const Offset(27, 30)), isTrue);
+    expect(path.getBounds().width, closeTo(278 * 0.82, 0.01));
+
+    final recordBoard = find.byKey(const ValueKey('home-record-board'));
+    expect(tester.getSize(recordBoard).height, 88);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('home initially shows the stage page containing saved progress', (
     tester,
   ) async {
@@ -2341,6 +2379,27 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('endless-mode-info')));
     await tester.pump();
+    expect(find.text('모든 풍선은 한 번 터치하면 터져요.'), findsOneWidget);
+    expect(
+      find.text('시간 제한과 게임오버 없이 계속 터뜨릴 수 있어요.'),
+      findsOneWidget,
+    );
+    expect(find.text('풍선 1개마다 기록이 1 올라가요.'), findsOneWidget);
+    expect(
+      find.text('끝내기를 누르면 현재 기록과 BEST가 저장돼요.'),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('랭킹'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('랭킹은 추후 60초 동안 터뜨린 풍선 수로 도전할 수 있게 추가될 예정이에요.'),
+      findsOneWidget,
+    );
     expect(find.text('Stage 30 완료 후 이용할 수 있어요.'), findsOneWidget);
     expect(find.byType(FlameIntegrationGamePage), findsNothing);
     await tester.tap(find.text('닫기'));
@@ -2426,7 +2485,22 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('endless-mode-info')));
     await tester.pump();
-    expect(find.text('풍선을 계속 터뜨려 최고 기록에 도전하세요.'), findsOneWidget);
+    expect(find.text('모든 풍선은 한 번 터치하면 터져요.'), findsOneWidget);
+    expect(
+      find.text('시간 제한과 게임오버 없이 계속 터뜨릴 수 있어요.'),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('랭킹'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('랭킹은 추후 60초 동안 터뜨린 풍선 수로 도전할 수 있게 추가될 예정이에요.'),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('endless-intro-start')), findsNothing);
     await tester.tap(find.text('닫기'));
     await tester.pump();
