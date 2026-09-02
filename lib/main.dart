@@ -34,6 +34,7 @@ import 'services/purchase_service.dart';
 import 'services/settings_service.dart';
 import 'settings_page.dart';
 import 'storage/progress_storage.dart';
+import 'storage/progress_storage_runtime.dart';
 import 'widgets/game_header.dart';
 import 'widgets/poppop_logo.dart';
 
@@ -83,7 +84,9 @@ double _homeStagePreviewWidth(BoxConstraints constraints) {
   ).clamp(52.0, 62.0).toDouble();
 }
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeProgressStorage();
   final uri = Uri.base;
   runApp(PoppopAppEntry(
     engineMode: poppopEngineModeFromUri(uri),
@@ -185,12 +188,14 @@ class BalloonPopApp extends StatefulWidget {
   State<BalloonPopApp> createState() => _BalloonPopAppState();
 }
 
-class _BalloonPopAppState extends State<BalloonPopApp> {
+class _BalloonPopAppState extends State<BalloonPopApp>
+    with WidgetsBindingObserver {
   late bool _nicknameOnboardingCompleted;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     ProgressStorage.initializeNewUserCoins();
     SettingsService.applyStoredPreferences();
     _nicknameOnboardingCompleted = SettingsService.nicknameOnboardingCompleted;
@@ -199,6 +204,22 @@ class _BalloonPopAppState extends State<BalloonPopApp> {
   void _completeNicknameOnboarding() {
     if (!mounted) return;
     setState(() => _nicknameOnboardingCompleted = true);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      unawaited(flushProgressStorage());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(flushProgressStorage());
+    super.dispose();
   }
 
   @override
@@ -2566,6 +2587,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     });
     _scheduleStagePageJump(stagePage);
     _publishHeader();
+    unawaited(flushProgressStorage());
   }
 
   void _scheduleStagePageJump(int page) {
