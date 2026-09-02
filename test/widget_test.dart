@@ -6229,6 +6229,7 @@ void main() {
   );
 
   testWidgets('fake sound and haptic follow settings', (tester) async {
+    ProgressStorage.advanceNextPlayableStage(21);
     SettingsService.setSoundEnabled(false);
     SettingsService.setHapticEnabled(false);
     var hapticCount = 0;
@@ -6240,8 +6241,6 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.drag(find.byType(PageView), const Offset(-500, 0));
-    await tester.pump(const Duration(milliseconds: 350));
     await tapSectionStart(tester, 3);
     await tapGameTarget(tester, 'fake-balloon-2');
 
