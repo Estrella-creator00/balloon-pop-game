@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import 'audio/pop_sound.dart';
+import 'audio/pop_sound_runtime.dart';
 import 'balloon_background.dart';
 import 'balloon_skin_catalog.dart';
 import 'coin_purchase_page.dart';
@@ -87,6 +88,7 @@ double _homeStagePreviewWidth(BoxConstraints constraints) {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeProgressStorage();
+  await initializeNativePopSound();
   final uri = Uri.base;
   runApp(PoppopAppEntry(
     engineMode: poppopEngineModeFromUri(uri),
@@ -211,13 +213,17 @@ class _BalloonPopAppState extends State<BalloonPopApp>
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
+      pauseNativePopSound();
       unawaited(flushProgressStorage());
+    } else if (state == AppLifecycleState.resumed) {
+      resumeNativePopSound();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    stopActiveNativePopSound();
     unawaited(flushProgressStorage());
     super.dispose();
   }
@@ -2440,11 +2446,17 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             soundDefinition.popSoundAssetPath,
           }.whereType<String>().toSet()
         : <String>{};
-    await Future.wait(
-      gameplaySoundPaths.map(PopSound.prepareGameplayAsset),
-    );
+    await Future.wait([
+      ...gameplaySoundPaths.map(PopSound.prepareGameplayAsset),
+      prepareNativeSemanticGameplaySounds(
+        hasHitAsset: soundDefinition.hitSoundAssetPath != null,
+        hasPopAsset: soundDefinition.popSoundAssetPath != null,
+        popSoundKind: soundDefinition.popSoundType.name,
+      ),
+    ]);
     if (!mounted || sessionId != _flameSessionId) {
       PopSound.releaseGameplayAssets(gameplaySoundPaths);
+      releaseNativeSemanticGameplaySounds();
       return;
     }
     setState(() {});
@@ -2474,8 +2486,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     );
                   }
                 : null,
-            onAudioPause: () =>
-                PopSound.pauseGameplayAssets(gameplaySoundPaths),
+            onAudioPause: () {
+              PopSound.pauseGameplayAssets(gameplaySoundPaths);
+              stopActiveNativePopSound();
+            },
             onFeedback: (event) {
               if (_flameRouteActive && sessionId == _flameSessionId) {
                 _handleFlameGameplayFeedback(event);
@@ -2493,6 +2507,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       );
     } finally {
       PopSound.releaseGameplayAssets(gameplaySoundPaths);
+      releaseNativeSemanticGameplaySounds();
     }
     if (!mounted || sessionId != _flameSessionId) return;
     if (endlessMode) {
@@ -2587,6 +2602,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     });
     _scheduleStagePageJump(stagePage);
     _publishHeader();
+    stopActiveNativePopSound();
     unawaited(flushProgressStorage());
   }
 

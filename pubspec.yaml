@@ -7,6 +7,7 @@ environment:
   sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
+  audioplayers: ^6.8.1
   flame: ^1.38.0
   flutter:
     sdk: flutter
@@ -78,3 +79,12 @@ flutter:
     - assets/sounds/boss_clear.mp3.mp3
     - assets/sounds/shop_purchase.mp3.mp3
     - assets/sounds/shop_equip.mp3.mp3
+    - assets/sounds/native/native_basic_pop.wav
+    - assets/sounds/native/native_heart_pop.wav
+    - assets/sounds/native/native_light_tap.wav
+    - assets/sounds/native/native_fake_hit.wav
+    - assets/sounds/native/native_boss_explosion.wav
+    - assets/sounds/native/native_ghost.wav
+    - assets/sounds/native/native_crackle.wav
+    - assets/sounds/native/native_crystal.wav
+    - assets/sounds/native/native_cream.wav
