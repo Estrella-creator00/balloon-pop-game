@@ -28,7 +28,9 @@ import 'gameplay/game_sprite_cache.dart';
 import 'gameplay/gameplay_ab_test_flags.dart';
 import 'gameplay/stage_intro_definition.dart';
 import 'onboarding_page.dart';
-import 'ranking/ranking_page.dart';
+import 'ranking/online_ranking_models.dart';
+import 'ranking/online_ranking_page.dart';
+import 'ranking/online_ranking_repository.dart';
 import 'services/coin_service.dart';
 import 'services/haptic_service.dart';
 import 'services/purchase_service.dart';
@@ -104,6 +106,7 @@ class PoppopAppEntry extends StatefulWidget {
     this.integrationGameFactory,
     this.integrationDebugConfig = const FlameIntegrationDebugConfig(),
     this.integrationMetrics,
+    this.onlineRankingRepository,
   });
 
   final PoppopEngineMode engineMode;
@@ -117,6 +120,7 @@ class PoppopAppEntry extends StatefulWidget {
 
   @visibleForTesting
   final FlameIntegrationMetrics? integrationMetrics;
+  final OnlineRankingRepository? onlineRankingRepository;
 
   @override
   State<PoppopAppEntry> createState() => _PoppopAppEntryState();
@@ -144,6 +148,7 @@ class _PoppopAppEntryState extends State<PoppopAppEntry> {
         integrationGameFactory: widget.integrationGameFactory,
         integrationDebugConfig: widget.integrationDebugConfig,
         integrationMetrics: widget.integrationMetrics,
+        onlineRankingRepository: widget.onlineRankingRepository,
       );
     }
     return MaterialApp(
@@ -168,6 +173,7 @@ class BalloonPopApp extends StatefulWidget {
     this.integrationGameFactory,
     this.integrationDebugConfig = const FlameIntegrationDebugConfig(),
     this.integrationMetrics,
+    this.onlineRankingRepository,
   });
 
   @visibleForTesting
@@ -185,6 +191,7 @@ class BalloonPopApp extends StatefulWidget {
 
   @visibleForTesting
   final FlameIntegrationMetrics? integrationMetrics;
+  final OnlineRankingRepository? onlineRankingRepository;
 
   @override
   State<BalloonPopApp> createState() => _BalloonPopAppState();
@@ -247,6 +254,7 @@ class _BalloonPopAppState extends State<BalloonPopApp>
               integrationGameFactory: widget.integrationGameFactory,
               integrationDebugConfig: widget.integrationDebugConfig,
               integrationMetrics: widget.integrationMetrics,
+              onlineRankingRepository: widget.onlineRankingRepository,
             )
           : NicknameOnboardingPage(onCompleted: _completeNicknameOnboarding),
     );
@@ -1977,6 +1985,7 @@ class BalloonGamePage extends StatefulWidget {
     this.integrationGameFactory,
     this.integrationDebugConfig = const FlameIntegrationDebugConfig(),
     this.integrationMetrics,
+    this.onlineRankingRepository,
   });
 
   @visibleForTesting
@@ -1994,6 +2003,7 @@ class BalloonGamePage extends StatefulWidget {
 
   @visibleForTesting
   final FlameIntegrationMetrics? integrationMetrics;
+  final OnlineRankingRepository? onlineRankingRepository;
 
   @override
   State<BalloonGamePage> createState() => _BalloonGamePageState();
@@ -2536,6 +2546,87 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           : GamePhase.gameOver;
     });
     _publishHeader();
+  }
+
+  Future<RankedRunResult?> _startRankedChallenge(
+    RankingCategory category,
+  ) async {
+    if (!mounted ||
+        _flameRouteActive ||
+        !widget.useFlameGameplay ||
+        widget.integrationDebugConfig.enabled) {
+      return null;
+    }
+    _stopGameLoop();
+    _stageTimer?.cancel();
+    _stopwatch.stop();
+    _flameRouteActive = true;
+    final sessionId = ++_flameSessionId;
+    final skin = flamePreviewSkinFromValue(_equippedBalloonSkin.id);
+    final soundDefinition = skin.catalogDefinition;
+    final gameplaySoundPaths = PopSound.enabled
+        ? <String?>{
+            soundDefinition.hitSoundAssetPath,
+            soundDefinition.popSoundAssetPath,
+          }.whereType<String>().toSet()
+        : <String>{};
+    await Future.wait([
+      ...gameplaySoundPaths.map(PopSound.prepareGameplayAsset),
+      prepareNativeSemanticGameplaySounds(
+        hasHitAsset: soundDefinition.hitSoundAssetPath != null,
+        hasPopAsset: soundDefinition.popSoundAssetPath != null,
+        popSoundKind: soundDefinition.popSoundType.name,
+      ),
+    ]);
+    if (!mounted || sessionId != _flameSessionId) {
+      PopSound.releaseGameplayAssets(gameplaySoundPaths);
+      releaseNativeSemanticGameplaySounds();
+      return null;
+    }
+    FlameIntegrationResult? result;
+    try {
+      result = await Navigator.of(context).push<FlameIntegrationResult>(
+        MaterialPageRoute(
+          builder: (context) => FlameIntegrationGamePage(
+            initialStage: 1,
+            skin: skin,
+            sessionId: sessionId,
+            gameFactory: widget.integrationGameFactory,
+            rankedRunMode: category == RankingCategory.stage
+                ? FlameRankedRunMode.stage
+                : FlameRankedRunMode.sixtySeconds,
+            onAudioPause: () {
+              PopSound.pauseGameplayAssets(gameplaySoundPaths);
+              stopActiveNativePopSound();
+            },
+            onFeedback: (event) {
+              if (_flameRouteActive && sessionId == _flameSessionId) {
+                _handleFlameGameplayFeedback(event);
+              }
+            },
+            onStageCompleted: (_) {},
+          ),
+        ),
+      );
+    } finally {
+      PopSound.releaseGameplayAssets(gameplaySoundPaths);
+      releaseNativeSemanticGameplaySounds();
+      if (mounted && sessionId == _flameSessionId) {
+        _flameRouteActive = false;
+      }
+    }
+    if (!mounted ||
+        result == null ||
+        result.outcome == FlameIntegrationOutcome.exited) {
+      return null;
+    }
+    return RankedRunResult(
+      category: category,
+      score: result.score,
+      reachedStage: category == RankingCategory.stage ? result.stage : null,
+      cleared: category == RankingCategory.stage &&
+          result.outcome == FlameIntegrationOutcome.completed,
+    );
   }
 
   void _persistFlameStageCompletion(
@@ -3993,7 +4084,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           ),
           const SizedBox(height: 5),
           const Text(
-            '랭킹은 추후 60초 동안 터뜨린 풍선 수로 도전할 수 있게 추가될 예정이에요.',
+            '온라인 랭킹에서는 STAGE 도전 또는 60초 팝을 선택할 수 있어요. 하단 랭킹 메뉴에서 시작해 보세요.',
           ),
           if (!_endlessModeUnlocked) ...[
             const SizedBox(height: 10),
@@ -4818,8 +4909,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) =>
-            WeeklyRankingPage(currentNickname: SettingsService.nickname),
+        builder: (context) => OnlineRankingPage(
+          currentNickname: SettingsService.nickname,
+          onChallenge: _startRankedChallenge,
+          repository: widget.onlineRankingRepository,
+        ),
       ),
     );
   }

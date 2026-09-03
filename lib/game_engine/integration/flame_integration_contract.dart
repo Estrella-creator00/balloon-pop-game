@@ -32,6 +32,8 @@ class FlameStageCompletionEvent {
 
 enum FlameIntegrationOutcome { completed, failed, endlessFinished, exited }
 
+enum FlameRankedRunMode { none, stage, sixtySeconds }
+
 class EndlessRecordResult {
   const EndlessRecordResult({
     required this.score,

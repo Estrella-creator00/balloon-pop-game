@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function safeName(value) {
+      return value is string
+          && value.size() >= 2
+          && value.size() <= 16
+          && value.matches('^[가-힣A-Za-z0-9 ]{2,16}$');
+    }
+
+    function commonValid(uid, maximumScore) {
+      return request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && safeName(request.resource.data.displayName)
+          && request.resource.data.score is int
+          && request.resource.data.score >= 0
+          && request.resource.data.score <= maximumScore
+          && request.resource.data.schemaVersion == 1
+          && request.resource.data.submittedAt == request.time;
+    }
+
+    function scoreDoesNotDecrease() {
+      return request.resource.data.score >= resource.data.score;
+    }
+
+    function stageFieldsValid(uid) {
+      return request.resource.data.keys().hasOnly([
+            'uid', 'displayName', 'score', 'reachedStage', 'cleared',
+            'submittedAt', 'schemaVersion'
+          ])
+          && commonValid(uid, 600)
+          && request.resource.data.reachedStage is int
+          && request.resource.data.reachedStage >= 1
+          && request.resource.data.reachedStage <= 30
+          && request.resource.data.cleared is bool
+          && (!request.resource.data.cleared
+              || request.resource.data.reachedStage == 30);
+    }
+
+    function sixtySecondFieldsValid(uid) {
+      return request.resource.data.keys().hasOnly([
+            'uid', 'displayName', 'score', 'submittedAt', 'schemaVersion'
+          ])
+          && commonValid(uid, 10000);
+    }
+
+    function sameScoreStageMetadataIsStable() {
+      return request.resource.data.score != resource.data.score
+          || (request.resource.data.reachedStage == resource.data.reachedStage
+              && request.resource.data.cleared == resource.data.cleared);
+    }
+
+    match /leaderboards_stage_v1/{uid} {
+      allow get: if signedIn();
+      allow list: if signedIn()
+          && request.query.limit != null
+          && request.query.limit <= 100;
+      allow create: if signedIn() && stageFieldsValid(uid);
+      allow update: if signedIn()
+          && stageFieldsValid(uid)
+          && scoreDoesNotDecrease()
+          && sameScoreStageMetadataIsStable();
+      allow delete: if false;
+    }
+
+    match /leaderboards_60s_v1/{uid} {
+      allow get: if signedIn();
+      allow list: if signedIn()
+          && request.query.limit != null
+          && request.query.limit <= 100;
+      allow create: if signedIn() && sixtySecondFieldsValid(uid);
+      allow update: if signedIn()
+          && sixtySecondFieldsValid(uid)
+          && scoreDoesNotDecrease();
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

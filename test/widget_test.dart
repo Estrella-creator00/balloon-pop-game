@@ -22,6 +22,9 @@ import 'package:balloon_pop_game/coin_purchase_page.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/onboarding_page.dart';
 import 'package:balloon_pop_game/ranking/mock_ranking_repository.dart';
+import 'package:balloon_pop_game/ranking/online_ranking_models.dart';
+import 'package:balloon_pop_game/ranking/online_ranking_page.dart';
+import 'package:balloon_pop_game/ranking/online_ranking_repository.dart';
 import 'package:balloon_pop_game/ranking/ranking_entry.dart';
 import 'package:balloon_pop_game/ranking/ranking_page.dart';
 import 'package:balloon_pop_game/ranking/ranking_repository.dart';
@@ -73,6 +76,20 @@ class _BasicRenderBalloon implements BasicBalloonRenderView {
   double get visualScale => 1;
   @override
   double get spriteOpacity => 1;
+}
+
+class _WidgetRankingRepository implements OnlineRankingRepository {
+  @override
+  Future<OnlineLeaderboard> fetch(RankingCategory category) async =>
+      OnlineLeaderboard(
+        category: category,
+        entries: const [],
+        currentUser: null,
+        currentUserOutsideTop100: false,
+      );
+
+  @override
+  Future<void> submitBest(RankedRunResult result, String? nickname) async {}
 }
 
 class _BasicRenderBoss implements BossBalloonRenderView {
@@ -2445,7 +2462,9 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('랭킹은 추후 60초 동안 터뜨린 풍선 수로 도전할 수 있게 추가될 예정이에요.'),
+      find.text(
+        '온라인 랭킹에서는 STAGE 도전 또는 60초 팝을 선택할 수 있어요. 하단 랭킹 메뉴에서 시작해 보세요.',
+      ),
       findsOneWidget,
     );
     expect(find.text('Stage 30 완료 후 이용할 수 있어요.'), findsOneWidget);
@@ -2546,7 +2565,9 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('랭킹은 추후 60초 동안 터뜨린 풍선 수로 도전할 수 있게 추가될 예정이에요.'),
+      find.text(
+        '온라인 랭킹에서는 STAGE 도전 또는 60초 팝을 선택할 수 있어요. 하단 랭킹 메뉴에서 시작해 보세요.',
+      ),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('endless-intro-start')), findsNothing);
@@ -2982,65 +3003,25 @@ void main() {
   );
 
   testWidgets(
-    'home ranking button opens R-01 with ordered top 20 and returns',
+    'home ranking button opens the online R-01 and returns',
     (tester) async {
       SettingsService.saveNickname('시원이');
-      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pumpWidget(BalloonPopApp(
+        onlineRankingRepository: _WidgetRankingRepository(),
+      ));
       await tester.pump();
 
       await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
       await tester.pumpAndSettle();
 
-      expect(find.byType(WeeklyRankingPage), findsOneWidget);
-      expect(find.byKey(const ValueKey('ranking-week-info')), findsOneWidget);
+      expect(find.byType(OnlineRankingPage), findsOneWidget);
+      expect(find.text('STAGE 도전'), findsWidgets);
+      expect(find.text('60초 팝'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('previous-week-leader-card')),
+        find.byKey(const ValueKey('online-ranking-challenge')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey('current-week-leader-card')),
-        findsOneWidget,
-      );
-      final rows = tester.widgetList<RankingEntryRow>(
-        find.byType(RankingEntryRow),
-      );
-      expect(rows, hasLength(20));
-      expect(
-        rows.map((row) => row.entry.rank),
-        orderedEquals(List.generate(20, (index) => index + 1)),
-      );
-      final scores = rows.map((row) => row.entry.score).toList();
-      expect(
-        scores,
-        orderedEquals([...scores]..sort((a, b) => b.compareTo(a))),
-      );
-      expect(
-        find.byKey(const ValueKey('ranking-top-accent-1')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('ranking-top-accent-2')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('ranking-top-accent-3')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('ranking-current-user-badge')),
-        findsOneWidget,
-      );
-
-      await tester.ensureVisible(find.byKey(const ValueKey('ranking-row-20')));
-      await tester.pump();
-      expect(find.byKey(const ValueKey('ranking-row-20')), findsOneWidget);
       expect(tester.takeException(), isNull);
-
-      await tester.drag(
-        find.byKey(const ValueKey('ranking-scroll')),
-        const Offset(0, 1800),
-      );
-      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('ranking-back-button')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
@@ -3154,7 +3135,9 @@ void main() {
   testWidgets('home and store open the same settings page and return', (
     tester,
   ) async {
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(BalloonPopApp(
+      onlineRankingRepository: _WidgetRankingRepository(),
+    ));
     await tester.pump();
 
     await openSettings(tester);
@@ -3692,11 +3675,13 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('home-nav-ranking')));
-    await tester.pumpAndSettle();
-    expect(find.byType(WeeklyRankingPage), findsOneWidget);
-    expect(find.text('주간 랭킹'), findsOneWidget);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(OnlineRankingPage), findsOneWidget);
+    expect(find.text('STAGE 도전'), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('ranking-back-button')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     await tester.tap(find.byKey(const ValueKey('home-nav-home')));
     await tester.pump();

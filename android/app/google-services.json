@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "855480037727",
+    "project_id": "poppop-c8bc6",
+    "storage_bucket": "poppop-c8bc6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:855480037727:android:e47392b544bb2c74ff46ea",
+        "android_client_info": {
+          "package_name": "com.estrellacreator00.poppop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArY8481sbS04ygxhpcNEBlTmtIODN7UvQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

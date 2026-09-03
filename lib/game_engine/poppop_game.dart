@@ -39,6 +39,7 @@ class PoppopGame extends FlameGame {
     this.showDiagnostics = true,
     this.diagnosticsTextProvider,
     this.endlessMode = false,
+    this.rankedSixtySecondMode = false,
     BasicBalloonSpriteCache? spriteCache,
   })  : stageDefinitions = stageDefinitions ?? flamePreviewStages,
         spriteCache = spriteCache ?? BasicBalloonSpriteCache(),
@@ -62,6 +63,7 @@ class PoppopGame extends FlameGame {
   final bool showDiagnostics;
   final DiagnosticsTextProvider? diagnosticsTextProvider;
   final bool endlessMode;
+  final bool rankedSixtySecondMode;
   final BasicBalloonSpriteCache spriteCache;
   final Map<int, BalloonComponent> _balloons = <int, BalloonComponent>{};
   final Map<int, BossBalloonComponent> _bosses = <int, BossBalloonComponent>{};
@@ -125,6 +127,7 @@ class PoppopGame extends FlameGame {
       sessionState.matchesActiveComponentIds(_balloons.keys) &&
       sessionState.matchesActiveBossComponentIds(_bosses.keys);
   int get endlessActiveLimit => EndlessModeRules.activeBalloonLimit;
+  bool get _isContinuousMode => endlessMode || rankedSixtySecondMode;
 
   @override
   Color backgroundColor() => renderLegendaryBackground
@@ -143,7 +146,7 @@ class PoppopGame extends FlameGame {
         textProvider: diagnosticsTextProvider ?? _diagnosticsText,
       ));
     }
-    if (endlessMode) {
+    if (_isContinuousMode) {
       await _installEndless(operation: ++_operationEpoch);
     } else {
       final requested = stageDefinitions.where((d) => d.stage == initialStage);
@@ -187,6 +190,7 @@ class PoppopGame extends FlameGame {
         }
       case GameSessionPhase.coreClear:
       case GameSessionPhase.endlessComplete:
+      case GameSessionPhase.rankedSixtySecondComplete:
         if (_popEffects.isNotEmpty ||
             _legendaryEffects.isNotEmpty ||
             _backgroundPulses.isNotEmpty) {
@@ -336,8 +340,11 @@ class PoppopGame extends FlameGame {
     _endlessSpawnOrdinal = 0;
     final generation = ++_componentGeneration;
     try {
+      final preparation = rankedSixtySecondMode
+          ? rankedSixtySecondPreparationStage
+          : endlessPreparationStage;
       await skinRuntime.prepareForStage(
-        endlessPreparationStage,
+        preparation,
         bossInitialSize: 0,
       );
     } catch (_) {
@@ -347,7 +354,10 @@ class PoppopGame extends FlameGame {
     if (_shutdown || operation != _operationEpoch) return;
     _installLegendaryBackground();
     final balloons = <BalloonComponent>[];
-    for (var slot = 0; slot < EndlessModeRules.activeBalloonLimit; slot++) {
+    final activeLimit = rankedSixtySecondMode
+        ? RankedSixtySecondRules.activeBalloonLimit
+        : EndlessModeRules.activeBalloonLimit;
+    for (var slot = 0; slot < activeLimit; slot++) {
       balloons.add(_createEndlessBalloon(
         slot: slot,
         generation: generation,
@@ -363,10 +373,12 @@ class PoppopGame extends FlameGame {
       return;
     }
     _balloons.addEntries(balloons.map((b) => MapEntry(b.balloonId, b)));
-    sessionState.startEndless(
-      <int, int>{for (final b in balloons) b.balloonId: b.maxHp},
-      generation: generation,
-    );
+    final targetHp = <int, int>{for (final b in balloons) b.balloonId: b.maxHp};
+    if (rankedSixtySecondMode) {
+      sessionState.startRankedSixtySeconds(targetHp, generation: generation);
+    } else {
+      sessionState.startEndless(targetHp, generation: generation);
+    }
   }
 
   BalloonComponent _createEndlessBalloon({
@@ -375,10 +387,14 @@ class PoppopGame extends FlameGame {
     required int record,
   }) {
     final id = generation * 100000 + _endlessSpawnOrdinal++;
-    final profile = EndlessModeRules.profileFor(
-      record: record,
-      spawnOrdinal: _endlessSpawnOrdinal,
-    );
+    final profile = rankedSixtySecondMode
+        ? RankedSixtySecondRules.profileFor(
+            spawnOrdinal: _endlessSpawnOrdinal,
+          )
+        : EndlessModeRules.profileFor(
+            record: record,
+            spawnOrdinal: _endlessSpawnOrdinal,
+          );
     final balloon = stageSpawner.createEndless(
       profile: profile,
       slot: slot,
@@ -402,7 +418,7 @@ class PoppopGame extends FlameGame {
   }
 
   void _replaceEndlessBalloon(BalloonComponent removed) {
-    if (_shutdown || !endlessMode || !sessionState.isPlaying) return;
+    if (_shutdown || !_isContinuousMode || !sessionState.isPlaying) return;
     final slot = _endlessSlotByBalloonId.remove(removed.balloonId);
     if (slot == null) return;
     final replacement = _createEndlessBalloon(
@@ -411,7 +427,7 @@ class PoppopGame extends FlameGame {
       record: sessionState.score,
     );
     _balloons[replacement.balloonId] = replacement;
-    sessionState.addEndlessBalloon(replacement.balloonId);
+    sessionState.addContinuousBalloon(replacement.balloonId);
     world.add(replacement);
   }
 
@@ -464,7 +480,7 @@ class PoppopGame extends FlameGame {
     _balloons.remove(balloon.balloonId);
     balloon.markRemoved();
     balloon.removeFromParent();
-    if (endlessMode) {
+    if (_isContinuousMode) {
       if (sessionState.phase == GameSessionPhase.endlessComplete) {
         _removeGameplayComponents();
         pauseEngine();
@@ -738,7 +754,7 @@ class PoppopGame extends FlameGame {
     _balloons.remove(balloon.balloonId);
     balloon.markRemoved();
     balloon.removeFromParent();
-    if (endlessMode) {
+    if (_isContinuousMode) {
       _replaceEndlessBalloon(balloon);
       return;
     }
@@ -808,7 +824,7 @@ class PoppopGame extends FlameGame {
     }
   }
 
-  Future<void> restartGame({bool resume = true}) => endlessMode
+  Future<void> restartGame({bool resume = true}) => _isContinuousMode
       ? restartEndless(resume: resume)
       : jumpToStage(1, resume: resume);
   Future<void> restartEndless({bool resume = true}) async {
@@ -847,7 +863,7 @@ class PoppopGame extends FlameGame {
     try {
       _removeGameplayComponents();
       await skinRuntime.switchSkin(skin);
-      if (endlessMode) {
+      if (_isContinuousMode) {
         await _installEndless(operation: operation);
       } else {
         final definition = stageDefinitions.firstWhere(

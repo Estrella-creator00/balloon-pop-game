@@ -10,6 +10,7 @@ enum GameSessionPhase {
   bossClear,
   coreClear,
   endlessComplete,
+  rankedSixtySecondComplete,
   failed,
   disposed,
 }
@@ -31,6 +32,7 @@ class GameSessionSnapshot {
     required this.stage30RealBossId,
     required this.generation,
     required this.isEndless,
+    this.isRankedSixtySeconds = false,
   });
 
   final int stage;
@@ -47,4 +49,5 @@ class GameSessionSnapshot {
   final int? stage30RealBossId;
   final int generation;
   final bool isEndless;
+  final bool isRankedSixtySeconds;
 }

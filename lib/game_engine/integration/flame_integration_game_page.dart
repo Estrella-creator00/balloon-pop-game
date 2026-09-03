@@ -35,6 +35,7 @@ class FlameIntegrationGamePage extends StatefulWidget {
     this.debugConfig = const FlameIntegrationDebugConfig(),
     this.metrics,
     this.endlessMode = false,
+    this.rankedRunMode = FlameRankedRunMode.none,
     this.onEndlessFinished,
   });
 
@@ -50,6 +51,7 @@ class FlameIntegrationGamePage extends StatefulWidget {
   @visibleForTesting
   final FlameIntegrationMetrics? metrics;
   final bool endlessMode;
+  final FlameRankedRunMode rankedRunMode;
   final EndlessRecordCallback? onEndlessFinished;
 
   @override
@@ -100,6 +102,8 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
           diagnosticsTextProvider:
               widget.debugConfig.enabled ? _diagnosticsText : null,
           endlessMode: widget.endlessMode,
+          rankedSixtySecondMode:
+              widget.rankedRunMode == FlameRankedRunMode.sixtySeconds,
         );
     _metrics.activeGameInstances++;
   }
@@ -140,9 +144,21 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
             : session.remainingBalloons,
         secondsLeft: session.secondsLeft,
         controlsEnabled: session.phase == GameSessionPhase.playing,
-        stageLabel: widget.endlessMode ? '무한 팝' : null,
-        scoreText: widget.endlessMode ? '기록  ${session.score}' : null,
-        remainingText: widget.endlessMode ? '' : null,
+        stageLabel: widget.endlessMode
+            ? '무한 팝'
+            : widget.rankedRunMode == FlameRankedRunMode.sixtySeconds
+                ? '60초 팝'
+                : widget.rankedRunMode == FlameRankedRunMode.stage
+                    ? 'STAGE 도전'
+                    : null,
+        scoreText: widget.endlessMode ||
+                widget.rankedRunMode == FlameRankedRunMode.sixtySeconds
+            ? '기록  ${session.score}'
+            : null,
+        remainingText: widget.endlessMode ||
+                widget.rankedRunMode == FlameRankedRunMode.sixtySeconds
+            ? ''
+            : null,
         timeText: widget.endlessMode ? '시간  ∞' : null,
       );
 
@@ -185,6 +201,11 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
       widget.onAudioPause?.call();
       _game.pausePreview();
       setState(() {});
+      return;
+    }
+
+    if (phase == GameSessionPhase.rankedSixtySecondComplete && phaseChanged) {
+      _returnResult(FlameIntegrationOutcome.completed);
       return;
     }
 
@@ -269,10 +290,16 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(widget.endlessMode ? '무한 팝 끝내기' : '게임 끝내기'),
+        title: Text(widget.endlessMode
+            ? '무한 팝 끝내기'
+            : widget.rankedRunMode != FlameRankedRunMode.none
+                ? '랭킹 도전 끝내기'
+                : '게임 끝내기'),
         content: Text(widget.endlessMode
             ? '현재 기록을 저장하고 도전을 끝낼까요?'
-            : '현재 게임을 끝내고 홈으로 돌아갈까요?'),
+            : widget.rankedRunMode != FlameRankedRunMode.none
+                ? '중간에 끝내면 기록은 제출되지 않아요.'
+                : '현재 게임을 끝내고 홈으로 돌아갈까요?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

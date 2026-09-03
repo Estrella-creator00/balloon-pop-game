@@ -27,6 +27,7 @@ class GameSessionState extends ChangeNotifier {
   int? _stage30RealBossId;
   int _stage30SharedHp = 0;
   bool _isEndless = false;
+  bool _isRankedSixtySeconds = false;
   bool _disposed = false;
 
   GameSessionPhase get phase => _phase;
@@ -55,6 +56,7 @@ class GameSessionState extends ChangeNotifier {
   bool get isPlaying => _phase == GameSessionPhase.playing;
   bool get isDisposed => _disposed;
   bool get isEndless => _isEndless;
+  bool get isRankedSixtySeconds => _isRankedSixtySeconds;
   Set<int> get activeBalloonIds =>
       Set<int>.unmodifiable(<int>{..._targetHp.keys, ..._fakeIds});
   Set<int> get targetBalloonIds => Set<int>.unmodifiable(_targetHp.keys);
@@ -76,6 +78,7 @@ class GameSessionState extends ChangeNotifier {
         stage30RealBossId: stage30RealBossId,
         generation: generation,
         isEndless: isEndless,
+        isRankedSixtySeconds: isRankedSixtySeconds,
       );
 
   void startEndless(
@@ -88,6 +91,7 @@ class GameSessionState extends ChangeNotifier {
     _lastClearBonus = 0;
     _updateCount = 0;
     _isEndless = true;
+    _isRankedSixtySeconds = false;
     _beginStage(
       endlessPreparationStage,
       <int, int>{for (final id in targetHp.keys) id: 1},
@@ -97,10 +101,39 @@ class GameSessionState extends ChangeNotifier {
     );
   }
 
-  void addEndlessBalloon(int id) {
-    if (_disposed || !_isEndless || _phase != GameSessionPhase.playing) return;
+  void addContinuousBalloon(int id) {
+    if (_disposed ||
+        (!_isEndless && !_isRankedSixtySeconds) ||
+        _phase != GameSessionPhase.playing) {
+      return;
+    }
     _targetHp[id] = 1;
     notifyListeners();
+  }
+
+  void addEndlessBalloon(int id) {
+    if (!_isEndless) return;
+    addContinuousBalloon(id);
+  }
+
+  void startRankedSixtySeconds(
+    Map<int, int> targetHp, {
+    int generation = 0,
+  }) {
+    if (_disposed) return;
+    _score = 0;
+    _stageClearCount = 0;
+    _lastClearBonus = 0;
+    _updateCount = 0;
+    _isEndless = false;
+    _isRankedSixtySeconds = true;
+    _beginStage(
+      rankedSixtySecondPreparationStage,
+      <int, int>{for (final id in targetHp.keys) id: 1},
+      const <int>{},
+      const <int, int>{},
+      generation,
+    );
   }
 
   void startNewGame(
@@ -111,6 +144,7 @@ class GameSessionState extends ChangeNotifier {
     int generation = 0,
   }) {
     if (_disposed) return;
+    _isRankedSixtySeconds = false;
     _score = 0;
     _stageClearCount = 0;
     _lastClearBonus = 0;
@@ -150,6 +184,7 @@ class GameSessionState extends ChangeNotifier {
   ) {
     if (definition.stage != 0) {
       _isEndless = false;
+      _isRankedSixtySeconds = false;
     }
     _definition = definition;
     _generation = generation;
@@ -204,7 +239,7 @@ class GameSessionState extends ChangeNotifier {
     }
     _targetHp.remove(id);
     _score += definition.scoreRule.pointsPerBalloon;
-    if (_isEndless) {
+    if (_isEndless || _isRankedSixtySeconds) {
       notifyListeners();
       return BalloonHitResult.popped;
     }
@@ -280,7 +315,9 @@ class GameSessionState extends ChangeNotifier {
     _preciseSecondsLeft = max(0, _preciseSecondsLeft - seconds);
     _secondsLeft = _preciseSecondsLeft.ceil();
     if (_secondsLeft == 0) {
-      _phase = GameSessionPhase.failed;
+      _phase = _isRankedSixtySeconds
+          ? GameSessionPhase.rankedSixtySecondComplete
+          : GameSessionPhase.failed;
       _clearLogicalObjects();
     }
   }
@@ -332,7 +369,9 @@ class GameSessionState extends ChangeNotifier {
     if (displayed == _secondsLeft) return;
     _secondsLeft = displayed;
     if (_secondsLeft == 0) {
-      _phase = GameSessionPhase.failed;
+      _phase = _isRankedSixtySeconds
+          ? GameSessionPhase.rankedSixtySecondComplete
+          : GameSessionPhase.failed;
       _clearLogicalObjects();
     }
     notifyListeners();
@@ -356,6 +395,7 @@ class GameSessionState extends ChangeNotifier {
     _clearLogicalObjects();
     _phase = GameSessionPhase.ready;
     _isEndless = false;
+    _isRankedSixtySeconds = false;
     notifyListeners();
   }
 
