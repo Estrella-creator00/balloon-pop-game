@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/poppop_splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/poppop_splash_logo</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/poppop_splash_background</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>
