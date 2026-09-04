@@ -9,7 +9,8 @@ service cloud.firestore {
       return value is string
           && value.size() >= 2
           && value.size() <= 16
-          && value.matches('^[가-힣A-Za-z0-9 ]{2,16}$');
+          && value.matches(
+              '^[가-힣A-Za-z0-9][가-힣A-Za-z0-9 ]{0,14}[가-힣A-Za-z0-9]$');
     }
 
     function commonValid(uid, maximumScore) {
@@ -45,13 +46,14 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly([
             'uid', 'displayName', 'score', 'submittedAt', 'schemaVersion'
           ])
-          && commonValid(uid, 10000);
+          && commonValid(uid, 600);
     }
 
-    function sameScoreStageMetadataIsStable() {
+    function sameScoreStageMetadataDoesNotRegress() {
       return request.resource.data.score != resource.data.score
-          || (request.resource.data.reachedStage == resource.data.reachedStage
-              && request.resource.data.cleared == resource.data.cleared);
+          || (request.resource.data.reachedStage >= resource.data.reachedStage
+              && (!resource.data.cleared
+                  || request.resource.data.cleared));
     }
 
     match /leaderboards_stage_v1/{uid} {
@@ -63,7 +65,7 @@ service cloud.firestore {
       allow update: if signedIn()
           && stageFieldsValid(uid)
           && scoreDoesNotDecrease()
-          && sameScoreStageMetadataIsStable();
+          && sameScoreStageMetadataDoesNotRegress();
       allow delete: if false;
     }
 
