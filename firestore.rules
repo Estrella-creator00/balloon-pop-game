@@ -46,7 +46,7 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly([
             'uid', 'displayName', 'score', 'submittedAt', 'schemaVersion'
           ])
-          && commonValid(uid, 600);
+          && commonValid(uid, 900);
     }
 
     function sameScoreStageMetadataDoesNotRegress() {
