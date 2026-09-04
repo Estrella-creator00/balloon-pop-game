@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#72cffa">
+  <title>POPPOP Privacy Policy</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #234f69; background: #eaf9ff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 0; background: linear-gradient(180deg, #73d2fb 0, #dff6ff 310px, #f8fcff 100%); line-height: 1.65; overflow-wrap: anywhere; }
+    header, main, footer { width: min(760px, calc(100% - 28px)); margin-inline: auto; }
+    header { padding: 38px 0 22px; text-align: center; }
+    .brand { margin: 0; color: white; font-size: clamp(34px, 10vw, 54px); font-weight: 1000; letter-spacing: -2px; text-shadow: 0 4px 0 #2d6f9e, 0 7px 14px #17608b55; }
+    .subtitle { margin: 6px 0 18px; color: #1f5e83; font-weight: 800; }
+    .languages { display: inline-flex; padding: 4px; gap: 4px; border-radius: 999px; background: #ffffffcc; box-shadow: 0 4px 14px #28688922; }
+    .languages button { min-width: 92px; min-height: 40px; padding: 7px 14px; border: 0; border-radius: 999px; background: transparent; color: #35637b; font: inherit; font-weight: 800; cursor: pointer; }
+    .languages button[aria-pressed="true"] { background: #7953db; color: white; }
+    main { padding-bottom: 30px; }
+    article { padding: clamp(20px, 5vw, 34px); border: 2px solid #fff; border-radius: 26px; background: #ffffffed; box-shadow: 0 12px 35px #28688924; }
+    h1 { margin: 0 0 5px; color: #f04f7c; font-size: clamp(25px, 7vw, 34px); line-height: 1.25; }
+    .effective { margin: 0 0 24px; color: #668492; font-size: 14px; font-weight: 700; }
+    h2 { margin: 27px 0 8px; color: #6043c8; font-size: 19px; line-height: 1.35; }
+    p, ul { margin: 8px 0; }
+    ul { padding-left: 22px; }
+    strong { color: #23495e; }
+    a { color: #3b59bd; font-weight: 800; }
+    .notice { margin-top: 18px; padding: 14px 16px; border-radius: 15px; background: #f1ecff; border-left: 5px solid #8b62e5; }
+    footer { padding: 0 0 34px; text-align: center; color: #54778a; font-size: 13px; }
+    footer a { margin: 0 8px; }
+    [data-lang][hidden] { display: none !important; }
+    @media (max-width: 380px) { header, main, footer { width: min(100% - 20px, 760px); } article { padding: 18px 16px; border-radius: 20px; } h2 { font-size: 18px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="brand">POPPOP</p>
+    <p class="subtitle" data-lang="ko">개인정보처리방침</p>
+    <p class="subtitle" data-lang="en">Privacy Policy</p>
+    <nav class="languages" aria-label="Language">
+      <button type="button" data-language-button="ko">한국어</button>
+      <button type="button" data-language-button="en">English</button>
+    </nav>
+  </header>
+  <main>
+    <article data-lang="ko">
+      <h1>개인정보처리방침</h1>
+      <p class="effective">시행일: 2026년 9월 4일</p>
+      <p>웁사이드 스튜디오(OOPSIDE STUDIO, 이하 “운영자”)는 POPPOP을 운영하면서 필요한 최소한의 정보만 처리합니다. 문의: <a href="mailto:oopsidestudio@gmail.com">oopsidestudio@gmail.com</a></p>
+
+      <h2>1. 처리하는 정보</h2>
+      <p><strong>온라인으로 전송되는 정보:</strong> 온라인 랭킹을 열거나 기록을 제출하면 Firebase 익명 인증으로 생성된 UID(Support ID), 닉네임, 점수, 서버 제출 시각, schema version을 처리합니다. STAGE 도전에는 도달 Stage와 완료 여부가 추가됩니다. 종목은 별도 필드로 저장하지 않고 <code>leaderboards_stage_v1</code> 또는 <code>leaderboards_60s_v1</code> collection으로 구분합니다.</p>
+      <p><strong>기기에만 저장되는 정보:</strong> Stage 진행·해금 상태, 최근/최고 점수, 무한 팝 최근/최고 기록과 안내 확인 상태, 코인, 구매·장착 아이템, 닉네임과 온보딩 상태, 효과음·진동 설정을 브라우저 localStorage 또는 앱의 로컬 저장소에 보관합니다. 네트워크 장애 시 재전송할 최고 랭킹 기록도 기기에 일시 저장될 수 있습니다.</p>
+
+      <h2>2. 처리 목적</h2>
+      <ul><li>게임 진행, 구매·장착 상태 및 설정 유지</li><li>온라인 랭킹 제공, 최고 기록 갱신 및 중복·부정 제출 방지</li><li>오류 대응, 고객지원 및 데이터 삭제 요청 처리</li></ul>
+
+      <h2>3. Firebase와 외부 서비스</h2>
+      <p>온라인 랭킹에는 Google Firebase Authentication(익명 인증)과 Cloud Firestore를 사용합니다. Firebase는 서비스 보안, 인증 및 부정 사용 방지를 위해 IP 주소, user-agent와 같은 기술 정보를 처리할 수 있습니다. 앱 웹 버전은 GitHub Pages에서 제공됩니다. 운영자는 Analytics, Crashlytics, 광고 SDK를 사용하지 않습니다.</p>
+
+      <h2>4. 보관과 삭제</h2>
+      <p>온라인 랭킹 기록과 익명 인증 식별자는 기록이 갱신되거나, 이용자가 삭제를 요청하거나, 서비스 운영상 더 이상 필요하지 않을 때까지 보관합니다. 삭제 요청은 설정의 Support ID와 함께 이메일로 보내 주세요. 확인 가능한 요청은 원칙적으로 30일 이내 처리합니다. 자세한 절차는 <a href="/balloon-pop-game/support/#delete-data">데이터 삭제 안내</a>를 확인하세요.</p>
+      <p>기기 로컬 정보는 설정의 데이터 초기화, 브라우저 사이트 데이터 삭제 또는 앱 삭제로 제거할 수 있습니다. 운영자는 이용자의 기기에만 저장된 데이터를 원격으로 확인하거나 삭제할 수 없습니다.</p>
+
+      <h2>5. 판매·광고 목적 공유</h2>
+      <p>개인정보를 판매하지 않으며 맞춤 광고 목적으로 공유하지 않습니다. Firebase와 GitHub는 각 서비스 제공에 필요한 범위에서 기술 정보를 처리합니다.</p>
+
+      <h2>6. 수집하지 않는 정보</h2>
+      <p>정확한 위치, 카메라, 마이크, 사진, 연락처, 광고 식별자, 결제카드 정보는 수집하지 않습니다. POPPOP은 이메일·비밀번호 기반 계정을 만들지 않습니다.</p>
+
+      <h2>7. 어린이 이용자와 닉네임</h2>
+      <p>닉네임에는 실명, 학교명, 전화번호, 이메일, 주소 등 본인이나 다른 사람을 알아볼 수 있는 정보를 사용하지 마세요. 보호자는 어린이의 온라인 랭킹 이용을 지도하고 필요하면 데이터 삭제를 요청할 수 있습니다.</p>
+
+      <h2>8. 보안</h2>
+      <p>익명 인증, Firestore 보안 규칙, 제출 필드·점수 제한 등을 사용합니다. 다만 인터넷 전송이나 저장의 절대적인 안전을 보장할 수는 없습니다. Support ID는 공개 게시하지 마세요.</p>
+
+      <h2>9. 방침 변경 및 문의</h2>
+      <p>서비스 또는 법적 요구가 바뀌면 이 방침을 수정하고 시행일을 갱신합니다. 개인정보 또는 삭제 문의는 <a href="mailto:oopsidestudio@gmail.com">oopsidestudio@gmail.com</a>으로 보내 주세요.</p>
+      <p class="notice">운영자: 웁사이드 스튜디오 (OOPSIDE STUDIO)<br>이메일: oopsidestudio@gmail.com</p>
+    </article>
+
+    <article data-lang="en">
+      <h1>Privacy Policy</h1>
+      <p class="effective">Effective: September 4, 2026</p>
+      <p>OOPSIDE STUDIO (“we”) processes only the information needed to operate POPPOP. Contact: <a href="mailto:oopsidestudio@gmail.com">oopsidestudio@gmail.com</a></p>
+
+      <h2>1. Information we process</h2>
+      <p><strong>Information sent online:</strong> When you open an online leaderboard or submit a score, we process the anonymous UID created by Firebase Authentication (your Support ID), nickname, score, server submission time, and schema version. Stage Challenge also includes the reached stage and whether it was cleared. The category is not stored as a field; it is separated into the <code>leaderboards_stage_v1</code> and <code>leaderboards_60s_v1</code> collections.</p>
+      <p><strong>Information stored only on your device:</strong> Stage progress and unlocks, recent and best scores, Endless Pop recent/best scores and intro state, coins, purchased/equipped items, nickname and onboarding state, sound and haptic settings are kept in browser localStorage or app-local storage. A best leaderboard result may also be held locally while waiting to retry after a network error.</p>
+
+      <h2>2. Why we process it</h2>
+      <ul><li>Keep game progress, purchases, equipment, and settings</li><li>Provide leaderboards, update best scores, and prevent duplicate or invalid submissions</li><li>Respond to errors, support requests, and data deletion requests</li></ul>
+
+      <h2>3. Firebase and external services</h2>
+      <p>Online ranking uses Google Firebase Authentication (anonymous sign-in) and Cloud Firestore. Firebase may process technical information such as IP addresses and user-agent data for authentication security and abuse prevention. The web app is served through GitHub Pages. We do not use Analytics, Crashlytics, or advertising SDKs.</p>
+
+      <h2>4. Retention and deletion</h2>
+      <p>Online leaderboard records and the anonymous authentication identifier are retained until replaced, deletion is requested, or they are no longer needed to operate the service. Email us with the Support ID shown in Settings. Verifiable requests are normally handled within 30 days. See <a href="/balloon-pop-game/support/#delete-data">Data Deletion</a> for details.</p>
+      <p>Device-local information can be removed with Reset Data in Settings, by clearing browser site data, or by uninstalling the app. We cannot remotely view or erase information that exists only on your device.</p>
+
+      <h2>5. Sale and advertising</h2>
+      <p>We do not sell personal information or share it for targeted advertising. Firebase and GitHub process technical information only as needed to provide their services.</p>
+
+      <h2>6. Information we do not collect</h2>
+      <p>We do not collect precise location, camera, microphone, photos, contacts, advertising identifiers, or payment-card information. POPPOP does not create email-and-password accounts.</p>
+
+      <h2>7. Children and safe nicknames</h2>
+      <p>Do not use a real name, school, phone number, email, address, or other identifying details in a nickname. Parents and guardians should guide a child's use of online ranking and may request deletion where appropriate.</p>
+
+      <h2>8. Security</h2>
+      <p>We use anonymous authentication, Firestore security rules, and limits on submitted fields and scores. No internet transmission or storage system can be guaranteed completely secure. Do not post your Support ID publicly.</p>
+
+      <h2>9. Changes and contact</h2>
+      <p>We may update this policy when the service or legal requirements change and will update its effective date. Contact <a href="mailto:oopsidestudio@gmail.com">oopsidestudio@gmail.com</a> for privacy or deletion questions.</p>
+      <p class="notice">Operator: OOPSIDE STUDIO<br>Email: oopsidestudio@gmail.com</p>
+    </article>
+  </main>
+  <footer>
+    <a href="/balloon-pop-game/support/" data-lang="ko">고객지원</a>
+    <a href="/balloon-pop-game/support/" data-lang="en">Support</a>
+    <span>© 2026 OOPSIDE STUDIO</span>
+  </footer>
+  <script>
+    (() => {
+      const supported = new Set(['ko', 'en']);
+      const preferred = (navigator.language || 'en').toLowerCase().startsWith('ko') ? 'ko' : 'en';
+      const setLanguage = (language) => {
+        const selected = supported.has(language) ? language : 'en';
+        document.documentElement.lang = selected;
+        document.querySelectorAll('[data-lang]').forEach((element) => { element.hidden = element.dataset.lang !== selected; });
+        document.querySelectorAll('[data-language-button]').forEach((button) => { button.setAttribute('aria-pressed', String(button.dataset.languageButton === selected)); });
+      };
+      document.querySelectorAll('[data-language-button]').forEach((button) => button.addEventListener('click', () => setLanguage(button.dataset.languageButton)));
+      setLanguage(preferred);
+    })();
+  </script>
+</body>
+</html>

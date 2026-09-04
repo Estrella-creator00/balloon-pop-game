@@ -328,6 +328,28 @@ class AppLocalizationsKo extends AppLocalizations {
   String get nicknameChange => '닉네임 변경';
 
   @override
+  String get supportId => 'Support ID';
+
+  @override
+  String get supportIdDescription =>
+      '온라인 랭킹 데이터 삭제를 요청할 때 이 ID를 함께 보내 주세요. 공개된 곳에는 게시하지 마세요.';
+
+  @override
+  String get copySupportId => 'Support ID 복사';
+
+  @override
+  String get supportIdCopied => 'Support ID를 복사했습니다.';
+
+  @override
+  String get supportIdError => 'Support ID를 불러오지 못했습니다. 네트워크 연결 후 다시 시도해 주세요.';
+
+  @override
+  String get linkOpenError => '페이지를 열지 못했습니다.';
+
+  @override
+  String get view => '확인';
+
+  @override
   String get progressReset => '진행 초기화';
 
   @override

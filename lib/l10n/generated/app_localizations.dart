@@ -698,6 +698,48 @@ abstract class AppLocalizations {
   /// **'닉네임 변경'**
   String get nicknameChange;
 
+  /// No description provided for @supportId.
+  ///
+  /// In ko, this message translates to:
+  /// **'Support ID'**
+  String get supportId;
+
+  /// No description provided for @supportIdDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 랭킹 데이터 삭제를 요청할 때 이 ID를 함께 보내 주세요. 공개된 곳에는 게시하지 마세요.'**
+  String get supportIdDescription;
+
+  /// No description provided for @copySupportId.
+  ///
+  /// In ko, this message translates to:
+  /// **'Support ID 복사'**
+  String get copySupportId;
+
+  /// No description provided for @supportIdCopied.
+  ///
+  /// In ko, this message translates to:
+  /// **'Support ID를 복사했습니다.'**
+  String get supportIdCopied;
+
+  /// No description provided for @supportIdError.
+  ///
+  /// In ko, this message translates to:
+  /// **'Support ID를 불러오지 못했습니다. 네트워크 연결 후 다시 시도해 주세요.'**
+  String get supportIdError;
+
+  /// No description provided for @linkOpenError.
+  ///
+  /// In ko, this message translates to:
+  /// **'페이지를 열지 못했습니다.'**
+  String get linkOpenError;
+
+  /// No description provided for @view.
+  ///
+  /// In ko, this message translates to:
+  /// **'확인'**
+  String get view;
+
   /// No description provided for @progressReset.
   ///
   /// In ko, this message translates to:

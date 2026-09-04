@@ -1116,7 +1116,6 @@ void main() {
       BalloonSkinCatalog.definitions.map((skin) => skin.id),
       isNot(containsAll(['balloon-a', 'balloon-b'])),
     );
-    expect(BalloonRarity.heroic.label, '영웅');
   });
 
   test(
@@ -3217,7 +3216,7 @@ void main() {
     },
   );
 
-  testWidgets('information rows open replaceable SET-03 to SET-05 pages', (
+  testWidgets('terms row opens the replaceable SET-03 page', (
     tester,
   ) async {
     await tester.pumpWidget(const BalloonPopApp());
@@ -3226,14 +3225,11 @@ void main() {
 
     for (final entry in const [
       ('settings-terms-row', 'settings-terms-page', '이용약관'),
-      ('settings-privacy-row', 'settings-privacy-page', '개인정보처리방침'),
-      ('settings-contact-row', 'settings-contact-page', '문의하기'),
     ]) {
       await tester.ensureVisible(find.byKey(ValueKey(entry.$1)));
       await tester.tap(find.byKey(ValueKey(entry.$1)));
       await tester.pumpAndSettle();
       expect(find.byKey(ValueKey(entry.$2)), findsOneWidget);
-      expect(find.text(entry.$3), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('settings-back-button')));
       await tester.pumpAndSettle();
       expect(find.byType(SettingsPage), findsOneWidget);

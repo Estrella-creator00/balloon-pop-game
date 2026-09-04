@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#72cffa">
+  <title>POPPOP Support</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #234f69; background: #eaf9ff; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; min-width: 0; background: linear-gradient(180deg, #73d2fb 0, #dff6ff 310px, #f8fcff 100%); line-height: 1.65; overflow-wrap: anywhere; }
+    header, main, footer { width: min(760px, calc(100% - 28px)); margin-inline: auto; }
+    header { padding: 38px 0 22px; text-align: center; }
+    .brand { margin: 0; color: white; font-size: clamp(34px, 10vw, 54px); font-weight: 1000; letter-spacing: -2px; text-shadow: 0 4px 0 #2d6f9e, 0 7px 14px #17608b55; }
+    .subtitle { margin: 6px 0 18px; color: #1f5e83; font-weight: 800; }
+    .languages { display: inline-flex; padding: 4px; gap: 4px; border-radius: 999px; background: #ffffffcc; box-shadow: 0 4px 14px #28688922; }
+    .languages button { min-width: 92px; min-height: 40px; padding: 7px 14px; border: 0; border-radius: 999px; background: transparent; color: #35637b; font: inherit; font-weight: 800; cursor: pointer; }
+    .languages button[aria-pressed="true"] { background: #7953db; color: white; }
+    main { padding-bottom: 30px; }
+    article { padding: clamp(20px, 5vw, 34px); border: 2px solid #fff; border-radius: 26px; background: #ffffffed; box-shadow: 0 12px 35px #28688924; }
+    h1 { margin: 0 0 5px; color: #f04f7c; font-size: clamp(25px, 7vw, 34px); line-height: 1.25; }
+    h2 { margin: 27px 0 8px; color: #6043c8; font-size: 19px; line-height: 1.35; scroll-margin-top: 14px; }
+    p, ol, ul { margin: 8px 0; }
+    ol, ul { padding-left: 22px; }
+    strong { color: #23495e; }
+    a { color: #3b59bd; font-weight: 800; }
+    .email { display: inline-flex; max-width: 100%; margin: 8px 0; padding: 10px 14px; border-radius: 999px; background: #7953db; color: white; text-decoration: none; }
+    .notice { margin-top: 18px; padding: 14px 16px; border-radius: 15px; background: #f1ecff; border-left: 5px solid #8b62e5; }
+    footer { padding: 0 0 34px; text-align: center; color: #54778a; font-size: 13px; }
+    footer a { margin: 0 8px; }
+    [data-lang][hidden] { display: none !important; }
+    @media (max-width: 380px) { header, main, footer { width: min(100% - 20px, 760px); } article { padding: 18px 16px; border-radius: 20px; } h2 { font-size: 18px; } .email { border-radius: 16px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="brand">POPPOP</p>
+    <p class="subtitle" data-lang="ko">고객지원</p>
+    <p class="subtitle" data-lang="en">Support</p>
+    <nav class="languages" aria-label="Language">
+      <button type="button" data-language-button="ko">한국어</button>
+      <button type="button" data-language-button="en">English</button>
+    </nav>
+  </header>
+  <main>
+    <article data-lang="ko">
+      <h1>고객지원</h1>
+      <p>POPPOP 이용 중 문제가 있거나 데이터 삭제가 필요하면 웁사이드 스튜디오로 문의해 주세요.</p>
+      <a class="email" href="mailto:oopsidestudio@gmail.com">oopsidestudio@gmail.com</a>
+
+      <h2>게임 이용 및 오류 문의</h2>
+      <p>이메일에 사용 중인 기기 모델, OS와 버전, 문제가 발생한 화면, 재현 순서를 적어 주세요. 가능하면 개인정보가 보이지 않는 스크린샷도 함께 보내 주세요.</p>
+
+      <h2>로컬 진행도 초기화</h2>
+      <p>POPPOP 설정에서 <strong>데이터 초기화</strong>를 선택하면 해당 기기의 Stage 진행, 점수, 무한 팝 기록, 코인, 구매·장착 아이템, 닉네임 및 설정을 지울 수 있습니다. 웹에서는 브라우저의 사이트 데이터를 지우는 방법도 있습니다. 로컬 초기화는 온라인 랭킹 기록을 삭제하지 않습니다.</p>
+
+      <h2>온라인 랭킹 문제</h2>
+      <p>네트워크 연결을 확인하고 랭킹의 새로고침을 사용해 주세요. 전송에 실패한 최고 기록은 기기에 보관되었다가 이후 다시 전송될 수 있습니다. 계속 문제가 발생하면 종목(STAGE 도전 또는 60초 팝), 발생 시각과 화면을 이메일로 보내 주세요.</p>
+
+      <h2>안전한 닉네임</h2>
+      <p>닉네임에는 실명, 학교명, 전화번호, 이메일, 주소 또는 다른 개인 식별 정보를 사용하지 마세요.</p>
+
+      <h2 id="delete-data">온라인 데이터 삭제 요청</h2>
+      <ol>
+        <li>앱의 <strong>설정 → Support ID</strong>를 열고 ID를 복사합니다.</li>
+        <li>제목을 <strong>POPPOP 데이터 삭제 요청</strong>으로 작성합니다.</li>
+        <li>본문에 Support ID를 붙여 <a href="mailto:oopsidestudio@gmail.com?subject=POPPOP%20%EB%8D%B0%EC%9D%B4%ED%84%B0%20%EC%82%AD%EC%A0%9C%20%EC%9A%94%EC%B2%AD&amp;body=Support%20ID%3A%20">oopsidestudio@gmail.com</a>으로 보냅니다.</li>
+      </ol>
+      <p>Support ID는 Firebase 익명 UID이며 닉네임과 달리 삭제할 기록을 구분할 수 있습니다. 공개 게시하지 마세요. Support ID가 없으면 기록을 안전하게 특정할 수 없어 삭제가 제한될 수 있습니다.</p>
+      <p><strong>삭제 대상:</strong> 해당 Support ID의 STAGE·60초 랭킹 문서와 연결된 Firebase 익명 인증 계정 식별자.</p>
+      <p><strong>기기에 남는 정보:</strong> 진행도, 코인, 아이템, 닉네임과 설정 등 기기 로컬 정보는 이메일 요청으로 지워지지 않습니다. 위의 데이터 초기화 또는 앱/사이트 데이터 삭제를 직접 사용해 주세요.</p>
+      <p>확인 가능한 요청은 원칙적으로 30일 이내 처리합니다. 삭제된 온라인 데이터는 복구할 수 없습니다.</p>
+      <p class="notice">닉네임만으로는 삭제 요청자를 안전하게 확인할 수 없습니다. 반드시 설정 화면의 Support ID를 보내 주세요.</p>
+    </article>
+
+    <article data-lang="en">
+      <h1>Support</h1>
+      <p>Contact OOPSIDE STUDIO if you have a problem using POPPOP or need to request data deletion.</p>
+      <a class="email" href="mailto:oopsidestudio@gmail.com">oopsidestudio@gmail.com</a>
+
+      <h2>Game and error support</h2>
+      <p>Include your device model, OS and version, the affected screen, and steps to reproduce the problem. If possible, attach a screenshot that does not show personal information.</p>
+
+      <h2>Reset local progress</h2>
+      <p>Choose <strong>Reset Data</strong> in POPPOP Settings to erase Stage progress, scores, Endless Pop records, coins, purchased/equipped items, nickname, and settings on that device. On the web, you can also clear the browser's site data. A local reset does not delete online leaderboard records.</p>
+
+      <h2>Online ranking issues</h2>
+      <p>Check your network connection and use Refresh on the ranking screen. A best result that could not be sent may remain on the device and retry later. If the issue continues, email the category (Stage Challenge or 60-Second Pop), time, and affected screen.</p>
+
+      <h2>Safe nicknames</h2>
+      <p>Do not include a real name, school, phone number, email, address, or other identifying information in your nickname.</p>
+
+      <h2 id="delete-data-en">Online data deletion request</h2>
+      <ol>
+        <li>Open <strong>Settings → Support ID</strong> in the app and copy the ID.</li>
+        <li>Use the subject <strong>POPPOP Data Deletion Request</strong>.</li>
+        <li>Paste the Support ID in the message and email <a href="mailto:oopsidestudio@gmail.com?subject=POPPOP%20Data%20Deletion%20Request&amp;body=Support%20ID%3A%20">oopsidestudio@gmail.com</a>.</li>
+      </ol>
+      <p>The Support ID is your anonymous Firebase UID and, unlike a nickname, lets us distinguish the records to delete. Do not post it publicly. Without a Support ID, we may be unable to safely identify and delete the requested records.</p>
+      <p><strong>Deleted:</strong> Stage and 60-second leaderboard documents for that Support ID and the linked anonymous Firebase Authentication account identifier.</p>
+      <p><strong>Remains on your device:</strong> Device-local progress, coins, items, nickname, and settings are not erased by an email request. Use Reset Data or remove the app/site data yourself.</p>
+      <p>Verifiable requests are normally completed within 30 days. Deleted online data cannot be recovered.</p>
+      <p class="notice">A nickname alone cannot safely identify the requester. Include the Support ID shown in Settings.</p>
+    </article>
+  </main>
+  <footer>
+    <a href="/balloon-pop-game/privacy/" data-lang="ko">개인정보처리방침</a>
+    <a href="/balloon-pop-game/privacy/" data-lang="en">Privacy Policy</a>
+    <span>© 2026 OOPSIDE STUDIO</span>
+  </footer>
+  <script>
+    (() => {
+      const supported = new Set(['ko', 'en']);
+      const preferred = (navigator.language || 'en').toLowerCase().startsWith('ko') ? 'ko' : 'en';
+      const setLanguage = (language) => {
+        const selected = supported.has(language) ? language : 'en';
+        document.documentElement.lang = selected;
+        document.querySelectorAll('[data-lang]').forEach((element) => { element.hidden = element.dataset.lang !== selected; });
+        document.querySelectorAll('[data-language-button]').forEach((button) => { button.setAttribute('aria-pressed', String(button.dataset.languageButton === selected)); });
+      };
+      document.querySelectorAll('[data-language-button]').forEach((button) => button.addEventListener('click', () => setLanguage(button.dataset.languageButton)));
+      setLanguage(preferred);
+    })();
+  </script>
+</body>
+</html>

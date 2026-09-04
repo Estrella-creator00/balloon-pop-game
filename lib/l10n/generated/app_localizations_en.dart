@@ -334,6 +334,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nicknameChange => 'Change Nickname';
 
   @override
+  String get supportId => 'Support ID';
+
+  @override
+  String get supportIdDescription =>
+      'Include this ID when requesting deletion of your online ranking data. Do not post it publicly.';
+
+  @override
+  String get copySupportId => 'Copy Support ID';
+
+  @override
+  String get supportIdCopied => 'Support ID copied.';
+
+  @override
+  String get supportIdError =>
+      'Could not load your Support ID. Check your connection and try again.';
+
+  @override
+  String get linkOpenError => 'Could not open the page.';
+
+  @override
+  String get view => 'View';
+
+  @override
   String get progressReset => 'Reset Progress';
 
   @override

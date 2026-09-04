@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'audio/pop_sound.dart';
-import 'services/settings_service.dart';
 import 'l10n/l10n.dart';
+import 'ranking/firebase_ranking_runtime.dart';
+import 'services/external_links.dart';
+import 'services/settings_service.dart';
 
 abstract final class AppVersion {
   static const current = '1.0.0';
@@ -13,15 +16,96 @@ class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
     required this.onDataReset,
+    this.externalLinkOpener = PoppopExternalLinks.open,
+    this.supportIdProvider,
   });
 
   final VoidCallback onDataReset;
+  final ExternalLinkOpener externalLinkOpener;
+  final Future<String> Function()? supportIdProvider;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  Future<void> _openExternal(Uri uri) async {
+    final opened = await widget.externalLinkOpener(uri);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(context.l10n.linkOpenError)));
+    }
+  }
+
+  Future<void> _showSupportId() async {
+    final future = widget.supportIdProvider?.call() ??
+        FirebaseRankingRuntime.instance.ensureUid();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('support-id-dialog'),
+        title: Text(dialogContext.l10n.supportId),
+        content: FutureBuilder<String>(
+          future: future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const SizedBox(
+                height: 52,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError || snapshot.data == null) {
+              return Text(context.l10n.supportIdError);
+            }
+            final supportId = snapshot.data!;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(context.l10n.supportIdDescription),
+                const SizedBox(height: 12),
+                SelectableText(
+                  supportId,
+                  key: const ValueKey('support-id-value'),
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  key: const ValueKey('support-id-copy'),
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: supportId));
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(this.context)
+                      ..hideCurrentSnackBar()
+                      ..showSnackBar(
+                        SnackBar(
+                          content: Text(this.context.l10n.supportIdCopied),
+                        ),
+                      );
+                  },
+                  icon: const Icon(Icons.copy_rounded),
+                  label: Text(context.l10n.copySupportId),
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(dialogContext.l10n.close),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _editNickname() async {
     final saved = await showDialog<bool>(
       context: context,
@@ -100,6 +184,14 @@ class _SettingsPageState extends State<SettingsPage> {
                             SettingsService.nickname ?? context.l10n.notSet,
                         onTap: _editNickname,
                       ),
+                      const _SettingsDivider(),
+                      _SettingsRow(
+                        key: const ValueKey('settings-support-id-row'),
+                        icon: Icons.key_rounded,
+                        label: context.l10n.supportId,
+                        trailingText: context.l10n.view,
+                        onTap: _showSupportId,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -152,22 +244,14 @@ class _SettingsPageState extends State<SettingsPage> {
                         key: const ValueKey('settings-privacy-row'),
                         icon: Icons.privacy_tip_rounded,
                         label: context.l10n.privacy,
-                        onTap: () => _openInfo(
-                          title: context.l10n.privacy,
-                          content: context.l10n.privacyPending,
-                          pageKey: 'settings-privacy-page',
-                        ),
+                        onTap: () => _openExternal(PoppopExternalLinks.privacy),
                       ),
                       const _SettingsDivider(),
                       _SettingsRow(
                         key: const ValueKey('settings-contact-row'),
                         icon: Icons.chat_bubble_rounded,
                         label: context.l10n.contact,
-                        onTap: () => _openInfo(
-                          title: context.l10n.contact,
-                          content: context.l10n.contactPending,
-                          pageKey: 'settings-contact-page',
-                        ),
+                        onTap: () => _openExternal(PoppopExternalLinks.support),
                       ),
                     ],
                   ),
