@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'audio/pop_sound.dart';
+import 'legal_pages.dart';
 import 'l10n/l10n.dart';
 import 'ranking/firebase_ranking_runtime.dart';
 import 'services/external_links.dart';
@@ -29,15 +30,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  Future<void> _openExternal(Uri uri) async {
-    final opened = await widget.externalLinkOpener(uri);
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(context.l10n.linkOpenError)));
-    }
-  }
-
   Future<void> _showSupportId() async {
     final future = widget.supportIdProvider?.call() ??
         FirebaseRankingRuntime.instance.ensureUid();
@@ -244,14 +236,27 @@ class _SettingsPageState extends State<SettingsPage> {
                         key: const ValueKey('settings-privacy-row'),
                         icon: Icons.privacy_tip_rounded,
                         label: context.l10n.privacy,
-                        onTap: () => _openExternal(PoppopExternalLinks.privacy),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (context) => PrivacyPolicyPage(
+                              externalLinkOpener: widget.externalLinkOpener,
+                            ),
+                          ),
+                        ),
                       ),
                       const _SettingsDivider(),
                       _SettingsRow(
                         key: const ValueKey('settings-contact-row'),
                         icon: Icons.chat_bubble_rounded,
                         label: context.l10n.contact,
-                        onTap: () => _openExternal(PoppopExternalLinks.support),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (context) => SupportPage(
+                              externalLinkOpener: widget.externalLinkOpener,
+                              supportIdProvider: widget.supportIdProvider,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),

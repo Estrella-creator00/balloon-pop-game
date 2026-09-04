@@ -350,6 +350,138 @@ class AppLocalizationsKo extends AppLocalizations {
   String get view => '확인';
 
   @override
+  String get support => '고객지원';
+
+  @override
+  String get viewOnWeb => '웹에서 보기';
+
+  @override
+  String get emailSupport => '이메일 문의';
+
+  @override
+  String get supportEmailSubject => 'POPPOP 문의';
+
+  @override
+  String get privacyIntroduction =>
+      '시행일: 2026년 9월 4일. 웁사이드 스튜디오(OOPSIDE STUDIO)는 POPPOP 운영에 필요한 최소한의 정보만 처리합니다.';
+
+  @override
+  String get privacyOperatorTitle => '운영자 및 연락처';
+
+  @override
+  String get privacyOperatorBody =>
+      '운영자: 웁사이드 스튜디오(OOPSIDE STUDIO)\n이메일: oopsidestudio@gmail.com';
+
+  @override
+  String get privacyOnlineTitle => '온라인으로 전송되는 정보';
+
+  @override
+  String get privacyOnlineBody =>
+      '온라인 랭킹을 열거나 기록을 제출하면 Firebase 익명 UID(Support ID), 닉네임, 점수, 서버 제출 시각, schema version을 처리합니다. STAGE 도전에는 도달 Stage와 완료 여부가 추가됩니다. 종목은 STAGE 및 60초 랭킹 collection으로 구분합니다.';
+
+  @override
+  String get privacyLocalTitle => '기기에만 저장되는 정보';
+
+  @override
+  String get privacyLocalBody =>
+      'Stage 진행·해금 상태, 최근·최고 점수, 무한 팝 기록과 안내 확인 상태, 코인, 구매·장착 아이템, 닉네임과 온보딩 상태, 효과음·진동 설정은 브라우저 localStorage 또는 앱의 로컬 저장소에 보관합니다. 네트워크 오류 후 다시 전송할 최고 랭킹 기록도 기기에 일시 저장될 수 있습니다.';
+
+  @override
+  String get privacyFirebaseTitle => 'Firebase 사용 및 처리 목적';
+
+  @override
+  String get privacyFirebaseBody =>
+      '온라인 랭킹에는 Google Firebase Authentication의 익명 인증과 Cloud Firestore를 사용합니다. 랭킹 제공, 최고 기록 갱신, 중복·잘못된 제출 방지, 고객지원 및 삭제 요청 처리를 위해 정보를 사용합니다. Firebase는 인증 보안과 부정 사용 방지를 위해 IP 주소와 user-agent 같은 기술 정보를 처리할 수 있습니다. 웹 앱은 GitHub Pages에서 제공됩니다. Analytics, Crashlytics, 광고 SDK를 사용하지 않으며 개인정보를 판매하거나 맞춤 광고 목적으로 공유하지 않습니다.';
+
+  @override
+  String get privacyNotCollectedTitle => '수집하지 않는 정보';
+
+  @override
+  String get privacyNotCollectedBody =>
+      '정확한 위치, 카메라, 마이크, 사진, 연락처, 광고 식별자, 결제카드 정보는 수집하지 않으며 이메일·비밀번호 기반 계정을 만들지 않습니다.';
+
+  @override
+  String get privacyRetentionTitle => '보관 및 삭제';
+
+  @override
+  String get privacyRetentionBody =>
+      '온라인 랭킹 기록과 익명 인증 식별자는 기록이 갱신되거나, 삭제를 요청하거나, 서비스 운영상 더 이상 필요하지 않을 때까지 보관합니다. 확인 가능한 삭제 요청은 원칙적으로 30일 이내 처리합니다. 기기 로컬 정보는 설정의 데이터 초기화, 브라우저 사이트 데이터 삭제 또는 앱 삭제로 제거할 수 있습니다. 운영자는 기기에만 저장된 정보를 원격으로 확인하거나 삭제할 수 없습니다.';
+
+  @override
+  String get privacyChildrenTitle => '어린이 이용자와 안전한 닉네임';
+
+  @override
+  String get privacyChildrenBody =>
+      '닉네임에는 실명, 학교명, 전화번호, 이메일, 주소 등 본인이나 다른 사람을 알아볼 수 있는 정보를 사용하지 마세요. 보호자는 어린이의 온라인 랭킹 이용을 지도하고 필요하면 데이터 삭제를 요청할 수 있습니다.';
+
+  @override
+  String get privacySecurityTitle => '보안';
+
+  @override
+  String get privacySecurityBody =>
+      '익명 인증, Firestore 보안 규칙, 제출 필드·점수 제한 등을 사용합니다. 다만 인터넷 전송이나 저장의 절대적인 안전을 보장할 수는 없습니다. Support ID는 공개 게시하지 마세요.';
+
+  @override
+  String get privacyContactTitle => '문의 및 방침 변경';
+
+  @override
+  String get privacyContactBody =>
+      '서비스 또는 법적 요구가 바뀌면 방침과 시행일을 갱신합니다. 개인정보 또는 삭제 문의는 oopsidestudio@gmail.com으로 보내 주세요.';
+
+  @override
+  String get supportIntroduction =>
+      'POPPOP 이용 중 문제가 있거나 데이터 삭제가 필요하면 웁사이드 스튜디오로 문의해 주세요.';
+
+  @override
+  String get supportContactTitle => '게임 이용 및 오류 문의';
+
+  @override
+  String get supportContactBody =>
+      'oopsidestudio@gmail.com으로 사용 중인 기기 모델, OS와 버전, 문제가 발생한 화면, 재현 순서를 보내 주세요. 가능하면 개인정보가 보이지 않는 스크린샷도 함께 보내 주세요.';
+
+  @override
+  String get supportResetTitle => '로컬 진행도 초기화';
+
+  @override
+  String get supportResetBody =>
+      'POPPOP 설정에서 데이터 초기화를 선택하면 해당 기기의 Stage 진행, 점수, 무한 팝 기록, 코인, 구매·장착 아이템, 닉네임 및 설정을 지울 수 있습니다. 웹에서는 브라우저 사이트 데이터를 지울 수도 있습니다. 로컬 초기화는 온라인 랭킹 기록을 삭제하지 않습니다.';
+
+  @override
+  String get supportRankingTitle => '온라인 랭킹 오류';
+
+  @override
+  String get supportRankingBody =>
+      '네트워크 연결을 확인하고 랭킹 화면에서 새로고침을 사용해 주세요. 전송에 실패한 최고 기록은 기기에 보관되었다가 나중에 다시 전송될 수 있습니다. 문제가 계속되면 종목(STAGE 도전 또는 60초 팝), 발생 시각과 화면을 이메일에 적어 주세요.';
+
+  @override
+  String get supportNicknameTitle => '안전한 닉네임';
+
+  @override
+  String get supportNicknameBody =>
+      '닉네임에는 실명, 학교명, 전화번호, 이메일, 주소 또는 다른 개인 식별 정보를 사용하지 마세요.';
+
+  @override
+  String get supportDeletionTitle => '온라인 데이터 삭제 요청';
+
+  @override
+  String get supportDeletionBody =>
+      '아래 Support ID를 복사하세요. 제목을 ‘POPPOP 데이터 삭제 요청’으로 작성하고 본문에 Support ID를 붙여 oopsidestudio@gmail.com으로 보내 주세요. Support ID는 Firebase 익명 UID이며 삭제할 기록을 구분할 수 있습니다. 공개 게시하지 마세요. Support ID가 없으면 기록을 안전하게 특정하고 삭제하기 어려울 수 있습니다.';
+
+  @override
+  String get supportDataDifferenceTitle => '서버 데이터와 기기 데이터';
+
+  @override
+  String get supportDataDifferenceBody =>
+      '확인된 요청으로 해당 Support ID의 STAGE·60초 랭킹 문서와 연결된 Firebase 익명 인증 계정 식별자를 삭제합니다. 진행도, 코인, 아이템, 닉네임과 설정 등 기기 로컬 정보는 이메일 요청으로 지워지지 않으므로 데이터 초기화 또는 앱·사이트 데이터 삭제를 직접 사용해 주세요.';
+
+  @override
+  String get supportTimingTitle => '처리 기간';
+
+  @override
+  String get supportTimingBody =>
+      '확인 가능한 요청은 원칙적으로 30일 이내 처리합니다. 삭제한 온라인 데이터는 복구할 수 없습니다.';
+
+  @override
   String get progressReset => '진행 초기화';
 
   @override

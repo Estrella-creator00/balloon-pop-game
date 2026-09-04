@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:balloon_pop_game/legal_pages.dart';
 import 'package:balloon_pop_game/l10n/generated/app_localizations.dart';
+import 'package:balloon_pop_game/l10n/l10n.dart';
 import 'package:balloon_pop_game/services/external_links.dart';
 import 'package:balloon_pop_game/settings_page.dart';
 import 'package:flutter/material.dart';
@@ -10,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('settings opens privacy/support and keeps Support ID private', (
+  testWidgets('settings opens native privacy/support with explicit actions', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(360, 640);
@@ -22,7 +24,8 @@ void main() {
       SystemChannels.platform,
       (call) async {
         if (call.method == 'Clipboard.setData') {
-          copiedText = (call.arguments as Map<Object?, Object?>)['text'] as String?;
+          copiedText =
+              (call.arguments as Map<Object?, Object?>)['text'] as String?;
         }
         return null;
       },
@@ -53,10 +56,49 @@ void main() {
       find.byKey(const ValueKey('settings-privacy-row')),
     );
     await tester.tap(find.byKey(const ValueKey('settings-privacy-row')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('privacy-policy-page')), findsOneWidget);
+    expect(find.textContaining('Effective date: September 4, 2026'),
+        findsOneWidget);
+    expect(opened, isEmpty);
+    await _scrollTo(
+      tester,
+      find.byKey(const ValueKey('privacy-view-on-web')),
+    );
+    await tester.tap(find.byKey(const ValueKey('privacy-view-on-web')));
     await tester.pump();
+    expect(opened, [PoppopExternalLinks.privacy]);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('settings-contact-row')),
+    );
     await tester.tap(find.byKey(const ValueKey('settings-contact-row')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('support-page')), findsOneWidget);
+    expect(find.text('anonymous-support-id'), findsOneWidget);
+    expect(opened, [PoppopExternalLinks.privacy]);
+
+    await _scrollTo(
+      tester,
+      find.byKey(const ValueKey('support-page-id-copy')),
+    );
+    await tester.tap(find.byKey(const ValueKey('support-page-id-copy')));
     await tester.pump();
-    expect(opened, [PoppopExternalLinks.privacy, PoppopExternalLinks.support]);
+    expect(copiedText, 'anonymous-support-id');
+
+    await tester.tap(find.byKey(const ValueKey('support-email-button')));
+    await tester.tap(find.byKey(const ValueKey('support-view-on-web')));
+    await tester.pump();
+    expect(opened[1].scheme, 'mailto');
+    expect(opened[1].path, PoppopExternalLinks.supportEmailAddress);
+    expect(opened[1].queryParameters['body'], contains('anonymous-support-id'));
+    expect(opened[2], PoppopExternalLinks.support);
+    expect(tester.takeException(), isNull);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('settings-support-id-row')),
@@ -70,6 +112,68 @@ void main() {
     expect(copiedText, 'anonymous-support-id');
     expect(tester.takeException(), isNull);
   });
+
+  for (final testCase
+      in <({Locale locale, String privacyExpected, String supportExpected})>[
+    (
+      locale: const Locale('ko'),
+      privacyExpected: '시행일: 2026년 9월 4일',
+      supportExpected: 'POPPOP 이용 중 문제가 있거나',
+    ),
+    (
+      locale: const Locale('en'),
+      privacyExpected: 'Effective date: September 4, 2026',
+      supportExpected: 'Contact OOPSIDE STUDIO',
+    ),
+    (
+      locale: const Locale('fr'),
+      privacyExpected: 'Effective date: September 4, 2026',
+      supportExpected: 'Contact OOPSIDE STUDIO',
+    ),
+  ]) {
+    testWidgets(
+      'privacy locale ${testCase.locale.languageCode} is readable at 390x844',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: testCase.locale,
+            localeListResolutionCallback: poppopLocaleResolution,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const PrivacyPolicyPage(),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining(testCase.privacyExpected), findsOneWidget);
+        expect(find.byKey(const ValueKey('legal-document-scroll')),
+            findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: testCase.locale,
+            localeListResolutionCallback: poppopLocaleResolution,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: SupportPage(
+              supportIdProvider: () async => 'locale-support-id',
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining(testCase.supportExpected), findsOneWidget);
+        expect(find.byKey(const ValueKey('support-page')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   test('privacy and support pages contain bilingual, local-only controls', () {
     final privacy = File('web/privacy/index.html').readAsStringSync();
@@ -98,4 +202,17 @@ void main() {
     expect(support, contains('Support%20ID%3A%20'));
     expect(support, contains('POPPOP%20%EB%8D%B0%EC%9D%B4%ED%84%B0'));
   });
+}
+
+Future<void> _scrollTo(WidgetTester tester, Finder target) async {
+  for (var attempt = 0; attempt < 12 && target.evaluate().isEmpty; attempt++) {
+    await tester.drag(
+      find.byKey(const ValueKey('legal-document-scroll')),
+      const Offset(0, -500),
+    );
+    await tester.pumpAndSettle();
+  }
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
 }

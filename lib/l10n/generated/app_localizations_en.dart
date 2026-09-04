@@ -357,6 +357,138 @@ class AppLocalizationsEn extends AppLocalizations {
   String get view => 'View';
 
   @override
+  String get support => 'Customer Support';
+
+  @override
+  String get viewOnWeb => 'View on the Web';
+
+  @override
+  String get emailSupport => 'Email Support';
+
+  @override
+  String get supportEmailSubject => 'POPPOP Support Request';
+
+  @override
+  String get privacyIntroduction =>
+      'Effective date: September 4, 2026. OOPSIDE STUDIO processes only the information needed to operate POPPOP.';
+
+  @override
+  String get privacyOperatorTitle => 'Operator and contact';
+
+  @override
+  String get privacyOperatorBody =>
+      'Operator: OOPSIDE STUDIO (웁사이드 스튜디오)\nEmail: oopsidestudio@gmail.com';
+
+  @override
+  String get privacyOnlineTitle => 'Information sent online';
+
+  @override
+  String get privacyOnlineBody =>
+      'When you open an online leaderboard or submit a record, we process the anonymous Firebase UID (Support ID), nickname, score, server submission time, and schema version. Stage Challenge also includes the reached stage and whether it was cleared. Categories are separated into the Stage and 60-second leaderboard collections.';
+
+  @override
+  String get privacyLocalTitle => 'Information stored only on your device';
+
+  @override
+  String get privacyLocalBody =>
+      'Stage progress and unlocks, recent and best scores, Endless Pop records and intro state, coins, purchased and equipped items, nickname and onboarding state, sound and haptic settings are stored in browser localStorage or app-local storage. A best leaderboard result may be stored temporarily while waiting to retry after a network error.';
+
+  @override
+  String get privacyFirebaseTitle => 'Firebase and purpose';
+
+  @override
+  String get privacyFirebaseBody =>
+      'Online ranking uses Google Firebase Authentication with anonymous sign-in and Cloud Firestore. We use this information to provide rankings, update best records, prevent duplicate or invalid submissions, and handle support and deletion requests. Firebase may process technical information such as IP addresses and user-agent data for authentication security and abuse prevention. The web app is served through GitHub Pages. We do not use Analytics, Crashlytics, or advertising SDKs, and we do not sell personal information or share it for targeted advertising.';
+
+  @override
+  String get privacyNotCollectedTitle => 'Information we do not collect';
+
+  @override
+  String get privacyNotCollectedBody =>
+      'We do not collect precise location, camera, microphone, photos, contacts, advertising identifiers, payment-card information, or email-and-password accounts.';
+
+  @override
+  String get privacyRetentionTitle => 'Retention and deletion';
+
+  @override
+  String get privacyRetentionBody =>
+      'Online leaderboard records and the anonymous authentication identifier remain until replaced, deletion is requested, or they are no longer needed to operate the service. Verifiable deletion requests are normally handled within 30 days. Device-local information can be removed with Reset Data, by clearing browser site data, or by uninstalling the app. We cannot remotely view or erase information stored only on your device.';
+
+  @override
+  String get privacyChildrenTitle => 'Children and safe nicknames';
+
+  @override
+  String get privacyChildrenBody =>
+      'Do not use a real name, school, phone number, email, address, or other identifying details in a nickname. Parents and guardians should guide a child\'s use of online ranking and may request deletion where appropriate.';
+
+  @override
+  String get privacySecurityTitle => 'Security';
+
+  @override
+  String get privacySecurityBody =>
+      'We use anonymous authentication, Firestore security rules, and limits on submitted fields and scores. No internet transmission or storage system can be guaranteed completely secure. Do not post your Support ID publicly.';
+
+  @override
+  String get privacyContactTitle => 'Questions and policy changes';
+
+  @override
+  String get privacyContactBody =>
+      'We may update this policy when the service or legal requirements change and will update its effective date. Contact oopsidestudio@gmail.com for privacy or deletion questions.';
+
+  @override
+  String get supportIntroduction =>
+      'Contact OOPSIDE STUDIO if you have a problem using POPPOP or need to request data deletion.';
+
+  @override
+  String get supportContactTitle => 'Game and error support';
+
+  @override
+  String get supportContactBody =>
+      'Email oopsidestudio@gmail.com with your device model, OS and version, the affected screen, and steps to reproduce the problem. If possible, attach a screenshot that does not show personal information.';
+
+  @override
+  String get supportResetTitle => 'Reset local progress';
+
+  @override
+  String get supportResetBody =>
+      'Choose Reset Data in POPPOP Settings to erase Stage progress, scores, Endless Pop records, coins, purchased and equipped items, nickname, and settings on that device. On the web, you can also clear the browser\'s site data. A local reset does not delete online leaderboard records.';
+
+  @override
+  String get supportRankingTitle => 'Online ranking issues';
+
+  @override
+  String get supportRankingBody =>
+      'Check your network connection and use Refresh on the ranking screen. A best record that could not be sent may remain on the device and retry later. If the issue continues, include the category (Stage Challenge or 60-Second Pop), time, and affected screen in your email.';
+
+  @override
+  String get supportNicknameTitle => 'Safe nicknames';
+
+  @override
+  String get supportNicknameBody =>
+      'Do not include a real name, school, phone number, email, address, or other identifying information in your nickname.';
+
+  @override
+  String get supportDeletionTitle => 'Request deletion of online data';
+
+  @override
+  String get supportDeletionBody =>
+      'Copy the Support ID shown below. Email oopsidestudio@gmail.com with the subject ‘POPPOP Data Deletion Request’ and include the Support ID in the message. The Support ID is your anonymous Firebase UID and lets us distinguish the records to delete. Do not post it publicly. Without it, we may be unable to safely identify and delete the requested records.';
+
+  @override
+  String get supportDataDifferenceTitle => 'Server data and device data';
+
+  @override
+  String get supportDataDifferenceBody =>
+      'A verified request deletes the Stage and 60-second leaderboard documents for that Support ID and the linked anonymous Firebase Authentication account identifier. Progress, coins, items, nickname, and settings stored on your device are not erased by an email request; use Reset Data or remove the app or site data yourself.';
+
+  @override
+  String get supportTimingTitle => 'Processing time';
+
+  @override
+  String get supportTimingBody =>
+      'Verifiable requests are normally completed within 30 days. Deleted online data cannot be recovered.';
+
+  @override
   String get progressReset => 'Reset Progress';
 
   @override
