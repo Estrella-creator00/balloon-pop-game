@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'poppop_logo.dart';
+import '../l10n/l10n.dart';
 
 class GameHeaderData {
   const GameHeaderData({
@@ -109,7 +110,7 @@ class GameHeader extends StatelessWidget {
                               children: [
                                 _controlButton(
                                   key: const ValueKey('pause-button'),
-                                  label: '일시정지',
+                                  label: context.l10n.pause,
                                   icon: Icons.pause_rounded,
                                   onPressed:
                                       value.controlsEnabled ? onPause : null,
@@ -117,7 +118,7 @@ class GameHeader extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 _controlButton(
                                   key: const ValueKey('end-button'),
-                                  label: '끝내기',
+                                  label: context.l10n.exit,
                                   icon: Icons.logout_rounded,
                                   onPressed:
                                       value.controlsEnabled ? onEnd : null,
@@ -157,7 +158,8 @@ class GameHeader extends StatelessWidget {
                           _HudMetric(
                             key: const ValueKey('hud-score'),
                             icon: Icons.star_rounded,
-                            text: value.scoreText ?? '점수  ${value.score}',
+                            text: value.scoreText ??
+                                context.l10n.score(value.score),
                             color: const Color(0xFFE59A00),
                           ),
                           const _HudDivider(),
@@ -166,7 +168,7 @@ class GameHeader extends StatelessWidget {
                               key: const ValueKey('hud-remaining'),
                               icon: Icons.bubble_chart_rounded,
                               text: value.remainingText ??
-                                  '남은 풍선  ${value.remaining}',
+                                  context.l10n.remaining(value.remaining),
                               color: const Color(0xFF7354E8),
                             ),
                             const _HudDivider(),
@@ -174,7 +176,8 @@ class GameHeader extends StatelessWidget {
                           _HudMetric(
                             key: const ValueKey('hud-time'),
                             icon: Icons.timer_rounded,
-                            text: value.timeText ?? '시간  ${value.secondsLeft}',
+                            text: value.timeText ??
+                                context.l10n.timeSeconds(value.secondsLeft),
                             color: value.secondsLeft <= 5
                                 ? const Color(0xFFE53E62)
                                 : const Color(0xFF236B9A),

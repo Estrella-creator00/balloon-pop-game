@@ -7,6 +7,7 @@ import '../../audio/pop_sound.dart';
 import '../../balloon_background.dart';
 import '../../balloon_skin_catalog.dart';
 import '../../widgets/game_header.dart';
+import '../../l10n/l10n.dart';
 import '../../gameplay/stage_intro_definition.dart';
 import '../game_session_state.dart';
 import '../legendary/flame_preview_skin.dart';
@@ -282,6 +283,8 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
   }
 
   Future<void> _confirmExit() async {
+    final strings = context.l10n;
+    final saveRankedStage = widget.rankedRunMode == FlameRankedRunMode.stage;
     final wasPaused = _manualPause;
     if (!wasPaused) {
       widget.onAudioPause?.call();
@@ -290,24 +293,31 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(widget.endlessMode
-            ? '무한 팝 끝내기'
-            : widget.rankedRunMode != FlameRankedRunMode.none
-                ? '랭킹 도전 끝내기'
-                : '게임 끝내기'),
-        content: Text(widget.endlessMode
-            ? '현재 기록을 저장하고 도전을 끝낼까요?'
-            : widget.rankedRunMode != FlameRankedRunMode.none
-                ? '중간에 끝내면 기록은 제출되지 않아요.'
-                : '현재 게임을 끝내고 홈으로 돌아갈까요?'),
+        title: Text(saveRankedStage
+            ? strings.rankedStageExitTitle
+            : widget.endlessMode
+                ? strings.endlessExitTitle
+                : widget.rankedRunMode != FlameRankedRunMode.none
+                    ? strings.rankedExitTitle
+                    : strings.gameExitTitle),
+        content: Text(saveRankedStage
+            ? strings.rankedStageExitBody
+            : widget.endlessMode
+                ? strings.endlessExitBody
+                : widget.rankedRunMode != FlameRankedRunMode.none
+                    ? strings.rankedExitBody
+                    : strings.gameExitBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
+            child: Text(saveRankedStage
+                ? strings.rankedStageKeepPlaying
+                : strings.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('끝내기'),
+            child: Text(
+                saveRankedStage ? strings.rankedStageSaveExit : strings.exit),
           ),
         ],
       ),
@@ -317,7 +327,9 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
       if (widget.endlessMode) {
         _game.finishEndless();
       } else {
-        _returnResult(FlameIntegrationOutcome.exited);
+        _returnResult(saveRankedStage
+            ? FlameIntegrationOutcome.savedAndExited
+            : FlameIntegrationOutcome.exited);
       }
     } else if (!wasPaused && !_backgroundPause) {
       _game.resumePreview();

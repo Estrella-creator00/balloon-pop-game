@@ -10,6 +10,7 @@ import 'package:balloon_pop_game/ranking/online_ranking_page.dart';
 import 'package:balloon_pop_game/ranking/online_ranking_repository.dart';
 import 'package:balloon_pop_game/ranking/ranking_nickname.dart';
 import 'package:balloon_pop_game/ranking/ranking_pending_store.dart';
+import 'package:balloon_pop_game/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -187,6 +188,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       final repository = _FakeOnlineRankingRepository();
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('ko'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: OnlineRankingPage(
           currentNickname: '테스터',
           repository: repository,
@@ -204,6 +208,9 @@ void main() {
       (tester) async {
     final repository = _FakeOnlineRankingRepository();
     await tester.pumpWidget(MaterialApp(
+      locale: const Locale('ko'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: OnlineRankingPage(
         currentNickname: '테스터',
         repository: repository,

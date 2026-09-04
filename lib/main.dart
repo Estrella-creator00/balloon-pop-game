@@ -4,6 +4,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'l10n/generated/app_localizations.dart';
+import 'l10n/l10n.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import 'audio/pop_sound.dart';
@@ -155,6 +157,9 @@ class _PoppopAppEntryState extends State<PoppopAppEntry> {
       debugShowCheckedModeBanner: false,
       title: 'POPPOP Flame Preview',
       theme: ThemeData.dark(useMaterial3: true),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localeListResolutionCallback: poppopLocaleResolution,
       home: FlameGamePage(
         gameFactory: widget.flameGameFactory,
         onExit: _exitFlamePreview,
@@ -240,6 +245,10 @@ class _BalloonPopAppState extends State<BalloonPopApp>
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'POPPOP',
+      onGenerateTitle: (context) => context.l10n.appTitle,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localeListResolutionCallback: poppopLocaleResolution,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF6B9D)),
         useMaterial3: true,

@@ -30,7 +30,13 @@ class FlameStageCompletionEvent {
   final int generation;
 }
 
-enum FlameIntegrationOutcome { completed, failed, endlessFinished, exited }
+enum FlameIntegrationOutcome {
+  completed,
+  failed,
+  endlessFinished,
+  savedAndExited,
+  exited,
+}
 
 enum FlameRankedRunMode { none, stage, sixtySeconds }
 

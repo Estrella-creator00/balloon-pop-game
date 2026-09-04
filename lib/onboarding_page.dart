@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'audio/pop_sound.dart';
 import 'services/settings_service.dart';
+import 'l10n/l10n.dart';
 
 /// ON-01 최초 닉네임 설정 화면.
 class NicknameOnboardingPage extends StatefulWidget {
@@ -34,7 +35,7 @@ class _NicknameOnboardingPageState extends State<NicknameOnboardingPage> {
     if (_submitting) return;
     final normalized = SettingsService.normalizeNickname(_controller.text);
     if (normalized == null) {
-      setState(() => _error = '닉네임은 2자 이상 10자 이하로 입력해 주세요.');
+      setState(() => _error = context.l10n.nicknameValidation);
       return;
     }
 
@@ -86,8 +87,8 @@ class _NicknameOnboardingPageState extends State<NicknameOnboardingPage> {
                     children: [
                       const _OnboardingLogo(),
                       const SizedBox(height: 24),
-                      const Text(
-                        '닉네임을 정해주세요 🎈',
+                      Text(
+                        context.l10n.nicknameTitle,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Color(0xFFFF4F7B),
@@ -96,8 +97,8 @@ class _NicknameOnboardingPageState extends State<NicknameOnboardingPage> {
                         ),
                       ),
                       const SizedBox(height: 7),
-                      const Text(
-                        '게임에서 사용할 이름이에요',
+                      Text(
+                        context.l10n.nicknameSubtitle,
                         style: TextStyle(
                           color: Color(0xFF688596),
                           fontSize: 14,
@@ -116,7 +117,7 @@ class _NicknameOnboardingPageState extends State<NicknameOnboardingPage> {
                           if (_isValid) _submit();
                         },
                         decoration: InputDecoration(
-                          hintText: '2~10자',
+                          hintText: context.l10n.nicknameHint,
                           errorText: _error,
                           counterText: '',
                           filled: true,
@@ -162,8 +163,8 @@ class _NicknameOnboardingPageState extends State<NicknameOnboardingPage> {
                             elevation: 4,
                             shadowColor: const Color(0x55D93469),
                           ),
-                          child: const Text(
-                            '시작하기',
+                          child: Text(
+                            context.l10n.start,
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w900,

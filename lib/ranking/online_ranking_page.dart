@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../audio/pop_sound.dart';
+import '../l10n/l10n.dart';
 import 'firebase_online_ranking_repository.dart';
 import 'online_ranking_models.dart';
 import 'online_ranking_repository.dart';
@@ -73,13 +74,13 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
         await widget.repository.submitBest(result, widget.currentNickname);
         if (_disposed || !mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('최고 기록을 온라인 랭킹에 반영했어요.')),
+          SnackBar(content: Text(context.l10n.rankingSaved)),
         );
         _refresh();
       } catch (_) {
         if (_disposed || !mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('기록을 보관했어요. 다음 접속 때 다시 전송할게요.')),
+          SnackBar(content: Text(context.l10n.rankingPending)),
         );
       }
     } finally {
@@ -108,7 +109,9 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
                 segments: RankingCategory.values
                     .map((category) => ButtonSegment(
                           value: category,
-                          label: Text(category.label),
+                          label: Text(category == RankingCategory.stage
+                              ? context.l10n.stageChallenge
+                              : context.l10n.sixtySecondPop),
                         ))
                     .toList(growable: false),
                 selected: {_category},
@@ -139,7 +142,7 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
                 child: FilledButton(
                   key: const ValueKey('online-ranking-challenge'),
                   onPressed: _challenge,
-                  child: const Text('도전하기'),
+                  child: Text(context.l10n.challenge),
                 ),
               ),
             ],
@@ -160,8 +163,8 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
             ),
-            const Text(
-              '온라인 랭킹',
+            Text(
+              context.l10n.rankingTitle,
               style: TextStyle(
                 color: Color(0xFFFF4F7B),
                 fontSize: 23,
@@ -174,7 +177,7 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
                 key: const ValueKey('online-ranking-refresh'),
                 onPressed: _refresh,
                 icon: const Icon(Icons.refresh_rounded),
-                tooltip: '새로고침',
+                tooltip: context.l10n.retry,
               ),
             ),
           ],
@@ -205,9 +208,9 @@ class _LeaderboardView extends StatelessWidget {
           const SizedBox(height: 4),
           Expanded(
             child: board.entries.isEmpty
-                ? const Center(
+                ? Center(
                     key: ValueKey('online-ranking-empty'),
-                    child: Text('아직 등록된 기록이 없어요.'),
+                    child: Text(context.l10n.rankingEmpty),
                   )
                 : ListView.builder(
                     key: const ValueKey('online-ranking-top-100'),
@@ -286,13 +289,12 @@ class _RankingError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('온라인 랭킹을 불러오지 못했어요.\n연결을 확인하고 다시 시도해 주세요.',
-                textAlign: TextAlign.center),
+            Text(context.l10n.rankingLoadError, textAlign: TextAlign.center),
             const SizedBox(height: 12),
             OutlinedButton(
               key: const ValueKey('online-ranking-retry'),
               onPressed: onRetry,
-              child: const Text('다시 시도'),
+              child: Text(context.l10n.retry),
             ),
           ],
         ),
