@@ -146,21 +146,33 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
         secondsLeft: session.secondsLeft,
         controlsEnabled: session.phase == GameSessionPhase.playing,
         stageLabel: widget.endlessMode
-            ? '무한 팝'
+            ? poppopLocalizationsForLocale(
+                    WidgetsBinding.instance.platformDispatcher.locale)
+                .endlessPop
             : widget.rankedRunMode == FlameRankedRunMode.sixtySeconds
-                ? '60초 팝'
+                ? poppopLocalizationsForLocale(
+                        WidgetsBinding.instance.platformDispatcher.locale)
+                    .sixtySecondPop
                 : widget.rankedRunMode == FlameRankedRunMode.stage
-                    ? 'STAGE 도전'
+                    ? poppopLocalizationsForLocale(
+                            WidgetsBinding.instance.platformDispatcher.locale)
+                        .stageChallenge
                     : null,
         scoreText: widget.endlessMode ||
                 widget.rankedRunMode == FlameRankedRunMode.sixtySeconds
-            ? '기록  ${session.score}'
+            ? poppopLocalizationsForLocale(
+                    WidgetsBinding.instance.platformDispatcher.locale)
+                .currentRecord(session.score)
             : null,
         remainingText: widget.endlessMode ||
                 widget.rankedRunMode == FlameRankedRunMode.sixtySeconds
             ? ''
             : null,
-        timeText: widget.endlessMode ? '시간  ∞' : null,
+        timeText: widget.endlessMode
+            ? poppopLocalizationsForLocale(
+                    WidgetsBinding.instance.platformDispatcher.locale)
+                .timeInfinite
+            : null,
       );
 
   void _onSessionChanged() {
@@ -405,7 +417,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
                           ),
                         ),
                         if (phase == GameSessionPhase.loading)
-                          const _StatusOverlay(title: '준비 중...'),
+                          _StatusOverlay(title: context.l10n.preparing),
                         if (phase == GameSessionPhase.bossReady)
                           _BossReadyOverlay(
                             stage: _session.stage,
@@ -532,7 +544,11 @@ class _SectionIntroOverlay extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    definition.headline,
+                    definition.title.contains('11')
+                        ? context.l10n.sectionMultiHitHeadline
+                        : definition.title.contains('21')
+                            ? context.l10n.sectionFakeHeadline
+                            : definition.headline,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Color(0xFFFF4F7B),
@@ -541,9 +557,9 @@ class _SectionIntroOverlay extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  for (final rule in definition.rules)
+                  for (var index = 0; index < definition.rules.length; index++)
                     Text(
-                      '• $rule',
+                      '• ${definition.title.contains('11') ? (index == 0 ? context.l10n.sectionMultiHitRule1 : context.l10n.sectionMultiHitRule2) : definition.title.contains('21') ? (index == 0 ? context.l10n.sectionFakeRule1 : context.l10n.sectionFakeRule2) : definition.rules[index]}',
                       style: const TextStyle(
                         color: Color(0xFF3F5F70),
                         fontSize: 14,
@@ -554,7 +570,7 @@ class _SectionIntroOverlay extends StatelessWidget {
                   FilledButton(
                     key: const ValueKey('flame-integration-stage-intro-next'),
                     onPressed: onStart,
-                    child: const Text('다음 단계 ▶'),
+                    child: Text(context.l10n.nextStep),
                   ),
                 ],
               ),
@@ -576,7 +592,7 @@ class _BossReadyOverlay extends StatelessWidget {
         action: FilledButton(
           key: const ValueKey('flame-integration-boss-start'),
           onPressed: onStart,
-          child: const Text('시작'),
+          child: Text(context.l10n.startShort),
         ),
       );
 }
@@ -589,16 +605,17 @@ class _PauseOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _StatusOverlay(
-        title: '일시정지',
+        title: context.l10n.pause,
         action: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             FilledButton(
               key: const ValueKey('flame-integration-resume'),
               onPressed: onResume,
-              child: const Text('계속하기'),
+              child: Text(context.l10n.resume),
             ),
-            TextButton(onPressed: onExit, child: const Text('시작 화면으로')),
+            TextButton(
+                onPressed: onExit, child: Text(context.l10n.startScreen)),
           ],
         ),
       );
@@ -617,12 +634,12 @@ class _EndlessResultOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _StatusOverlay(
-        title: '무한 팝 종료',
+        title: context.l10n.endlessFinished,
         action: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '현재 기록  ${result.score}',
+              context.l10n.currentRecord(result.score),
               key: const ValueKey('endless-current-score'),
               style: const TextStyle(
                 color: Color(0xFF25385F),
@@ -656,12 +673,12 @@ class _EndlessResultOverlay extends StatelessWidget {
             FilledButton(
               key: const ValueKey('endless-restart'),
               onPressed: onRestart,
-              child: const Text('다시 도전'),
+              child: Text(context.l10n.tryAgain),
             ),
             TextButton(
               key: const ValueKey('endless-home'),
               onPressed: onHome,
-              child: const Text('홈으로'),
+              child: Text(context.l10n.goHome),
             ),
           ],
         ),

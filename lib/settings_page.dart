@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'audio/pop_sound.dart';
 import 'services/settings_service.dart';
+import 'l10n/l10n.dart';
 
 abstract final class AppVersion {
   static const current = '1.0.0';
@@ -59,9 +60,9 @@ class _SettingsPageState extends State<SettingsPage> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
+        SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('게임 데이터가 초기화되었습니다.'),
+          content: Text(context.l10n.dataResetDone),
         ),
       );
   }
@@ -76,7 +77,7 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Column(
           children: [
             _SettingsHeader(
-              title: '설정',
+              title: context.l10n.settings,
               onBack: () {
                 PopSound.playUiClick();
                 Navigator.of(context).pop();
@@ -89,25 +90,26 @@ class _SettingsPageState extends State<SettingsPage> {
                 padding: const EdgeInsets.only(bottom: 8),
                 children: [
                   _SettingsSectionCard(
-                    title: '플레이어',
+                    title: context.l10n.player,
                     children: [
                       _SettingsRow(
                         key: const ValueKey('settings-nickname-row'),
                         icon: Icons.person_rounded,
-                        label: '닉네임',
-                        trailingText: SettingsService.nickname ?? '설정 안 됨',
+                        label: context.l10n.nickname,
+                        trailingText:
+                            SettingsService.nickname ?? context.l10n.notSet,
                         onTap: _editNickname,
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   _SettingsSectionCard(
-                    title: '게임 설정',
+                    title: context.l10n.gameSettings,
                     children: [
                       _SettingsSwitchRow(
                         key: const ValueKey('settings-sound-row'),
                         icon: Icons.volume_up_rounded,
-                        label: '효과음',
+                        label: context.l10n.soundEffects,
                         value: SettingsService.soundEnabled,
                         switchKey: const ValueKey('settings-sound-switch'),
                         onChanged: (enabled) {
@@ -120,7 +122,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       _SettingsSwitchRow(
                         key: const ValueKey('settings-haptic-row'),
                         icon: Icons.vibration_rounded,
-                        label: '진동',
+                        label: context.l10n.haptics,
                         value: SettingsService.hapticEnabled,
                         switchKey: const ValueKey('settings-haptic-switch'),
                         onChanged: (enabled) {
@@ -133,15 +135,15 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   _SettingsSectionCard(
-                    title: '정보',
+                    title: context.l10n.information,
                     children: [
                       _SettingsRow(
                         key: const ValueKey('settings-terms-row'),
                         icon: Icons.description_rounded,
-                        label: '이용약관',
+                        label: context.l10n.terms,
                         onTap: () => _openInfo(
-                          title: '이용약관',
-                          content: '정식 서비스 출시 전 이용약관이 제공될 예정입니다.',
+                          title: context.l10n.terms,
+                          content: context.l10n.termsPending,
                           pageKey: 'settings-terms-page',
                         ),
                       ),
@@ -149,10 +151,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       _SettingsRow(
                         key: const ValueKey('settings-privacy-row'),
                         icon: Icons.privacy_tip_rounded,
-                        label: '개인정보처리방침',
+                        label: context.l10n.privacy,
                         onTap: () => _openInfo(
-                          title: '개인정보처리방침',
-                          content: '정식 서비스 출시 전 개인정보처리방침이 제공될 예정입니다.',
+                          title: context.l10n.privacy,
+                          content: context.l10n.privacyPending,
                           pageKey: 'settings-privacy-page',
                         ),
                       ),
@@ -160,18 +162,18 @@ class _SettingsPageState extends State<SettingsPage> {
                       _SettingsRow(
                         key: const ValueKey('settings-contact-row'),
                         icon: Icons.chat_bubble_rounded,
-                        label: '문의하기',
+                        label: context.l10n.contact,
                         onTap: () => _openInfo(
-                          title: '문의하기',
-                          content: '문의 채널은 정식 출시 전 안내될 예정입니다.',
+                          title: context.l10n.contact,
+                          content: context.l10n.contactPending,
                           pageKey: 'settings-contact-page',
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 18),
-                  const Text(
-                    '버전 ${AppVersion.current}',
+                  Text(
+                    context.l10n.version(AppVersion.current),
                     key: ValueKey('settings-version'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -185,8 +187,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: TextButton(
                       key: const ValueKey('settings-reset-button'),
                       onPressed: _confirmReset,
-                      child: const Text(
-                        '데이터 초기화',
+                      child: Text(
+                        context.l10n.dataReset,
                         style: TextStyle(
                           color: Color(0xFFCC5B68),
                           fontSize: 13,
@@ -435,7 +437,7 @@ class _NicknameEditDialogState extends State<NicknameEditDialog> {
 
   void _save() {
     if (!SettingsService.saveNickname(_controller.text)) {
-      setState(() => _error = '닉네임은 2자 이상 10자 이하로 입력해 주세요.');
+      setState(() => _error = context.l10n.nicknameValidation);
       return;
     }
     Navigator.of(context).pop(true);
@@ -464,8 +466,8 @@ class _NicknameEditDialogState extends State<NicknameEditDialog> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    '닉네임 변경',
+                  Text(
+                    context.l10n.nicknameChange,
                     style: TextStyle(
                       color: Color(0xFFFF4F7B),
                       fontSize: 22,
@@ -481,7 +483,7 @@ class _NicknameEditDialogState extends State<NicknameEditDialog> {
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _save(),
                     decoration: InputDecoration(
-                      hintText: '2~10자',
+                      hintText: context.l10n.nicknameHint,
                       errorText: _error,
                       filled: true,
                       fillColor: const Color(0xFFF4FAFD),
@@ -504,8 +506,8 @@ class _NicknameEditDialogState extends State<NicknameEditDialog> {
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFFFF4F7B),
                       ),
-                      child: const Text(
-                        '저장',
+                      child: Text(
+                        context.l10n.save,
                         style: TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),
@@ -581,24 +583,24 @@ class SettingsResetDialog extends StatelessWidget {
   Widget build(BuildContext context) => AlertDialog(
         key: const ValueKey('settings-reset-dialog'),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Text(
-          '모든 게임 데이터를 초기화할까요?',
+        title: Text(
+          context.l10n.dataResetTitle,
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
-        content: const Text(
-          '코인, 구매한 풍선, 장착 상태, 닉네임 및 설정이 모두 초기화됩니다.',
+        content: Text(
+          context.l10n.dataResetBody,
         ),
         actions: [
           TextButton(
             key: const ValueKey('settings-reset-cancel'),
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('취소'),
+            child: Text(context.l10n.cancel),
           ),
           TextButton(
             key: const ValueKey('settings-reset-confirm'),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
-              '초기화',
+            child: Text(
+              context.l10n.reset,
               style: TextStyle(
                 color: Color(0xFFCC5B68),
                 fontWeight: FontWeight.w900,

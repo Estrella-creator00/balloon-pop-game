@@ -302,11 +302,821 @@ abstract class AppLocalizations {
   /// **'무한 팝은 시간 제한 없이 원터치 풍선을 계속 터뜨리는 일반 모드예요. 온라인 랭킹에서는 STAGE 도전과 60초 팝 중 선택할 수 있으며, 랭킹 도전은 하단 랭킹 메뉴에서 시작해요.'**
   String get endlessInfo;
 
+  /// No description provided for @fakePenalty.
+  ///
+  /// In ko, this message translates to:
+  /// **'-2초'**
+  String get fakePenalty;
+
   /// No description provided for @allClear.
   ///
   /// In ko, this message translates to:
   /// **'ALL CLEAR'**
   String get allClear;
+
+  /// No description provided for @back.
+  ///
+  /// In ko, this message translates to:
+  /// **'뒤로가기'**
+  String get back;
+
+  /// No description provided for @close.
+  ///
+  /// In ko, this message translates to:
+  /// **'닫기'**
+  String get close;
+
+  /// No description provided for @confirm.
+  ///
+  /// In ko, this message translates to:
+  /// **'확인'**
+  String get confirm;
+
+  /// No description provided for @save.
+  ///
+  /// In ko, this message translates to:
+  /// **'저장'**
+  String get save;
+
+  /// No description provided for @reset.
+  ///
+  /// In ko, this message translates to:
+  /// **'초기화'**
+  String get reset;
+
+  /// No description provided for @home.
+  ///
+  /// In ko, this message translates to:
+  /// **'홈'**
+  String get home;
+
+  /// No description provided for @shop.
+  ///
+  /// In ko, this message translates to:
+  /// **'상점'**
+  String get shop;
+
+  /// No description provided for @event.
+  ///
+  /// In ko, this message translates to:
+  /// **'이벤트'**
+  String get event;
+
+  /// No description provided for @ranking.
+  ///
+  /// In ko, this message translates to:
+  /// **'랭킹'**
+  String get ranking;
+
+  /// No description provided for @settings.
+  ///
+  /// In ko, this message translates to:
+  /// **'설정'**
+  String get settings;
+
+  /// No description provided for @help.
+  ///
+  /// In ko, this message translates to:
+  /// **'도움말'**
+  String get help;
+
+  /// No description provided for @achievements.
+  ///
+  /// In ko, this message translates to:
+  /// **'업적'**
+  String get achievements;
+
+  /// No description provided for @bestScore.
+  ///
+  /// In ko, this message translates to:
+  /// **'최고 기록'**
+  String get bestScore;
+
+  /// No description provided for @lastScore.
+  ///
+  /// In ko, this message translates to:
+  /// **'최근 기록'**
+  String get lastScore;
+
+  /// No description provided for @record.
+  ///
+  /// In ko, this message translates to:
+  /// **'기록'**
+  String get record;
+
+  /// No description provided for @rank.
+  ///
+  /// In ko, this message translates to:
+  /// **'순위'**
+  String get rank;
+
+  /// No description provided for @nickname.
+  ///
+  /// In ko, this message translates to:
+  /// **'닉네임'**
+  String get nickname;
+
+  /// No description provided for @notSet.
+  ///
+  /// In ko, this message translates to:
+  /// **'설정 안 됨'**
+  String get notSet;
+
+  /// No description provided for @locked.
+  ///
+  /// In ko, this message translates to:
+  /// **'잠김'**
+  String get locked;
+
+  /// No description provided for @inUse.
+  ///
+  /// In ko, this message translates to:
+  /// **'사용 중'**
+  String get inUse;
+
+  /// No description provided for @use.
+  ///
+  /// In ko, this message translates to:
+  /// **'사용하기'**
+  String get use;
+
+  /// No description provided for @playNow.
+  ///
+  /// In ko, this message translates to:
+  /// **'바로 플레이'**
+  String get playNow;
+
+  /// No description provided for @goHome.
+  ///
+  /// In ko, this message translates to:
+  /// **'홈으로'**
+  String get goHome;
+
+  /// No description provided for @coinPurchase.
+  ///
+  /// In ko, this message translates to:
+  /// **'코인 충전'**
+  String get coinPurchase;
+
+  /// No description provided for @ownedCoins.
+  ///
+  /// In ko, this message translates to:
+  /// **'보유 코인'**
+  String get ownedCoins;
+
+  /// No description provided for @coins.
+  ///
+  /// In ko, this message translates to:
+  /// **'{count} 코인'**
+  String coins(String count);
+
+  /// No description provided for @purchaseComingSoon.
+  ///
+  /// In ko, this message translates to:
+  /// **'결제 기능 준비 중입니다.'**
+  String get purchaseComingSoon;
+
+  /// No description provided for @productsEmpty.
+  ///
+  /// In ko, this message translates to:
+  /// **'표시할 상품이 없습니다'**
+  String get productsEmpty;
+
+  /// No description provided for @previewClose.
+  ///
+  /// In ko, this message translates to:
+  /// **'풍선 미리보기 닫기'**
+  String get previewClose;
+
+  /// No description provided for @productInUse.
+  ///
+  /// In ko, this message translates to:
+  /// **'{name} 사용 중'**
+  String productInUse(String name);
+
+  /// No description provided for @productPurchased.
+  ///
+  /// In ko, this message translates to:
+  /// **'{name} 구매 완료!'**
+  String productPurchased(String name);
+
+  /// No description provided for @productNotOwned.
+  ///
+  /// In ko, this message translates to:
+  /// **'보유하지 않은 상품입니다.'**
+  String get productNotOwned;
+
+  /// No description provided for @coinsInsufficient.
+  ///
+  /// In ko, this message translates to:
+  /// **'코인이 부족해요!'**
+  String get coinsInsufficient;
+
+  /// No description provided for @productAlreadyOwned.
+  ///
+  /// In ko, this message translates to:
+  /// **'이미 보유한 상품입니다.'**
+  String get productAlreadyOwned;
+
+  /// No description provided for @productUnavailable.
+  ///
+  /// In ko, this message translates to:
+  /// **'현재 구매할 수 없는 상품입니다.'**
+  String get productUnavailable;
+
+  /// No description provided for @equippedDone.
+  ///
+  /// In ko, this message translates to:
+  /// **'착용 완료!'**
+  String get equippedDone;
+
+  /// No description provided for @buyPrice.
+  ///
+  /// In ko, this message translates to:
+  /// **'{price} 구매'**
+  String buyPrice(int price);
+
+  /// No description provided for @filterAll.
+  ///
+  /// In ko, this message translates to:
+  /// **'전체'**
+  String get filterAll;
+
+  /// No description provided for @filterOwned.
+  ///
+  /// In ko, this message translates to:
+  /// **'보유'**
+  String get filterOwned;
+
+  /// No description provided for @filterUnowned.
+  ///
+  /// In ko, this message translates to:
+  /// **'미보유'**
+  String get filterUnowned;
+
+  /// No description provided for @filterLimited.
+  ///
+  /// In ko, this message translates to:
+  /// **'한정'**
+  String get filterLimited;
+
+  /// No description provided for @rarityCommon.
+  ///
+  /// In ko, this message translates to:
+  /// **'일반'**
+  String get rarityCommon;
+
+  /// No description provided for @rarityRare.
+  ///
+  /// In ko, this message translates to:
+  /// **'희귀'**
+  String get rarityRare;
+
+  /// No description provided for @rarityHeroic.
+  ///
+  /// In ko, this message translates to:
+  /// **'영웅'**
+  String get rarityHeroic;
+
+  /// No description provided for @rarityLegendary.
+  ///
+  /// In ko, this message translates to:
+  /// **'전설'**
+  String get rarityLegendary;
+
+  /// No description provided for @recommended.
+  ///
+  /// In ko, this message translates to:
+  /// **'추천'**
+  String get recommended;
+
+  /// No description provided for @basicOwned.
+  ///
+  /// In ko, this message translates to:
+  /// **'기본 보유'**
+  String get basicOwned;
+
+  /// No description provided for @soundEffects.
+  ///
+  /// In ko, this message translates to:
+  /// **'효과음'**
+  String get soundEffects;
+
+  /// No description provided for @haptics.
+  ///
+  /// In ko, this message translates to:
+  /// **'진동'**
+  String get haptics;
+
+  /// No description provided for @player.
+  ///
+  /// In ko, this message translates to:
+  /// **'플레이어'**
+  String get player;
+
+  /// No description provided for @gameSettings.
+  ///
+  /// In ko, this message translates to:
+  /// **'게임 설정'**
+  String get gameSettings;
+
+  /// No description provided for @information.
+  ///
+  /// In ko, this message translates to:
+  /// **'정보'**
+  String get information;
+
+  /// No description provided for @terms.
+  ///
+  /// In ko, this message translates to:
+  /// **'이용약관'**
+  String get terms;
+
+  /// No description provided for @privacy.
+  ///
+  /// In ko, this message translates to:
+  /// **'개인정보처리방침'**
+  String get privacy;
+
+  /// No description provided for @contact.
+  ///
+  /// In ko, this message translates to:
+  /// **'문의하기'**
+  String get contact;
+
+  /// No description provided for @version.
+  ///
+  /// In ko, this message translates to:
+  /// **'버전 {version}'**
+  String version(String version);
+
+  /// No description provided for @termsPending.
+  ///
+  /// In ko, this message translates to:
+  /// **'정식 서비스 출시 전 이용약관이 제공될 예정입니다.'**
+  String get termsPending;
+
+  /// No description provided for @privacyPending.
+  ///
+  /// In ko, this message translates to:
+  /// **'정식 서비스 출시 전 개인정보처리방침이 제공될 예정입니다.'**
+  String get privacyPending;
+
+  /// No description provided for @contactPending.
+  ///
+  /// In ko, this message translates to:
+  /// **'문의 채널은 정식 출시 전 안내될 예정입니다.'**
+  String get contactPending;
+
+  /// No description provided for @dataReset.
+  ///
+  /// In ko, this message translates to:
+  /// **'데이터 초기화'**
+  String get dataReset;
+
+  /// No description provided for @dataResetDone.
+  ///
+  /// In ko, this message translates to:
+  /// **'게임 데이터가 초기화되었습니다.'**
+  String get dataResetDone;
+
+  /// No description provided for @dataResetTitle.
+  ///
+  /// In ko, this message translates to:
+  /// **'모든 게임 데이터를 초기화할까요?'**
+  String get dataResetTitle;
+
+  /// No description provided for @dataResetBody.
+  ///
+  /// In ko, this message translates to:
+  /// **'코인, 구매한 풍선, 장착 상태, 닉네임 및 설정이 모두 초기화됩니다.'**
+  String get dataResetBody;
+
+  /// No description provided for @nicknameChange.
+  ///
+  /// In ko, this message translates to:
+  /// **'닉네임 변경'**
+  String get nicknameChange;
+
+  /// No description provided for @progressReset.
+  ///
+  /// In ko, this message translates to:
+  /// **'진행 초기화'**
+  String get progressReset;
+
+  /// No description provided for @progressResetBody.
+  ///
+  /// In ko, this message translates to:
+  /// **'저장된 진행 상태를 초기화할까요?'**
+  String get progressResetBody;
+
+  /// No description provided for @endlessPop.
+  ///
+  /// In ko, this message translates to:
+  /// **'무한 팝'**
+  String get endlessPop;
+
+  /// No description provided for @endlessStart.
+  ///
+  /// In ko, this message translates to:
+  /// **'도전 시작'**
+  String get endlessStart;
+
+  /// No description provided for @endlessRuleOneHit.
+  ///
+  /// In ko, this message translates to:
+  /// **'모든 풍선은 한 번 터치하면 터져요.'**
+  String get endlessRuleOneHit;
+
+  /// No description provided for @endlessRuleNoLimit.
+  ///
+  /// In ko, this message translates to:
+  /// **'시간 제한과 게임오버 없이 계속 터뜨릴 수 있어요.'**
+  String get endlessRuleNoLimit;
+
+  /// No description provided for @endlessRuleScore.
+  ///
+  /// In ko, this message translates to:
+  /// **'풍선 1개마다 기록이 1 올라가요.'**
+  String get endlessRuleScore;
+
+  /// No description provided for @endlessRuleSave.
+  ///
+  /// In ko, this message translates to:
+  /// **'끝내기를 누르면 현재 기록과 BEST가 저장돼요.'**
+  String get endlessRuleSave;
+
+  /// No description provided for @endlessRankingInfo.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 랭킹에서는 STAGE 도전 또는 60초 팝을 선택할 수 있어요. 하단 랭킹 메뉴에서 시작해 보세요.'**
+  String get endlessRankingInfo;
+
+  /// No description provided for @endlessLocked.
+  ///
+  /// In ko, this message translates to:
+  /// **'Stage 30 완료 후 이용할 수 있어요.'**
+  String get endlessLocked;
+
+  /// No description provided for @endlessTitle.
+  ///
+  /// In ko, this message translates to:
+  /// **'∞ (무한 팝)'**
+  String get endlessTitle;
+
+  /// No description provided for @endlessStartSemantic.
+  ///
+  /// In ko, this message translates to:
+  /// **'무한 팝 시작'**
+  String get endlessStartSemantic;
+
+  /// No description provided for @endlessLockedSemantic.
+  ///
+  /// In ko, this message translates to:
+  /// **'무한 팝 잠김'**
+  String get endlessLockedSemantic;
+
+  /// No description provided for @endlessInfoSemantic.
+  ///
+  /// In ko, this message translates to:
+  /// **'무한 팝 설명'**
+  String get endlessInfoSemantic;
+
+  /// No description provided for @preparing.
+  ///
+  /// In ko, this message translates to:
+  /// **'준비 중...'**
+  String get preparing;
+
+  /// No description provided for @nextStep.
+  ///
+  /// In ko, this message translates to:
+  /// **'다음 단계 ▶'**
+  String get nextStep;
+
+  /// No description provided for @startShort.
+  ///
+  /// In ko, this message translates to:
+  /// **'시작'**
+  String get startShort;
+
+  /// No description provided for @startScreen.
+  ///
+  /// In ko, this message translates to:
+  /// **'시작 화면으로'**
+  String get startScreen;
+
+  /// No description provided for @endlessFinished.
+  ///
+  /// In ko, this message translates to:
+  /// **'무한 팝 종료'**
+  String get endlessFinished;
+
+  /// No description provided for @currentRecord.
+  ///
+  /// In ko, this message translates to:
+  /// **'현재 기록  {score}'**
+  String currentRecord(int score);
+
+  /// No description provided for @tryAgain.
+  ///
+  /// In ko, this message translates to:
+  /// **'다시 도전'**
+  String get tryAgain;
+
+  /// No description provided for @timeUp.
+  ///
+  /// In ko, this message translates to:
+  /// **'시간 끝!'**
+  String get timeUp;
+
+  /// No description provided for @gameComplete.
+  ///
+  /// In ko, this message translates to:
+  /// **'게임 완료!'**
+  String get gameComplete;
+
+  /// No description provided for @finalScore.
+  ///
+  /// In ko, this message translates to:
+  /// **'최종 점수'**
+  String get finalScore;
+
+  /// No description provided for @points.
+  ///
+  /// In ko, this message translates to:
+  /// **'{score}점'**
+  String points(int score);
+
+  /// No description provided for @again.
+  ///
+  /// In ko, this message translates to:
+  /// **'다시'**
+  String get again;
+
+  /// No description provided for @stageLockedSemantic.
+  ///
+  /// In ko, this message translates to:
+  /// **'{title} STAGE 잠김'**
+  String stageLockedSemantic(String title);
+
+  /// No description provided for @stageStartSemantic.
+  ///
+  /// In ko, this message translates to:
+  /// **'{title} STAGE 시작'**
+  String stageStartSemantic(String title);
+
+  /// No description provided for @stageOneDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'기본 풍선 · 보스 도전!'**
+  String get stageOneDescription;
+
+  /// No description provided for @stageTwoDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'2회 터치 풍선 · 더블 보스!'**
+  String get stageTwoDescription;
+
+  /// No description provided for @stageFakeDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'가짜 풍선을 터뜨리지 마세요!'**
+  String get stageFakeDescription;
+
+  /// No description provided for @modeEndless.
+  ///
+  /// In ko, this message translates to:
+  /// **'∞ 무한'**
+  String get modeEndless;
+
+  /// No description provided for @ribbonText.
+  ///
+  /// In ko, this message translates to:
+  /// **'터치해서 터뜨려!'**
+  String get ribbonText;
+
+  /// No description provided for @rankingColumnRank.
+  ///
+  /// In ko, this message translates to:
+  /// **'순위'**
+  String get rankingColumnRank;
+
+  /// No description provided for @rankingColumnNickname.
+  ///
+  /// In ko, this message translates to:
+  /// **'닉네임'**
+  String get rankingColumnNickname;
+
+  /// No description provided for @rankingColumnRecord.
+  ///
+  /// In ko, this message translates to:
+  /// **'기록'**
+  String get rankingColumnRecord;
+
+  /// No description provided for @myBestNone.
+  ///
+  /// In ko, this message translates to:
+  /// **'내 최고 기록  -'**
+  String get myBestNone;
+
+  /// No description provided for @myBest.
+  ///
+  /// In ko, this message translates to:
+  /// **'내 최고 기록  {score}점 · {rank}'**
+  String myBest(int score, String rank);
+
+  /// No description provided for @outsideTop100.
+  ///
+  /// In ko, this message translates to:
+  /// **'100위 밖'**
+  String get outsideTop100;
+
+  /// No description provided for @rankPosition.
+  ///
+  /// In ko, this message translates to:
+  /// **'{rank}위'**
+  String rankPosition(int rank);
+
+  /// No description provided for @skinBasic.
+  ///
+  /// In ko, this message translates to:
+  /// **'기본 풍선'**
+  String get skinBasic;
+
+  /// No description provided for @skinHeart.
+  ///
+  /// In ko, this message translates to:
+  /// **'하트 풍선'**
+  String get skinHeart;
+
+  /// No description provided for @skinStar.
+  ///
+  /// In ko, this message translates to:
+  /// **'별 풍선'**
+  String get skinStar;
+
+  /// No description provided for @skinFlower.
+  ///
+  /// In ko, this message translates to:
+  /// **'꽃 풍선'**
+  String get skinFlower;
+
+  /// No description provided for @skinMochi.
+  ///
+  /// In ko, this message translates to:
+  /// **'모찌'**
+  String get skinMochi;
+
+  /// No description provided for @skinWari.
+  ///
+  /// In ko, this message translates to:
+  /// **'와리'**
+  String get skinWari;
+
+  /// No description provided for @skinKicks.
+  ///
+  /// In ko, this message translates to:
+  /// **'KICKS'**
+  String get skinKicks;
+
+  /// No description provided for @skinBoo.
+  ///
+  /// In ko, this message translates to:
+  /// **'BOO'**
+  String get skinBoo;
+
+  /// No description provided for @skinMugi.
+  ///
+  /// In ko, this message translates to:
+  /// **'무기'**
+  String get skinMugi;
+
+  /// No description provided for @skinGemi.
+  ///
+  /// In ko, this message translates to:
+  /// **'제미'**
+  String get skinGemi;
+
+  /// No description provided for @skinShushu.
+  ///
+  /// In ko, this message translates to:
+  /// **'슈슈'**
+  String get skinShushu;
+
+  /// No description provided for @skinStarDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'조용하지만 은근 튀는 편'**
+  String get skinStarDescription;
+
+  /// No description provided for @skinFlowerDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'화사하고 기분파'**
+  String get skinFlowerDescription;
+
+  /// No description provided for @skinMochiDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'겁 많고 호기심 많음'**
+  String get skinMochiDescription;
+
+  /// No description provided for @skinWariDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'시원하고 자유분방함'**
+  String get skinWariDescription;
+
+  /// No description provided for @skinKicksDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'활발하고 승부욕 강함'**
+  String get skinKicksDescription;
+
+  /// No description provided for @skinBooDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'장난기 많고 살짝 겁쟁이'**
+  String get skinBooDescription;
+
+  /// No description provided for @skinMugiDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'예민하고 까칠함'**
+  String get skinMugiDescription;
+
+  /// No description provided for @skinGemiDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'차갑고 단단함'**
+  String get skinGemiDescription;
+
+  /// No description provided for @skinShushuDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'달콤하고 엉뚱함'**
+  String get skinShushuDescription;
+
+  /// No description provided for @sectionMultiHitHeadline.
+  ///
+  /// In ko, this message translates to:
+  /// **'단단한 풍선 등장!'**
+  String get sectionMultiHitHeadline;
+
+  /// No description provided for @sectionMultiHitRule1.
+  ///
+  /// In ko, this message translates to:
+  /// **'풍선마다 2번 터치'**
+  String get sectionMultiHitRule1;
+
+  /// No description provided for @sectionMultiHitRule2.
+  ///
+  /// In ko, this message translates to:
+  /// **'빠르게 모두 터뜨리기'**
+  String get sectionMultiHitRule2;
+
+  /// No description provided for @sectionFakeHeadline.
+  ///
+  /// In ko, this message translates to:
+  /// **'가짜 풍선 등장!'**
+  String get sectionFakeHeadline;
+
+  /// No description provided for @sectionFakeRule1.
+  ///
+  /// In ko, this message translates to:
+  /// **'가짜 풍선 터치 금지'**
+  String get sectionFakeRule1;
+
+  /// No description provided for @sectionFakeRule2.
+  ///
+  /// In ko, this message translates to:
+  /// **'진짜 풍선만 터뜨리기'**
+  String get sectionFakeRule2;
+
+  /// No description provided for @timeInfinite.
+  ///
+  /// In ko, this message translates to:
+  /// **'시간  ∞'**
+  String get timeInfinite;
+
+  /// No description provided for @refresh.
+  ///
+  /// In ko, this message translates to:
+  /// **'새로고침'**
+  String get refresh;
+
+  /// No description provided for @rankingScore.
+  ///
+  /// In ko, this message translates to:
+  /// **'{score} · {detail}'**
+  String rankingScore(int score, String detail);
+
+  /// No description provided for @reachedStage.
+  ///
+  /// In ko, this message translates to:
+  /// **'STAGE {stage}'**
+  String reachedStage(int stage);
 }
 
 class _AppLocalizationsDelegate

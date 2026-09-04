@@ -2760,16 +2760,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('게임 끝내기'),
-        content: const Text('현재 게임을 끝내고 시작 화면으로 돌아갈까요?'),
+        title: Text(context.l10n.gameExitTitle),
+        content: Text(context.l10n.gameExitBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('끝내기'),
+            child: Text(context.l10n.exit),
           ),
         ],
       ),
@@ -3300,7 +3300,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _feedbacks.add(
       FloatingTextFeedback(
         center: center,
-        text: '-2초',
+        text: context.l10n.fakePenalty,
         color: const Color(0xFFE53935),
         life: 0.72,
         maxLife: 0.72,
@@ -3758,16 +3758,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('진행 초기화'),
-        content: const Text('저장된 진행 상태를 초기화할까요?'),
+        title: Text(context.l10n.progressReset),
+        content: Text(context.l10n.progressResetBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('초기화'),
+            child: Text(context.l10n.reset),
           ),
         ],
       ),
@@ -4053,18 +4053,18 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('무한 팝'),
+        title: Text(context.l10n.endlessPop),
         content: _endlessModeDescription(),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('닫기'),
+            child: Text(context.l10n.close),
           ),
           if (startOnConfirm)
             FilledButton(
               key: const ValueKey('endless-intro-start'),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('도전 시작'),
+              child: Text(context.l10n.endlessStart),
             ),
         ],
       ),
@@ -4079,25 +4079,23 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('모든 풍선은 한 번 터치하면 터져요.'),
+          Text(context.l10n.endlessRuleOneHit),
           const SizedBox(height: 7),
-          const Text('시간 제한과 게임오버 없이 계속 터뜨릴 수 있어요.'),
+          Text(context.l10n.endlessRuleNoLimit),
           const SizedBox(height: 7),
-          const Text('풍선 1개마다 기록이 1 올라가요.'),
+          Text(context.l10n.endlessRuleScore),
           const SizedBox(height: 7),
-          const Text('끝내기를 누르면 현재 기록과 BEST가 저장돼요.'),
+          Text(context.l10n.endlessRuleSave),
           const SizedBox(height: 14),
-          const Text(
-            '랭킹',
+          Text(
+            context.l10n.ranking,
             style: TextStyle(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 5),
-          const Text(
-            '온라인 랭킹에서는 STAGE 도전 또는 60초 팝을 선택할 수 있어요. 하단 랭킹 메뉴에서 시작해 보세요.',
-          ),
+          Text(context.l10n.endlessRankingInfo),
           if (!_endlessModeUnlocked) ...[
             const SizedBox(height: 10),
-            const Text('Stage 30 완료 후 이용할 수 있어요.'),
+            Text(context.l10n.endlessLocked),
           ],
         ],
       );
@@ -4322,11 +4320,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 key: const ValueKey('home-tagline-ribbon'),
                 painter: const RibbonPainter(),
                 child: Semantics(
-                  label: '터치해서 터뜨려!',
+                  label: context.l10n.ribbonText,
                   child: ExcludeSemantics(
                     child: CustomPaint(
                       key: const ValueKey('home-tagline-arched-text'),
                       painter: RibbonTextPainter(
+                        text: context.l10n.ribbonText,
                         textScaler: MediaQuery.textScalerOf(context),
                       ),
                     ),
@@ -4511,9 +4510,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             child: _stagePanel(
               title: leftTitle,
               subtitle: leftTitle.startsWith('1 ')
-                  ? '기본 풍선 · 보스 도전!'
+                  ? context.l10n.stageOneDescription
                   : leftTitle.startsWith('21 ')
-                      ? '가짜 풍선을 터뜨리지 마세요!'
+                      ? context.l10n.stageFakeDescription
                       : 'COMING SOON',
               color: leftColor,
               previewWidth: previewWidth,
@@ -4526,7 +4525,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             child: _stagePanel(
               title: rightTitle,
               subtitle: rightTitle.startsWith('11 ')
-                  ? '2회 터치 풍선 · 더블 보스!'
+                  ? context.l10n.stageTwoDescription
                   : 'COMING SOON',
               color: rightColor,
               previewWidth: previewWidth,
@@ -4604,7 +4603,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             ),
             _recordBoardRow(
               key: const ValueKey('endless-record-row'),
-              mode: '∞ 무한',
+              mode: context.l10n.modeEndless,
               badgeColor: _poppopRibbonTopColor,
               best: _endlessBestScore,
               last: _endlessLastScore,
@@ -4648,7 +4647,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             const SizedBox(width: 7),
             Expanded(
               child: _recordMetric(
-                label: '최고 기록',
+                label: context.l10n.bestScore,
                 value: best,
                 valueKey: ValueKey('${key.toString()}-best'),
               ),
@@ -4663,7 +4662,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             ),
             Expanded(
               child: _recordMetric(
-                label: '최근 기록',
+                label: context.l10n.lastScore,
                 value: last,
                 valueKey: ValueKey('${key.toString()}-last'),
               ),
@@ -4715,7 +4714,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               _navItem(
                 key: const ValueKey('home-nav-home'),
                 icon: Icons.home_rounded,
-                label: '홈',
+                label: context.l10n.home,
                 selected: selectedTab == MainTab.home,
                 selectionKey: selectedTab == MainTab.home
                     ? const ValueKey('home-nav-selected-home')
@@ -4725,7 +4724,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               _navItem(
                 key: const ValueKey('home-nav-shop'),
                 icon: Icons.storefront_rounded,
-                label: '상점',
+                label: context.l10n.shop,
                 selected: selectedTab == MainTab.store,
                 selectionKey: selectedTab == MainTab.store
                     ? const ValueKey('home-nav-selected-store')
@@ -4735,7 +4734,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               _navItem(
                 key: const ValueKey('home-nav-event'),
                 icon: Icons.celebration_rounded,
-                label: '이벤트',
+                label: context.l10n.event,
                 selected: selectedTab == MainTab.event,
                 selectionKey: selectedTab == MainTab.event
                     ? const ValueKey('home-nav-selected-event')
@@ -4745,7 +4744,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
               _navItem(
                 key: const ValueKey('home-nav-ranking'),
                 icon: Icons.emoji_events_rounded,
-                label: '랭킹',
+                label: context.l10n.ranking,
                 selected: selectedTab == MainTab.ranking,
                 selectionKey: selectedTab == MainTab.ranking
                     ? const ValueKey('home-nav-selected-ranking')
@@ -4776,7 +4775,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           key: selectionKey,
           width: 96,
           height: 80,
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 1),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -4817,18 +4816,28 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 ],
               ),
               const SizedBox(height: 3),
-              Text(
-                label,
-                style: TextStyle(
-                  color: selected ? Colors.white : const Color(0xFF244B62),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  shadows: selected
-                      ? const [
-                          Shadow(
-                              color: Color(0x55002C4E), offset: Offset(0, 1)),
-                        ]
-                      : null,
+              SizedBox(
+                height: 17,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: selected ? Colors.white : const Color(0xFF244B62),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      shadows: selected
+                          ? const [
+                              Shadow(
+                                color: Color(0x55002C4E),
+                                offset: Offset(0, 1),
+                              ),
+                            ]
+                          : null,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -5025,9 +5034,9 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 ),
                 Expanded(
                   child: products.isEmpty && category != StoreCategory.balloon
-                      ? const Center(
+                      ? Center(
                           child: Text(
-                            '표시할 상품이 없습니다',
+                            context.l10n.productsEmpty,
                             key: ValueKey('store-products-empty'),
                             style: TextStyle(
                               color: Color(0xFF6E8492),
@@ -5204,7 +5213,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     final destination = await showGeneralDialog<BalloonPreviewDestination>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: '풍선 미리보기 닫기',
+      barrierLabel: context.l10n.previewClose,
       barrierColor: const Color(0x660D2940),
       transitionDuration: const Duration(milliseconds: 180),
       pageBuilder: (dialogContext, _, __) => BalloonPreviewDialog(
@@ -5249,11 +5258,12 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           setState(() {
             _equippedProductIds[product.category] = product.id;
           });
-          _showComingSoon('${product.name} 사용 중');
+          _showComingSoon(context.l10n
+              .productInUse(localizedSkinName(context.l10n, product.id)));
         case EquipResult.alreadyEquipped:
           return;
         case EquipResult.notOwned:
-          _showComingSoon('보유하지 않은 상품입니다.');
+          _showComingSoon(context.l10n.productNotOwned);
       }
       return;
     }
@@ -5271,13 +5281,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           _coinBalance = CoinService.balance;
           _ownedProductIds = PurchaseService.ownedProductIds;
         });
-        _showComingSoon('${product.name} 구매 완료!');
+        _showComingSoon(context.l10n
+            .productPurchased(localizedSkinName(context.l10n, product.id)));
       case PurchaseResult.insufficientCoins:
-        _showComingSoon('코인이 부족해요!');
+        _showComingSoon(context.l10n.coinsInsufficient);
       case PurchaseResult.alreadyOwned:
-        _showComingSoon('이미 보유한 상품입니다.');
+        _showComingSoon(context.l10n.productAlreadyOwned);
       case PurchaseResult.unavailable:
-        _showComingSoon('현재 구매할 수 없는 상품입니다.');
+        _showComingSoon(context.l10n.productUnavailable);
     }
   }
 
@@ -5357,11 +5368,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
           MainTab.store => _buildShopScreen(),
           MainTab.event => _buildMainPlaceholder(
               tab: MainTab.event,
-              message: '이벤트 준비 중',
+              message: context.l10n.event,
             ),
           MainTab.ranking => _buildMainPlaceholder(
               tab: MainTab.ranking,
-              message: '랭킹 준비 중',
+              message: context.l10n.ranking,
             ),
         },
       );
@@ -5853,7 +5864,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 FilledButton(
                   key: const ValueKey('stage-intro-next'),
                   onPressed: _dismissStageIntro,
-                  child: const Text('다음 단계 ▶'),
+                  child: Text(context.l10n.nextStep),
                 ),
               ],
             ),
@@ -5886,8 +5897,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  '일시정지',
+                Text(
+                  context.l10n.pause,
                   style: TextStyle(
                     fontSize: 38,
                     fontWeight: FontWeight.w900,
@@ -5902,7 +5913,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     _resumeGame();
                   },
                   icon: const Icon(Icons.play_arrow_rounded, size: 30),
-                  label: const Text('계속하기'),
+                  label: Text(context.l10n.resume),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(double.infinity, 60),
                     textStyle: const TextStyle(
@@ -5918,7 +5929,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     _returnToMenu();
                   },
                   icon: const Icon(Icons.home_rounded, size: 28),
-                  label: const Text('시작 화면으로'),
+                  label: Text(context.l10n.startScreen),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 58),
                     textStyle: const TextStyle(
@@ -5962,7 +5973,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    completed ? '게임 완료!' : '시간 끝!',
+                    completed ? context.l10n.gameComplete : context.l10n.timeUp,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 32,
@@ -5971,8 +5982,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    '최종 점수',
+                  Text(
+                    context.l10n.finalScore,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -5980,7 +5991,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                     ),
                   ),
                   Text(
-                    '$_score점',
+                    context.l10n.points(_score),
                     style: const TextStyle(
                       fontSize: 46,
                       height: 1.05,
@@ -6016,14 +6027,14 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                       _buildResultAction(
                         key: const ValueKey('result-retry-button'),
                         icon: Icons.refresh_rounded,
-                        label: '다시',
+                        label: context.l10n.again,
                         onTap: () => _startGame(_stage),
                       ),
                       const SizedBox(width: 42),
                       _buildResultAction(
                         key: const ValueKey('result-home-button'),
                         icon: Icons.home_rounded,
-                        label: '홈',
+                        label: context.l10n.home,
                         onTap: _returnToMenu,
                       ),
                     ],
@@ -6093,13 +6104,6 @@ class StoreProductFilterBar extends StatelessWidget {
   final StoreProductFilter selected;
   final ValueChanged<StoreProductFilter> onSelected;
 
-  static const _items = <(StoreProductFilter, String)>[
-    (StoreProductFilter.all, '전체'),
-    (StoreProductFilter.owned, '보유'),
-    (StoreProductFilter.unowned, '미보유'),
-    (StoreProductFilter.limited, '한정'),
-  ];
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -6119,27 +6123,32 @@ class StoreProductFilterBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          for (final item in _items)
+          for (final item in StoreProductFilter.values)
             Expanded(
               child: InkWell(
-                key: ValueKey('store-filter-${item.$1.name}'),
+                key: ValueKey('store-filter-${item.name}'),
                 onTap: () {
                   PopSound.playUiClick();
-                  onSelected(item.$1);
+                  onSelected(item);
                 },
                 borderRadius: BorderRadius.circular(15),
                 child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: selected == item.$1
+                    color: selected == item
                         ? const Color(0xFFFFD8E5)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: Text(
-                    item.$2,
+                    switch (item) {
+                      StoreProductFilter.all => context.l10n.filterAll,
+                      StoreProductFilter.owned => context.l10n.filterOwned,
+                      StoreProductFilter.unowned => context.l10n.filterUnowned,
+                      StoreProductFilter.limited => context.l10n.filterLimited,
+                    },
                     style: TextStyle(
-                      color: selected == item.$1
+                      color: selected == item
                           ? const Color(0xFFFF4F7B)
                           : const Color(0xFF526B79),
                       fontSize: 11,
@@ -6156,11 +6165,11 @@ class StoreProductFilterBar extends StatelessWidget {
 }
 
 extension BalloonRarityStyle on BalloonRarity {
-  String get label => switch (this) {
-        BalloonRarity.common => '일반',
-        BalloonRarity.rare => '희귀',
-        BalloonRarity.heroic => '영웅',
-        BalloonRarity.legendary => '전설',
+  String localizedLabel(BuildContext context) => switch (this) {
+        BalloonRarity.common => context.l10n.rarityCommon,
+        BalloonRarity.rare => context.l10n.rarityRare,
+        BalloonRarity.heroic => context.l10n.rarityHeroic,
+        BalloonRarity.legendary => context.l10n.rarityLegendary,
       };
 
   String get symbol => switch (this) {
@@ -6192,7 +6201,7 @@ class BalloonRaritySectionHeader extends StatelessWidget {
             Text(rarity.symbol, style: const TextStyle(fontSize: 14)),
             const SizedBox(width: 5),
             Text(
-              rarity.label,
+              rarity.localizedLabel(context),
               style: TextStyle(
                 color: rarity.color,
                 fontSize: 15,
@@ -6218,7 +6227,7 @@ class BalloonRarityBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
-          rarity.label,
+          rarity.localizedLabel(context),
           style: const TextStyle(
             color: Colors.white,
             fontSize: 6.5,
@@ -6266,12 +6275,12 @@ class StoreComingSoonCard extends StatelessWidget {
 }
 
 extension BalloonBadgeLabel on BalloonBadge {
-  String get label => switch (this) {
+  String localizedLabel(BuildContext context) => switch (this) {
         BalloonBadge.none => '',
         BalloonBadge.newItem => 'NEW',
         BalloonBadge.popular => 'HOT',
         BalloonBadge.event => 'EVENT',
-        BalloonBadge.recommended => '추천',
+        BalloonBadge.recommended => context.l10n.recommended,
       };
 }
 
@@ -6289,7 +6298,7 @@ class StoreProductBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
-          badge.label,
+          badge.localizedLabel(context),
           style: const TextStyle(
             color: Colors.white,
             fontSize: 6.5,
@@ -6549,7 +6558,8 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                         const SizedBox(width: 40),
                         Expanded(
                           child: Text(
-                            widget.definition.displayName,
+                            localizedSkinName(
+                                context.l10n, widget.definition.id),
                             key: const ValueKey('balloon-preview-name'),
                             textAlign: TextAlign.center,
                             maxLines: 1,
@@ -6569,12 +6579,12 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                           },
                           icon: const Icon(Icons.close_rounded),
                           color: const Color(0xFF526B79),
-                          tooltip: '닫기',
+                          tooltip: context.l10n.close,
                         ),
                       ],
                     ),
                     Text(
-                      widget.definition.rarity.label,
+                      widget.definition.rarity.localizedLabel(context),
                       key: const ValueKey('balloon-preview-rarity'),
                       style: TextStyle(
                         color: widget.definition.rarity.color,
@@ -6585,7 +6595,8 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                     if (widget.definition.showsDescription) ...[
                       const SizedBox(height: 5),
                       Text(
-                        widget.definition.description!,
+                        localizedSkinDescription(
+                            context.l10n, widget.definition.id),
                         key: const ValueKey('balloon-preview-description'),
                         textAlign: TextAlign.center,
                         maxLines: 2,
@@ -6601,7 +6612,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                     const SizedBox(height: 3),
                     Text(
                       widget.definition.price == 0
-                          ? '기본 보유'
+                          ? context.l10n.basicOwned
                           : '${widget.definition.price} coin',
                       key: const ValueKey('balloon-preview-price'),
                       style: const TextStyle(
@@ -6759,7 +6770,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Row(
+        Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
@@ -6769,7 +6780,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
             ),
             SizedBox(width: 6),
             Text(
-              '착용 완료!',
+              context.l10n.equippedDone,
               key: ValueKey('balloon-preview-equipped-status'),
               style: TextStyle(
                 color: Color(0xFF25385F),
@@ -6788,7 +6799,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                 ? null
                 : () => _finishPreview(BalloonPreviewDestination.play),
             icon: const Icon(Icons.play_arrow_rounded, size: 25),
-            label: const Text('바로 플레이'),
+            label: Text(context.l10n.playNow),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFFFF4F7B),
               foregroundColor: Colors.white,
@@ -6811,7 +6822,7 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
                 ? null
                 : () => _finishPreview(BalloonPreviewDestination.home),
             icon: const Icon(Icons.home_rounded, size: 21),
-            label: const Text('홈으로'),
+            label: Text(context.l10n.goHome),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF25385F),
               side: const BorderSide(color: Color(0xFFCAD4E6), width: 1.2),
@@ -6834,14 +6845,14 @@ class _BalloonPreviewDialogState extends State<BalloonPreviewDialog>
       return FilledButton(
         key: const ValueKey('balloon-preview-action'),
         onPressed: _handleAction,
-        child: const Text('사용하기'),
+        child: Text(context.l10n.use),
       );
     }
     return FilledButton.icon(
       key: const ValueKey('balloon-preview-action'),
       onPressed: _handleAction,
       icon: const Icon(Icons.monetization_on_rounded),
-      label: Text('${product.price} 구매'),
+      label: Text(context.l10n.buyPrice(product.price)),
     );
   }
 }
@@ -6891,7 +6902,9 @@ class StoreProductCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      product.locked ? '???' : product.displayName,
+                      product.locked
+                          ? '???'
+                          : localizedSkinName(context.l10n, product.id),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -6903,7 +6916,7 @@ class StoreProductCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    SizedBox(height: 15, child: _status()),
+                    SizedBox(height: 15, child: _status(context)),
                   ],
                 ),
               ),
@@ -6926,15 +6939,15 @@ class StoreProductCard extends StatelessWidget {
     );
   }
 
-  Widget _status() {
+  Widget _status(BuildContext context) {
     if (product.locked) {
-      return const Row(
+      return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.lock_rounded, color: Color(0xFF98A3AA), size: 10),
           SizedBox(width: 2),
           Text(
-            '잠김',
+            context.l10n.locked,
             style: TextStyle(
               color: Color(0xFF87949C),
               fontSize: 9,
@@ -6945,8 +6958,8 @@ class StoreProductCard extends StatelessWidget {
       );
     }
     if (product.equipped) {
-      return const Text(
-        '사용 중',
+      return Text(
+        context.l10n.inUse,
         style: TextStyle(
           color: Color(0xFF35A978),
           fontSize: 9,
@@ -6955,8 +6968,8 @@ class StoreProductCard extends StatelessWidget {
       );
     }
     if (product.owned) {
-      return const Text(
-        '사용하기',
+      return Text(
+        context.l10n.use,
         style: TextStyle(
           color: Color(0xFF7354E8),
           fontSize: 9,
@@ -8822,7 +8835,9 @@ class _StageKeycap extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: onTap != null,
-      label: locked ? '$title STAGE 잠김' : '$title STAGE 시작',
+      label: locked
+          ? context.l10n.stageLockedSemantic(title)
+          : context.l10n.stageStartSemantic(title),
       child: Container(
         key: ValueKey('stage-card-$title'),
         decoration: BoxDecoration(
@@ -8979,7 +8994,9 @@ class _StageKeycap extends StatelessWidget {
                                   const SizedBox(width: 4),
                                 ],
                                 Text(
-                                  locked ? '잠김' : '시작하기',
+                                  locked
+                                      ? context.l10n.locked
+                                      : context.l10n.start,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: labelColor,
@@ -9028,7 +9045,9 @@ class _EndlessModeKeycap extends StatelessWidget {
       key: const ValueKey('endless-mode-entry'),
       button: true,
       enabled: onStart != null,
-      label: unlocked ? '무한 팝 시작' : '무한 팝 잠김',
+      label: unlocked
+          ? context.l10n.endlessStartSemantic
+          : context.l10n.endlessLockedSemantic,
       child: DecoratedBox(
         key: const ValueKey('endless-mode-visual'),
         decoration: BoxDecoration(
@@ -9065,7 +9084,7 @@ class _EndlessModeKeycap extends StatelessWidget {
               Center(
                 child: IgnorePointer(
                   child: Text(
-                    '∞ (무한 팝)',
+                    context.l10n.endlessTitle,
                     key: const ValueKey('endless-mode-title'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -9094,11 +9113,11 @@ class _EndlessModeKeycap extends StatelessWidget {
                 bottom: 0,
                 width: 44,
                 child: Semantics(
-                  label: '무한 팝 설명',
+                  label: context.l10n.endlessInfoSemantic,
                   button: true,
                   child: IconButton(
                     key: const ValueKey('endless-mode-info'),
-                    tooltip: '무한 팝 설명',
+                    tooltip: context.l10n.endlessInfoSemantic,
                     onPressed: onInfo,
                     constraints:
                         const BoxConstraints.tightFor(width: 44, height: 44),
@@ -9349,9 +9368,12 @@ class RibbonGlyphLayout {
 }
 
 class RibbonTextPainter extends CustomPainter {
-  const RibbonTextPainter({this.textScaler = TextScaler.noScaling});
+  const RibbonTextPainter({
+    this.text = '터치해서 터뜨려!',
+    this.textScaler = TextScaler.noScaling,
+  });
 
-  static const String text = '터치해서 터뜨려!';
+  final String text;
   static const double maxLift = 6;
   static const TextStyle textStyle = TextStyle(
     color: Colors.white,
@@ -9427,7 +9449,7 @@ class RibbonTextPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant RibbonTextPainter oldDelegate) =>
-      oldDelegate.textScaler != textScaler;
+      oldDelegate.textScaler != textScaler || oldDelegate.text != text;
 }
 
 class NatureLeftLayer extends StatefulWidget {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'l10n/l10n.dart';
 
 import 'audio/pop_sound.dart';
 import 'coin/coin_package.dart';
@@ -38,13 +39,13 @@ class CoinPurchasePage extends StatelessWidget {
                         PopSound.playUiClick();
                         Navigator.of(context).pop();
                       },
-                      tooltip: '뒤로가기',
+                      tooltip: context.l10n.back,
                       icon: const Icon(Icons.arrow_back_rounded),
                       color: const Color(0xFF285A78),
                     ),
                   ),
-                  const Text(
-                    '코인 충전',
+                  Text(
+                    context.l10n.coinPurchase,
                     style: TextStyle(
                       color: Color(0xFF244B62),
                       fontSize: 22,
@@ -90,7 +91,11 @@ class CoinPurchasePage extends StatelessWidget {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text(result.message),
+          content: Text(
+            result.status == CoinPurchaseStatus.unavailable
+                ? context.l10n.purchaseComingSoon
+                : result.message,
+          ),
         ),
       );
   }
@@ -137,8 +142,8 @@ class _CoinBalanceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          const Text(
-            '보유 코인',
+          Text(
+            context.l10n.ownedCoins,
             style: TextStyle(
               color: Color(0xFF6E8492),
               fontSize: 13,
@@ -193,7 +198,7 @@ class _CoinPackageCard extends StatelessWidget {
               const SizedBox(width: 13),
               Expanded(
                 child: Text(
-                  '${_formatNumber(package.coinAmount)} 코인',
+                  context.l10n.coins(_formatNumber(package.coinAmount)),
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF244B62),

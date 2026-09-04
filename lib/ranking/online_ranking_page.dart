@@ -197,12 +197,14 @@ class _LeaderboardView extends StatelessWidget {
               entry: board.currentUser,
               outside: board.currentUserOutsideTop100),
           const SizedBox(height: 8),
-          const Row(
+          Row(
             children: [
               SizedBox(
-                  width: 48, child: Text('순위', textAlign: TextAlign.center)),
-              Expanded(child: Text('닉네임')),
-              Text('기록'),
+                  width: 48,
+                  child: Text(context.l10n.rankingColumnRank,
+                      textAlign: TextAlign.center)),
+              Expanded(child: Text(context.l10n.rankingColumnNickname)),
+              Text(context.l10n.rankingColumnRecord),
             ],
           ),
           const SizedBox(height: 4),
@@ -239,8 +241,13 @@ class _MyBest extends StatelessWidget {
         ),
         child: Text(
           entry == null
-              ? '내 최고 기록  -'
-              : '내 최고 기록  ${entry!.score}점 · ${outside ? '100위 밖' : '${entry!.rank}위'}',
+              ? context.l10n.myBestNone
+              : context.l10n.myBest(
+                  entry!.score,
+                  outside
+                      ? context.l10n.outsideTop100
+                      : context.l10n.rankPosition(entry!.rank),
+                ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       );
@@ -270,7 +277,12 @@ class _RankingRow extends StatelessWidget {
             ),
             Text(
               category == RankingCategory.stage
-                  ? '${entry.score} · ${entry.cleared ? 'ALL CLEAR' : 'STAGE ${entry.reachedStage}'}'
+                  ? context.l10n.rankingScore(
+                      entry.score,
+                      entry.cleared
+                          ? context.l10n.allClear
+                          : context.l10n.reachedStage(entry.reachedStage!),
+                    )
                   : '${entry.score}',
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
