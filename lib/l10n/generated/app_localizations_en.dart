@@ -489,6 +489,130 @@ class AppLocalizationsEn extends AppLocalizations {
       'Verifiable requests are normally completed within 30 days. Deleted online data cannot be recovered.';
 
   @override
+  String get termsIntroduction =>
+      'Effective date: September 4, 2026. These Terms explain the rules for using POPPOP in clear language for players and guardians.';
+
+  @override
+  String get termsPurposeTitle => '1. Purpose and agreement';
+
+  @override
+  String get termsPurposeBody =>
+      'These Terms set out the rights, responsibilities, and basic rules that apply when you use POPPOP. By using the service, you agree to these Terms. If you do not agree, please stop using the service.';
+
+  @override
+  String get termsOperatorTitle => '2. Operator and contact';
+
+  @override
+  String get termsOperatorBody =>
+      'POPPOP is operated by OOPSIDE STUDIO (웁사이드 스튜디오). Questions about these Terms may be sent to oopsidestudio@gmail.com.';
+
+  @override
+  String get termsEligibilityTitle => '3. Eligibility and minors';
+
+  @override
+  String get termsEligibilityBody =>
+      'Children may enjoy POPPOP. If applicable law requires consent from a parent or guardian, a minor should use the service only after receiving that consent. Guardians are encouraged to review online ranking, nickname, and data-handling information together with the child.';
+
+  @override
+  String get termsLicenseTitle => '4. Permission to use POPPOP';
+
+  @override
+  String get termsLicenseBody =>
+      'OOPSIDE STUDIO grants you a limited, personal, non-exclusive, non-transferable, and revocable permission to use POPPOP for non-commercial entertainment in accordance with these Terms. This permission does not transfer ownership of the game or its content.';
+
+  @override
+  String get termsRankingTitle => '5. Nicknames and online ranking';
+
+  @override
+  String get termsRankingBody =>
+      'You are responsible for choosing an appropriate nickname. Do not include a real name, school, phone number, email, address, or other identifying information. Online rankings may display your nickname and game record to other players. Scores that violate these Terms or are invalid may be removed or corrected.';
+
+  @override
+  String get termsProhibitedTitle => '6. Prohibited conduct';
+
+  @override
+  String get termsProhibitedBody =>
+      'Do not manipulate scores or progress dishonestly; use bots, automation, modified clients, or vulnerabilities; impersonate another person; use a nickname containing personal information or harmful content; interfere with the service or another player\'s use; or attempt unauthorized access to the game, ranking, or related systems.';
+
+  @override
+  String get termsProgressTitle => '7. Game progress and local storage';
+
+  @override
+  String get termsProgressBody =>
+      'Most progress, scores, coins, items, nickname, and settings are stored on your device. They may be lost when app or browser data is cleared, the app is removed, the device is changed, or data is reset. OOPSIDE STUDIO cannot remotely restore information that exists only on your device.';
+
+  @override
+  String get termsItemsTitle => '8. Coins and digital items';
+
+  @override
+  String get termsItemsBody =>
+      'Coins and digital items are game content only. They are not cash or a payment method, cannot be transferred, exchanged, or redeemed for money, and do not represent ownership outside POPPOP. Availability and game balance may change reasonably as the service evolves.';
+
+  @override
+  String get termsPurchasesTitle => '9. In-app purchases';
+
+  @override
+  String get termsPurchasesBody =>
+      'POPPOP does not currently offer purchases for real money. If in-app purchases are offered in the future, they will use Apple App Store or Google Play payment systems, and prices and conditions will be shown on the purchase screen before confirmation. Cancellations and refunds will follow applicable law and the relevant store\'s policy.';
+
+  @override
+  String get termsChangesTitle =>
+      '10. Service changes, maintenance, and closure';
+
+  @override
+  String get termsChangesBody =>
+      'We may reasonably change, pause, inspect, or discontinue all or part of the service for updates, security, technical issues, legal requirements, or operational needs. Where practical, important changes will be announced in advance.';
+
+  @override
+  String get termsIntellectualPropertyTitle => '11. Intellectual property';
+
+  @override
+  String get termsIntellectualPropertyBody =>
+      'POPPOP\'s software, graphics, characters, names, sounds, and other content are owned by OOPSIDE STUDIO or used with permission and are protected by applicable intellectual-property laws. You may not copy, distribute, sell, or commercially exploit them without permission, except where law allows.';
+
+  @override
+  String get termsPrivacyTitle => '12. Privacy';
+
+  @override
+  String get termsPrivacyBody =>
+      'Information handling is described in the POPPOP Privacy Policy. Please review it together with these Terms, especially before using online ranking.';
+
+  @override
+  String get termsLiabilityTitle => '13. Reasonable limits of responsibility';
+
+  @override
+  String get termsLiabilityBody =>
+      'We work to provide a safe and stable service, but temporary interruption, device-specific issues, network failure, or loss of device-local data may occur. To the extent allowed by law, OOPSIDE STUDIO is not responsible for losses caused without its intent or gross negligence. Nothing in these Terms limits consumer rights or responsibilities that cannot lawfully be excluded.';
+
+  @override
+  String get termsRestrictionTitle => '14. Restriction of use';
+
+  @override
+  String get termsRestrictionBody =>
+      'If a user seriously or repeatedly violates these Terms, harms other users, manipulates ranking records, or threatens service security, we may remove invalid records or limit access to online features to a reasonable extent. We will consider the nature and seriousness of the conduct.';
+
+  @override
+  String get termsUpdatesTitle => '15. Changes to these Terms';
+
+  @override
+  String get termsUpdatesBody =>
+      'We may update these Terms when the service or legal requirements change. The updated text and effective date will be published in the app and on the public Terms page. Continued use after the effective date means the updated Terms apply.';
+
+  @override
+  String get termsLawTitle => '16. Governing law';
+
+  @override
+  String get termsLawBody =>
+      'These Terms are governed by the laws of the Republic of Korea. Any dispute will be handled under applicable law and procedures, without limiting protections available to consumers under mandatory law.';
+
+  @override
+  String get termsContactTitle => '17. Contact';
+
+  @override
+  String get termsContactBody =>
+      'For questions about these Terms or POPPOP, contact OOPSIDE STUDIO at oopsidestudio@gmail.com.';
+
+  @override
   String get progressReset => 'Reset Progress';
 
   @override

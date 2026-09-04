@@ -113,22 +113,86 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final testCase
-      in <({Locale locale, String privacyExpected, String supportExpected})>[
+  testWidgets('settings opens native terms and keeps legal links in-app', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final opened = <Uri>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: SettingsPage(
+          onDataReset: () {},
+          externalLinkOpener: (uri) async {
+            opened.add(uri);
+            return true;
+          },
+          supportIdProvider: () async => 'terms-support-id',
+        ),
+      ),
+    );
+
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('settings-terms-row')));
+    await tester.tap(find.byKey(const ValueKey('settings-terms-row')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('terms-of-service-page')), findsOneWidget);
+    expect(find.textContaining('Effective date: September 4, 2026'),
+        findsOneWidget);
+    expect(find.textContaining('does not currently offer purchases'),
+        findsOneWidget);
+    expect(opened, isEmpty);
+
+    await _scrollTo(tester, find.byKey(const ValueKey('terms-privacy-button')));
+    await tester.tap(find.byKey(const ValueKey('terms-privacy-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('privacy-policy-page')), findsOneWidget);
+    expect(opened, isEmpty);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('terms-support-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('support-page')), findsOneWidget);
+    expect(opened, isEmpty);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('terms-view-on-web')));
+    await tester.pump();
+    expect(opened, [PoppopExternalLinks.terms]);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final testCase in <({
+    Locale locale,
+    String privacyExpected,
+    String supportExpected,
+    String termsExpected,
+  })>[
     (
       locale: const Locale('ko'),
       privacyExpected: '시행일: 2026년 9월 4일',
       supportExpected: 'POPPOP 이용 중 문제가 있거나',
+      termsExpected: '이 약관은 이용자와 보호자가',
     ),
     (
       locale: const Locale('en'),
       privacyExpected: 'Effective date: September 4, 2026',
       supportExpected: 'Contact OOPSIDE STUDIO',
+      termsExpected: 'These Terms explain the rules',
     ),
     (
       locale: const Locale('fr'),
       privacyExpected: 'Effective date: September 4, 2026',
       supportExpected: 'Contact OOPSIDE STUDIO',
+      termsExpected: 'These Terms explain the rules',
     ),
   ]) {
     testWidgets(
@@ -171,15 +235,32 @@ void main() {
         expect(find.textContaining(testCase.supportExpected), findsOneWidget);
         expect(find.byKey(const ValueKey('support-page')), findsOneWidget);
         expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: testCase.locale,
+            localeListResolutionCallback: poppopLocaleResolution,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const TermsOfServicePage(),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining(testCase.termsExpected), findsOneWidget);
+        expect(find.byKey(const ValueKey('terms-of-service-page')),
+            findsOneWidget);
+        expect(tester.takeException(), isNull);
       },
     );
   }
 
-  test('privacy and support pages contain bilingual, local-only controls', () {
+  test('legal pages contain bilingual, local-only controls and links', () {
     final privacy = File('web/privacy/index.html').readAsStringSync();
     final support = File('web/support/index.html').readAsStringSync();
+    final terms = File('web/terms/index.html').readAsStringSync();
 
-    for (final html in [privacy, support]) {
+    for (final html in [privacy, support, terms]) {
       expect(html, contains('data-language-button="ko"'));
       expect(html, contains('data-language-button="en"'));
       expect(html, contains("startsWith('ko') ? 'ko' : 'en'"));
@@ -193,10 +274,16 @@ void main() {
       privacy,
       contains('href="/balloon-pop-game/support/#delete-data"'),
     );
+    expect(privacy, contains('href="/balloon-pop-game/terms/"'));
     expect(
       support,
       contains('href="/balloon-pop-game/privacy/"'),
     );
+    expect(support, contains('href="/balloon-pop-game/terms/"'));
+    expect(terms, contains('href="/balloon-pop-game/privacy/"'));
+    expect(terms, contains('href="/balloon-pop-game/support/"'));
+    expect(terms, contains('POPPOP does not currently offer purchases'));
+    expect(terms, contains('관계 법령상 배제할 수 없는 소비자의 권리'));
     expect(support, contains('id="delete-data"'));
     expect(support, contains('POPPOP%20Data%20Deletion%20Request'));
     expect(support, contains('Support%20ID%3A%20'));
@@ -205,7 +292,7 @@ void main() {
 }
 
 Future<void> _scrollTo(WidgetTester tester, Finder target) async {
-  for (var attempt = 0; attempt < 12 && target.evaluate().isEmpty; attempt++) {
+  for (var attempt = 0; attempt < 20 && target.evaluate().isEmpty; attempt++) {
     await tester.drag(
       find.byKey(const ValueKey('legal-document-scroll')),
       const Offset(0, -500),

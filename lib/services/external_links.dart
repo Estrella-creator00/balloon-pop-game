@@ -11,6 +11,9 @@ abstract final class PoppopExternalLinks {
   static final support = Uri.parse(
     'https://estrella-creator00.github.io/balloon-pop-game/support/',
   );
+  static final terms = Uri.parse(
+    'https://estrella-creator00.github.io/balloon-pop-game/terms/',
+  );
 
   static Uri supportEmail({required String subject, String? supportId}) => Uri(
         scheme: 'mailto',

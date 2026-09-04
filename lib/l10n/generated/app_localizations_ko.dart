@@ -482,6 +482,129 @@ class AppLocalizationsKo extends AppLocalizations {
       '확인 가능한 요청은 원칙적으로 30일 이내 처리합니다. 삭제한 온라인 데이터는 복구할 수 없습니다.';
 
   @override
+  String get termsIntroduction =>
+      '시행일: 2026년 9월 4일. 이 약관은 이용자와 보호자가 POPPOP 이용 규칙을 쉽게 이해할 수 있도록 안내합니다.';
+
+  @override
+  String get termsPurposeTitle => '1. 목적과 동의';
+
+  @override
+  String get termsPurposeBody =>
+      '이 약관은 POPPOP을 이용할 때 적용되는 권리, 책임과 기본 규칙을 정합니다. 서비스를 이용하면 이 약관에 동의한 것으로 봅니다. 동의하지 않는 경우에는 서비스 이용을 중단해 주세요.';
+
+  @override
+  String get termsOperatorTitle => '2. 운영자 및 연락처';
+
+  @override
+  String get termsOperatorBody =>
+      'POPPOP은 웁사이드 스튜디오(OOPSIDE STUDIO)가 운영합니다. 약관에 관한 문의는 oopsidestudio@gmail.com으로 보내 주세요.';
+
+  @override
+  String get termsEligibilityTitle => '3. 이용 자격과 미성년자';
+
+  @override
+  String get termsEligibilityBody =>
+      '어린이도 POPPOP을 즐길 수 있습니다. 관계 법령에 따라 보호자의 동의가 필요한 미성년자는 보호자의 동의를 받은 뒤 이용해야 합니다. 보호자는 어린이와 함께 온라인 랭킹, 닉네임 및 정보 처리 안내를 확인해 주세요.';
+
+  @override
+  String get termsLicenseTitle => '4. POPPOP 이용 권한';
+
+  @override
+  String get termsLicenseBody =>
+      '웁사이드 스튜디오는 이 약관을 지키는 범위에서 POPPOP을 비상업적 오락 목적으로 이용할 수 있는 제한적이고 개인적이며 비독점적·양도 불가능하고 철회 가능한 권한을 부여합니다. 이 권한은 게임이나 콘텐츠의 소유권을 이전하지 않습니다.';
+
+  @override
+  String get termsRankingTitle => '5. 닉네임과 온라인 랭킹';
+
+  @override
+  String get termsRankingBody =>
+      '이용자는 적절한 닉네임을 선택해야 합니다. 실명, 학교명, 전화번호, 이메일, 주소 등 개인을 알아볼 수 있는 정보는 사용하지 마세요. 온라인 랭킹에는 닉네임과 게임 기록이 다른 이용자에게 표시될 수 있습니다. 약관을 위반했거나 유효하지 않은 기록은 삭제 또는 정정될 수 있습니다.';
+
+  @override
+  String get termsProhibitedTitle => '6. 금지 행위';
+
+  @override
+  String get termsProhibitedBody =>
+      '점수나 진행도를 부정하게 조작하는 행위, 봇·자동화 도구·변조된 프로그램 또는 취약점을 이용하는 행위, 다른 이용자를 사칭하는 행위, 개인정보나 유해한 내용이 포함된 닉네임을 사용하는 행위, 서비스나 다른 이용자의 이용을 방해하는 행위, 게임·랭킹·관련 시스템에 무단 접근을 시도하는 행위를 금지합니다.';
+
+  @override
+  String get termsProgressTitle => '7. 게임 진행도와 로컬 저장';
+
+  @override
+  String get termsProgressBody =>
+      '대부분의 진행도, 점수, 코인, 아이템, 닉네임과 설정은 이용자의 기기에 저장됩니다. 앱·브라우저 데이터 삭제, 앱 제거, 기기 변경 또는 데이터 초기화 시 사라질 수 있습니다. 웁사이드 스튜디오는 기기에만 저장된 정보를 원격으로 복구할 수 없습니다.';
+
+  @override
+  String get termsItemsTitle => '8. 코인과 디지털 아이템';
+
+  @override
+  String get termsItemsBody =>
+      '코인과 디지털 아이템은 게임 안에서만 사용하는 콘텐츠입니다. 현금이나 결제 수단과 같은 가치가 없고, 양도·교환·현금 환전할 수 없으며, POPPOP 밖의 소유권을 의미하지 않습니다. 서비스 운영에 따라 제공 여부와 게임 균형은 합리적인 범위에서 변경될 수 있습니다.';
+
+  @override
+  String get termsPurchasesTitle => '9. 인앱결제';
+
+  @override
+  String get termsPurchasesBody =>
+      '현재 POPPOP은 실제 현금으로 구매하는 기능을 제공하지 않습니다. 향후 인앱결제를 제공하는 경우 Apple App Store 또는 Google Play 결제 시스템을 이용하며, 가격과 조건은 구매 확정 전에 구매 화면에 표시합니다. 취소와 환불에는 관계 법령 및 해당 스토어 정책이 적용됩니다.';
+
+  @override
+  String get termsChangesTitle => '10. 서비스 변경·점검·종료';
+
+  @override
+  String get termsChangesBody =>
+      '업데이트, 보안, 기술 문제, 법적 요구 또는 운영상 필요에 따라 서비스의 전부 또는 일부를 합리적인 범위에서 변경·일시 중단·점검 또는 종료할 수 있습니다. 가능한 경우 중요한 변경은 미리 안내합니다.';
+
+  @override
+  String get termsIntellectualPropertyTitle => '11. 지식재산권';
+
+  @override
+  String get termsIntellectualPropertyBody =>
+      'POPPOP의 프로그램, 그래픽, 캐릭터, 명칭, 소리와 그 밖의 콘텐츠는 웁사이드 스튜디오가 보유하거나 허락을 받아 사용하며 관계 지식재산권 법령의 보호를 받습니다. 법에서 허용하는 경우를 제외하고 허락 없이 복제·배포·판매하거나 상업적으로 이용할 수 없습니다.';
+
+  @override
+  String get termsPrivacyTitle => '12. 개인정보';
+
+  @override
+  String get termsPrivacyBody =>
+      '정보 처리에 관한 내용은 POPPOP 개인정보처리방침에서 안내합니다. 특히 온라인 랭킹을 이용하기 전에 이 약관과 함께 확인해 주세요.';
+
+  @override
+  String get termsLiabilityTitle => '13. 합리적인 책임 범위';
+
+  @override
+  String get termsLiabilityBody =>
+      '안전하고 안정적인 서비스를 제공하기 위해 노력하지만 일시적인 중단, 기기별 문제, 네트워크 장애 또는 기기 로컬 데이터 손실이 발생할 수 있습니다. 법이 허용하는 범위에서 웁사이드 스튜디오의 고의 또는 중대한 과실 없이 발생한 손해에 대해서는 책임을 지지 않습니다. 이 약관은 관계 법령상 배제할 수 없는 소비자의 권리나 책임을 제한하지 않습니다.';
+
+  @override
+  String get termsRestrictionTitle => '14. 이용 제한';
+
+  @override
+  String get termsRestrictionBody =>
+      '약관을 중대하게 또는 반복해서 위반하거나, 다른 이용자에게 피해를 주거나, 랭킹 기록을 조작하거나, 서비스 보안을 위협하는 경우 행위의 내용과 정도를 고려해 유효하지 않은 기록을 삭제하거나 온라인 기능 이용을 합리적인 범위에서 제한할 수 있습니다.';
+
+  @override
+  String get termsUpdatesTitle => '15. 약관 변경과 시행일';
+
+  @override
+  String get termsUpdatesBody =>
+      '서비스 또는 법적 요구가 바뀌면 이 약관을 수정할 수 있습니다. 변경된 내용과 시행일은 앱과 공개 약관 페이지에 게시합니다. 시행일 이후 서비스를 계속 이용하면 변경된 약관이 적용됩니다.';
+
+  @override
+  String get termsLawTitle => '16. 준거법';
+
+  @override
+  String get termsLawBody =>
+      '이 약관에는 대한민국 법률이 적용됩니다. 분쟁은 관계 법령과 절차에 따라 해결하며, 강행 법규가 보장하는 소비자 보호를 제한하지 않습니다.';
+
+  @override
+  String get termsContactTitle => '17. 문의';
+
+  @override
+  String get termsContactBody =>
+      '약관 또는 POPPOP에 관한 문의는 웁사이드 스튜디오의 oopsidestudio@gmail.com으로 보내 주세요.';
+
+  @override
   String get progressReset => '진행 초기화';
 
   @override

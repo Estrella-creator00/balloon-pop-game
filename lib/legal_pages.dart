@@ -5,6 +5,93 @@ import 'l10n/l10n.dart';
 import 'ranking/firebase_ranking_runtime.dart';
 import 'services/external_links.dart';
 
+class TermsOfServicePage extends StatelessWidget {
+  const TermsOfServicePage({
+    super.key,
+    this.externalLinkOpener = PoppopExternalLinks.open,
+    this.supportIdProvider,
+  });
+
+  final ExternalLinkOpener externalLinkOpener;
+  final Future<String> Function()? supportIdProvider;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.l10n;
+    return _LegalDocumentPage(
+      pageKey: const ValueKey('terms-of-service-page'),
+      title: strings.terms,
+      introduction: strings.termsIntroduction,
+      sections: [
+        _LegalSection(strings.termsPurposeTitle, strings.termsPurposeBody),
+        _LegalSection(strings.termsOperatorTitle, strings.termsOperatorBody),
+        _LegalSection(
+          strings.termsEligibilityTitle,
+          strings.termsEligibilityBody,
+        ),
+        _LegalSection(strings.termsLicenseTitle, strings.termsLicenseBody),
+        _LegalSection(strings.termsRankingTitle, strings.termsRankingBody),
+        _LegalSection(
+            strings.termsProhibitedTitle, strings.termsProhibitedBody),
+        _LegalSection(strings.termsProgressTitle, strings.termsProgressBody),
+        _LegalSection(strings.termsItemsTitle, strings.termsItemsBody),
+        _LegalSection(strings.termsPurchasesTitle, strings.termsPurchasesBody),
+        _LegalSection(strings.termsChangesTitle, strings.termsChangesBody),
+        _LegalSection(
+          strings.termsIntellectualPropertyTitle,
+          strings.termsIntellectualPropertyBody,
+        ),
+        _LegalSection(strings.termsPrivacyTitle, strings.termsPrivacyBody),
+        _LegalSection(strings.termsLiabilityTitle, strings.termsLiabilityBody),
+        _LegalSection(
+          strings.termsRestrictionTitle,
+          strings.termsRestrictionBody,
+        ),
+        _LegalSection(strings.termsUpdatesTitle, strings.termsUpdatesBody),
+        _LegalSection(strings.termsLawTitle, strings.termsLawBody),
+        _LegalSection(strings.termsContactTitle, strings.termsContactBody),
+      ],
+      actions: [
+        _LegalActionButton(
+          key: const ValueKey('terms-privacy-button'),
+          icon: Icons.privacy_tip_rounded,
+          label: strings.privacy,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (context) => PrivacyPolicyPage(
+                externalLinkOpener: externalLinkOpener,
+              ),
+            ),
+          ),
+        ),
+        _LegalActionButton(
+          key: const ValueKey('terms-support-button'),
+          icon: Icons.chat_bubble_rounded,
+          label: strings.support,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (context) => SupportPage(
+                externalLinkOpener: externalLinkOpener,
+                supportIdProvider: supportIdProvider,
+              ),
+            ),
+          ),
+        ),
+        _LegalActionButton(
+          key: const ValueKey('terms-view-on-web'),
+          icon: Icons.open_in_new_rounded,
+          label: strings.viewOnWeb,
+          onPressed: () => _openExternal(
+            context,
+            externalLinkOpener,
+            PoppopExternalLinks.terms,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class PrivacyPolicyPage extends StatelessWidget {
   const PrivacyPolicyPage({
     super.key,

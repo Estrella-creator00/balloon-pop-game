@@ -108,22 +108,6 @@ class _SettingsPageState extends State<SettingsPage> {
     if (saved == true && mounted) setState(() {});
   }
 
-  void _openInfo({
-    required String title,
-    required String content,
-    required String pageKey,
-  }) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => SettingsInfoPage(
-          title: title,
-          content: content,
-          pageKey: pageKey,
-        ),
-      ),
-    );
-  }
-
   Future<void> _confirmReset() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -225,10 +209,13 @@ class _SettingsPageState extends State<SettingsPage> {
                         key: const ValueKey('settings-terms-row'),
                         icon: Icons.description_rounded,
                         label: context.l10n.terms,
-                        onTap: () => _openInfo(
-                          title: context.l10n.terms,
-                          content: context.l10n.termsPending,
-                          pageKey: 'settings-terms-page',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (context) => TermsOfServicePage(
+                              externalLinkOpener: widget.externalLinkOpener,
+                              supportIdProvider: widget.supportIdProvider,
+                            ),
+                          ),
                         ),
                       ),
                       const _SettingsDivider(),
@@ -604,61 +591,6 @@ class _NicknameEditDialogState extends State<NicknameEditDialog> {
                 ],
               ),
             ),
-          ),
-        ),
-      );
-}
-
-/// SET-03/04/05 공통 정보 화면. 본문만 교체하면 정식 문서로 확장된다.
-class SettingsInfoPage extends StatelessWidget {
-  const SettingsInfoPage({
-    super.key,
-    required this.title,
-    required this.content,
-    required this.pageKey,
-  });
-
-  final String title;
-  final String content;
-  final String pageKey;
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        key: ValueKey(pageKey),
-        backgroundColor: const Color(0xFFE8F8FF),
-        body: SafeArea(
-          minimum: const EdgeInsets.fromLTRB(14, 8, 14, 14),
-          child: Column(
-            children: [
-              _SettingsHeader(
-                title: title,
-                onBack: () => Navigator.of(context).pop(),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: Material(
-                  color: Colors.white,
-                  elevation: 3,
-                  shadowColor: const Color(0x33204A5F),
-                  borderRadius: BorderRadius.circular(20),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Text(
-                        content,
-                        style: const TextStyle(
-                          color: Color(0xFF415F70),
-                          fontSize: 15,
-                          height: 1.55,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       );
