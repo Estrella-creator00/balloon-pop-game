@@ -8,6 +8,7 @@ abstract interface class RankingPendingStore {
   Future<RankedRunResult?> read(RankingCategory category);
   Future<void> saveBest(RankedRunResult result);
   Future<void> clear(RankingCategory category);
+  Future<void> clearAll();
 }
 
 class SharedPreferencesRankingPendingStore implements RankingPendingStore {
@@ -41,7 +42,7 @@ class SharedPreferencesRankingPendingStore implements RankingPendingStore {
   @override
   Future<void> saveBest(RankedRunResult result) async {
     final previous = await read(result.category);
-    if (previous != null && previous.score >= result.score) return;
+    if (previous != null && !_improves(previous, result)) return;
     final preferences = await _preferences;
     await preferences.setString(
       _key(result.category),
@@ -57,5 +58,21 @@ class SharedPreferencesRankingPendingStore implements RankingPendingStore {
   Future<void> clear(RankingCategory category) async {
     final preferences = await _preferences;
     await preferences.remove(_key(category));
+  }
+
+  @override
+  Future<void> clearAll() async {
+    for (final category in RankingCategory.values) {
+      await clear(category);
+    }
+  }
+
+  bool _improves(RankedRunResult previous, RankedRunResult next) {
+    if (next.score != previous.score) return next.score > previous.score;
+    if (next.category != RankingCategory.stage) return false;
+    final previousStage = previous.reachedStage ?? 1;
+    final nextStage = next.reachedStage ?? 1;
+    return nextStage > previousStage ||
+        (nextStage == previousStage && !previous.cleared && next.cleared);
   }
 }

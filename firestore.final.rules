@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /leaderboards_stage_v2/{entryId} {
+      allow get: if signedIn();
+      allow list: if signedIn()
+          && request.query.limit != null
+          && request.query.limit <= 100;
+      allow create, update, delete: if false;
+    }
+
+    match /leaderboards_60s_v2/{entryId} {
+      allow get: if signedIn();
+      allow list: if signedIn()
+          && request.query.limit != null
+          && request.query.limit <= 100;
+      allow create, update, delete: if false;
+    }
+
+    match /leaderboards_stage_v1/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /leaderboards_60s_v1/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /ranking_private/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

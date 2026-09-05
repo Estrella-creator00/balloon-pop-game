@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:balloon_pop_game/legal_pages.dart';
 import 'package:balloon_pop_game/l10n/generated/app_localizations.dart';
@@ -48,6 +49,7 @@ void main() {
             return true;
           },
           supportIdProvider: () async => 'anonymous-support-id',
+          onlineDataDeleter: () async {},
         ),
       ),
     );
@@ -112,6 +114,93 @@ void main() {
     expect(copiedText, 'anonymous-support-id');
     expect(tester.takeException(), isNull);
   });
+
+  for (final testCase in <({Locale locale, String bodyFragment})>[
+    (
+      locale: const Locale('ko'),
+      bodyFragment: 'STAGE·60초 온라인 랭킹 기록과 익명 온라인 계정',
+    ),
+    (
+      locale: const Locale('en'),
+      bodyFragment: 'Stage and 60-second leaderboard records',
+    ),
+  ]) {
+    for (final size in [const Size(360, 640), const Size(390, 844)]) {
+      testWidgets(
+        'online deletion confirmation ${testCase.locale.languageCode} is '
+        'localized and single-flight at '
+        '${size.width}x${size.height}',
+        (tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final deletion = Completer<void>();
+          var deletionCalls = 0;
+          var supportIdCalls = 0;
+          await tester.pumpWidget(MaterialApp(
+            locale: testCase.locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: SupportPage(
+              supportIdProvider: () async {
+                supportIdCalls++;
+                return 'private-support-id';
+              },
+              onlineDataDeleter: () {
+                deletionCalls++;
+                return deletion.future;
+              },
+            ),
+          ));
+          await tester.pumpAndSettle();
+          await _scrollTo(
+            tester,
+            find.byKey(const ValueKey('delete-online-data-button')),
+          );
+          await tester.tap(
+            find.byKey(const ValueKey('delete-online-data-button')),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const ValueKey('online-data-delete-dialog')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(
+              of: find.byKey(const ValueKey('online-data-delete-dialog')),
+              matching: find.textContaining(testCase.bodyFragment),
+            ),
+            findsOneWidget,
+          );
+          await tester.tap(
+            find.byKey(const ValueKey('online-data-delete-confirm')),
+          );
+          await tester.pump();
+          expect(deletionCalls, 1);
+          final button = tester.widget<FilledButton>(
+            find.descendant(
+              of: find.byKey(const ValueKey('delete-online-data-button')),
+              matching: find.byType(FilledButton),
+            ),
+          );
+          expect(button.onPressed, isNull);
+          expect(tester.takeException(), isNull);
+
+          deletion.complete();
+          await tester.pumpAndSettle();
+          expect(deletionCalls, 1);
+          expect(supportIdCalls, 1);
+          expect(
+            find.byKey(const ValueKey('online-data-deleted-card')),
+            findsOneWidget,
+          );
+          expect(find.text('private-support-id'), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
 
   testWidgets('settings opens native terms and keeps legal links in-app', (
     tester,
@@ -288,6 +377,14 @@ void main() {
     expect(support, contains('POPPOP%20Data%20Deletion%20Request'));
     expect(support, contains('Support%20ID%3A%20'));
     expect(support, contains('POPPOP%20%EB%8D%B0%EC%9D%B4%ED%84%B0'));
+    expect(
+      privacy,
+      contains('UID and Support ID are not included in public leaderboard'),
+    );
+    expect(
+      support,
+      contains('Settings → Customer Support → Delete Online Data'),
+    );
   });
 }
 

@@ -19,11 +19,13 @@ class SettingsPage extends StatefulWidget {
     required this.onDataReset,
     this.externalLinkOpener = PoppopExternalLinks.open,
     this.supportIdProvider,
+    this.onlineDataDeleter,
   });
 
   final VoidCallback onDataReset;
   final ExternalLinkOpener externalLinkOpener;
   final Future<String> Function()? supportIdProvider;
+  final Future<void> Function()? onlineDataDeleter;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -214,6 +216,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             builder: (context) => TermsOfServicePage(
                               externalLinkOpener: widget.externalLinkOpener,
                               supportIdProvider: widget.supportIdProvider,
+                              onlineDataDeleter: widget.onlineDataDeleter,
                             ),
                           ),
                         ),
@@ -241,6 +244,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             builder: (context) => SupportPage(
                               externalLinkOpener: widget.externalLinkOpener,
                               supportIdProvider: widget.supportIdProvider,
+                              onlineDataDeleter: widget.onlineDataDeleter,
                             ),
                           ),
                         ),

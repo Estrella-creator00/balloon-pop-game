@@ -5,10 +5,12 @@ import 'package:balloon_pop_game/game_engine/game_session_state.dart';
 import 'package:balloon_pop_game/game_engine/session/game_session_snapshot.dart';
 import 'package:balloon_pop_game/game_engine/stages/flame_stage_definition.dart';
 import 'package:balloon_pop_game/ranking/firebase_ranking_runtime.dart';
+import 'package:balloon_pop_game/ranking/firebase_online_ranking_repository.dart';
 import 'package:balloon_pop_game/ranking/online_ranking_models.dart';
 import 'package:balloon_pop_game/ranking/online_ranking_page.dart';
 import 'package:balloon_pop_game/ranking/online_ranking_repository.dart';
 import 'package:balloon_pop_game/ranking/ranking_nickname.dart';
+import 'package:balloon_pop_game/ranking/ranking_functions_client.dart';
 import 'package:balloon_pop_game/ranking/ranking_pending_store.dart';
 import 'package:balloon_pop_game/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -95,6 +97,121 @@ void main() {
     expect((await store.read(RankingCategory.sixtySeconds))!.score, 12);
     await store.clear(RankingCategory.sixtySeconds);
     expect(await store.read(RankingCategory.sixtySeconds), isNull);
+  });
+
+  test('pending Stage tie keeps metadata improvements and clears all',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'poppop_coin_balance': 1234,
+      'poppop_equipped_product_ids': '{"balloon":"balloon-wari"}',
+      'poppop_last_cleared_stage': 12,
+    });
+    final store = SharedPreferencesRankingPendingStore();
+    await store.saveBest(const RankedRunResult(
+      category: RankingCategory.stage,
+      score: 20,
+      reachedStage: 8,
+    ));
+    await store.saveBest(const RankedRunResult(
+      category: RankingCategory.stage,
+      score: 20,
+      reachedStage: 9,
+    ));
+    expect((await store.read(RankingCategory.stage))!.reachedStage, 9);
+    await store.saveBest(const RankedRunResult(
+      category: RankingCategory.sixtySeconds,
+      score: 30,
+    ));
+    await store.clearAll();
+    expect(await store.read(RankingCategory.stage), isNull);
+    expect(await store.read(RankingCategory.sixtySeconds), isNull);
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getInt('poppop_coin_balance'), 1234);
+    expect(
+      preferences.getString('poppop_equipped_product_ids'),
+      '{"balloon":"balloon-wari"}',
+    );
+    expect(preferences.getInt('poppop_last_cleared_stage'), 12);
+  });
+
+  test('repository submits callable v2 payload without UID or public ID',
+      () async {
+    final functions = _FakeRankingFunctionsClient();
+    final runtime = FirebaseRankingRuntime(
+      initialize: () async {},
+      currentUid: () => 'private-uid',
+      signInAnonymously: () async => 'unused',
+    );
+    final repository = FirebaseOnlineRankingRepository(
+      runtime: runtime,
+      functionsClient: functions,
+      pendingStore: _MemoryPendingStore(),
+    );
+    await repository.submitBest(
+      const RankedRunResult(
+        category: RankingCategory.stage,
+        score: 40,
+        reachedStage: 12,
+      ),
+      'Player',
+    );
+    expect(functions.calls.single.name, 'submitLeaderboard');
+    expect(functions.calls.single.data, {
+      'category': 'stage',
+      'displayName': 'Player',
+      'score': 40,
+      'reachedStage': 12,
+      'cleared': false,
+    });
+    expect(functions.calls.single.data, isNot(contains('uid')));
+    expect(functions.calls.single.data, isNot(contains('entryId')));
+  });
+
+  test('online deletion clears pending and does not recreate Auth immediately',
+      () async {
+    var signIns = 0;
+    var signOuts = 0;
+    String? currentUid = 'private-uid';
+    final runtime = FirebaseRankingRuntime(
+      initialize: () async {},
+      currentUid: () => currentUid,
+      signInAnonymously: () async {
+        signIns++;
+        currentUid = 'new-private-uid';
+        return currentUid!;
+      },
+      signOut: () async {
+        signOuts++;
+        currentUid = null;
+      },
+    );
+    final functions = _FakeRankingFunctionsClient();
+    final pending = _MemoryPendingStore()
+      ..values[RankingCategory.stage] = const RankedRunResult(
+        category: RankingCategory.stage,
+        score: 1,
+        reachedStage: 1,
+      );
+    final repository = FirebaseOnlineRankingRepository(
+      runtime: runtime,
+      functionsClient: functions,
+      pendingStore: pending,
+    );
+
+    await repository.deleteOnlineData();
+
+    expect(functions.calls.single.name, 'deleteOnlineData');
+    expect(pending.values, isEmpty);
+    expect(signOuts, 1);
+    expect(signIns, 0);
+    expect(runtime.automaticSignInSuppressed, isTrue);
+    await expectLater(runtime.ensureUid(), throwsStateError);
+    expect(signIns, 0);
+    expect(
+      await runtime.ensureUid(reactivateAfterDeletion: true),
+      'new-private-uid',
+    );
+    expect(signIns, 1);
   });
 
   test('ranked Stage run reuses the complete production Stage 1-30 rules', () {
@@ -233,31 +350,35 @@ void main() {
     expect(repository.fetchCount[RankingCategory.stage], 2);
   });
 
-  test('Firestore rules enforce UID documents and bounded TOP 100', () {
+  test('Firestore rules expose read-only v2 and preserve transition v1', () {
     final rules = File('firestore.rules').readAsStringSync();
     expect(rules, contains('request.auth.uid == uid'));
     expect(rules, contains('request.query.limit <= 100'));
     expect(
         rules, contains('request.resource.data.submittedAt == request.time'));
     expect(rules, contains('allow delete: if false'));
+    expect(rules, contains('leaderboards_stage_v2'));
+    expect(rules, contains('allow create, update, delete: if false'));
     expect(rules, isNot(contains('allow read, write: if true')));
   });
 
   test('leaderboard collections and score caps are separated', () {
-    expect(RankingCategory.stage.collection, 'leaderboards_stage_v1');
-    expect(RankingCategory.sixtySeconds.collection, 'leaderboards_60s_v1');
+    expect(RankingCategory.stage.collection, 'leaderboards_stage_v2');
+    expect(RankingCategory.sixtySeconds.collection, 'leaderboards_60s_v2');
+    expect(RankingCategory.stage.legacyCollection, 'leaderboards_stage_v1');
     expect(RankingLimits.maximumStageScore, 600);
-    expect(RankingLimits.maximumSixtySecondScore, 10000);
+    expect(RankingLimits.maximumSixtySecondScore, 900);
   });
 
-  test('repository is transaction-based with one UID document and no stream',
+  test('repository reads v2 and submits through callable without a client UID',
       () {
     final source = File('lib/ranking/firebase_online_ranking_repository.dart')
         .readAsStringSync();
-    expect(source, contains('.doc(uid)'));
-    expect(source, contains('runTransaction'));
-    expect(source, contains('currentScore >= result.score'));
+    expect(source, contains("call('submitLeaderboard'"));
+    expect(source, contains("call('getMyLeaderboardEntry'"));
     expect(source, contains('.limit(RankingLimits.topLimit)'));
+    expect(source, isNot(contains('.doc(uid)')));
+    expect(source, isNot(contains("'uid':")));
     expect(source, isNot(contains('.snapshots()')));
     expect(source, isNot(contains('Timer.')));
   });
@@ -279,4 +400,39 @@ class _FakeOnlineRankingRepository implements OnlineRankingRepository {
 
   @override
   Future<void> submitBest(RankedRunResult result, String? nickname) async {}
+
+  @override
+  Future<void> deleteOnlineData() async {}
+}
+
+class _FakeRankingFunctionsClient implements RankingFunctionsClient {
+  final List<({String name, Map<String, dynamic> data})> calls = [];
+
+  @override
+  Future<Map<String, dynamic>> call(
+    String name, [
+    Map<String, dynamic> data = const {},
+  ]) async {
+    calls.add((name: name, data: Map<String, dynamic>.from(data)));
+    return const {};
+  }
+}
+
+class _MemoryPendingStore implements RankingPendingStore {
+  final Map<RankingCategory, RankedRunResult> values = {};
+
+  @override
+  Future<void> clear(RankingCategory category) async => values.remove(category);
+
+  @override
+  Future<void> clearAll() async => values.clear();
+
+  @override
+  Future<RankedRunResult?> read(RankingCategory category) async =>
+      values[category];
+
+  @override
+  Future<void> saveBest(RankedRunResult result) async {
+    values[result.category] = result;
+  }
 }

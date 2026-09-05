@@ -369,6 +369,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get supportEmailSubject => 'POPPOP Support Request';
 
   @override
+  String get deleteOnlineData => 'Delete Online Data';
+
+  @override
+  String get deleteOnlineDataSemanticLabel =>
+      'Delete online ranking data and anonymous online account';
+
+  @override
+  String get onlineDataDeleteConfirmTitle => 'Delete your online data?';
+
+  @override
+  String get onlineDataDeleteConfirmBody =>
+      'Your Stage and 60-second leaderboard records and anonymous online account will be deleted. Stage progress, coins, and items stored on this device will not be deleted. Deleted online records cannot be recovered. If you use ranking again, you will start with a new anonymous account.';
+
+  @override
+  String get onlineDataDeleting => 'Deleting Online Data…';
+
+  @override
+  String get onlineDataDeleted => 'Online Data Deleted';
+
+  @override
+  String get onlineDataDeletedDescription =>
+      'Your online ranking records and anonymous online account were deleted. Device-local progress, coins, and items remain. A new anonymous account will be created only if you use online ranking again.';
+
+  @override
+  String get onlineDataDeleteSuccess => 'Your online data was deleted.';
+
+  @override
+  String get onlineDataDeleteOffline =>
+      'Could not connect. Check your connection and try again.';
+
+  @override
+  String get onlineDataDeleteUnauthenticated =>
+      'Your online account could not be verified. Open ranking once, then try again.';
+
+  @override
+  String get onlineDataDeleteServerError =>
+      'Online data could not be deleted. Please try again.';
+
+  @override
   String get privacyIntroduction =>
       'Effective date: September 4, 2026. OOPSIDE STUDIO processes only the information needed to operate POPPOP.';
 
@@ -384,7 +423,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get privacyOnlineBody =>
-      'When you open an online leaderboard or submit a record, we process the anonymous Firebase UID (Support ID), nickname, score, server submission time, and schema version. Stage Challenge also includes the reached stage and whether it was cleared. Categories are separated into the Stage and 60-second leaderboard collections.';
+      'When you open online ranking or submit a record, Firebase processes an anonymous UID (Support ID) for authentication and server-side ownership. Public Stage and 60-second leaderboard documents contain only nickname, score, server submission time, and schema version; Stage Challenge also includes reached stage and clear status. The UID and Support ID are not included in public leaderboard fields or document paths.';
 
   @override
   String get privacyLocalTitle => 'Information stored only on your device';
@@ -412,7 +451,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get privacyRetentionBody =>
-      'Online leaderboard records and the anonymous authentication identifier remain until replaced, deletion is requested, or they are no longer needed to operate the service. Verifiable deletion requests are normally handled within 30 days. Device-local information can be removed with Reset Data, by clearing browser site data, or by uninstalling the app. We cannot remotely view or erase information stored only on your device.';
+      'Online leaderboard records and the anonymous authentication identifier remain until replaced, deleted in the app, deletion is requested by email, or they are no longer needed to operate the service. Use Delete Online Data in Customer Support for immediate self-service deletion. Email requests remain available and are normally handled within 30 days when they can be verified. Device-local information can be removed with Reset Data, by clearing browser site data, or by uninstalling the app. We cannot remotely view or erase information stored only on your device.';
 
   @override
   String get privacyChildrenTitle => 'Children and safe nicknames';
@@ -468,18 +507,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Do not include a real name, school, phone number, email, address, or other identifying information in your nickname.';
 
   @override
-  String get supportDeletionTitle => 'Request deletion of online data';
+  String get supportDeletionTitle => 'Delete online data';
 
   @override
   String get supportDeletionBody =>
-      'Copy the Support ID shown below. Email oopsidestudio@gmail.com with the subject ‘POPPOP Data Deletion Request’ and include the Support ID in the message. The Support ID is your anonymous Firebase UID and lets us distinguish the records to delete. Do not post it publicly. Without it, we may be unable to safely identify and delete the requested records.';
+      'Use Delete Online Data below for self-service deletion of your Stage and 60-second leaderboard records and anonymous Firebase account. You can also email oopsidestudio@gmail.com with the subject ‘POPPOP Data Deletion Request’ and include the Support ID shown below. The Support ID is processed privately by Firebase and the server to identify your records; it is not published in leaderboard documents. Do not post it publicly.';
 
   @override
   String get supportDataDifferenceTitle => 'Server data and device data';
 
   @override
   String get supportDataDifferenceBody =>
-      'A verified request deletes the Stage and 60-second leaderboard documents for that Support ID and the linked anonymous Firebase Authentication account identifier. Progress, coins, items, nickname, and settings stored on your device are not erased by an email request; use Reset Data or remove the app or site data yourself.';
+      'Self-service deletion removes your Stage and 60-second public leaderboard entries, any matching legacy records and private server record, and the linked anonymous Firebase Authentication account. Progress, coins, items, nickname, and settings stored on your device are not erased. Deleted online records cannot be recovered. If you use ranking again, a new anonymous account is created without linking it to the deleted account.';
 
   @override
   String get supportTimingTitle => 'Processing time';

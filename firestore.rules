@@ -81,6 +81,28 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Transition phase: sanitized v2 entries are publicly readable to signed-in
+    // players, but only trusted server code may write them.
+    match /leaderboards_stage_v2/{entryId} {
+      allow get: if signedIn();
+      allow list: if signedIn()
+          && request.query.limit != null
+          && request.query.limit <= 100;
+      allow create, update, delete: if false;
+    }
+
+    match /leaderboards_60s_v2/{entryId} {
+      allow get: if signedIn();
+      allow list: if signedIn()
+          && request.query.limit != null
+          && request.query.limit <= 100;
+      allow create, update, delete: if false;
+    }
+
+    match /ranking_private/{uid} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

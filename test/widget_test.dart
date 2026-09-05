@@ -90,6 +90,9 @@ class _WidgetRankingRepository implements OnlineRankingRepository {
 
   @override
   Future<void> submitBest(RankedRunResult result, String? nickname) async {}
+
+  @override
+  Future<void> deleteOnlineData() async {}
 }
 
 class _BasicRenderBoss implements BossBalloonRenderView {

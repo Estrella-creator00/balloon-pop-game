@@ -764,6 +764,72 @@ abstract class AppLocalizations {
   /// **'POPPOP 문의'**
   String get supportEmailSubject;
 
+  /// No description provided for @deleteOnlineData.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 데이터 삭제'**
+  String get deleteOnlineData;
+
+  /// No description provided for @deleteOnlineDataSemanticLabel.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 랭킹 기록과 익명 온라인 계정 삭제'**
+  String get deleteOnlineDataSemanticLabel;
+
+  /// No description provided for @onlineDataDeleteConfirmTitle.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 데이터를 삭제할까요?'**
+  String get onlineDataDeleteConfirmTitle;
+
+  /// No description provided for @onlineDataDeleteConfirmBody.
+  ///
+  /// In ko, this message translates to:
+  /// **'STAGE·60초 온라인 랭킹 기록과 익명 온라인 계정이 삭제됩니다. 기기에 저장된 Stage 진행도, 코인과 아이템은 삭제되지 않습니다. 삭제한 온라인 기록은 복구할 수 없습니다. 다시 랭킹을 사용하면 새로운 익명 계정으로 시작합니다.'**
+  String get onlineDataDeleteConfirmBody;
+
+  /// No description provided for @onlineDataDeleting.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 데이터 삭제 중…'**
+  String get onlineDataDeleting;
+
+  /// No description provided for @onlineDataDeleted.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 데이터 삭제 완료'**
+  String get onlineDataDeleted;
+
+  /// No description provided for @onlineDataDeletedDescription.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 랭킹 기록과 익명 온라인 계정을 삭제했습니다. 기기의 진행도, 코인과 아이템은 유지됩니다. 온라인 랭킹을 다시 사용할 때만 새 익명 계정이 생성됩니다.'**
+  String get onlineDataDeletedDescription;
+
+  /// No description provided for @onlineDataDeleteSuccess.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 데이터를 삭제했습니다.'**
+  String get onlineDataDeleteSuccess;
+
+  /// No description provided for @onlineDataDeleteOffline.
+  ///
+  /// In ko, this message translates to:
+  /// **'연결할 수 없습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.'**
+  String get onlineDataDeleteOffline;
+
+  /// No description provided for @onlineDataDeleteUnauthenticated.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 계정을 확인할 수 없습니다. 랭킹을 한 번 연 뒤 다시 시도해 주세요.'**
+  String get onlineDataDeleteUnauthenticated;
+
+  /// No description provided for @onlineDataDeleteServerError.
+  ///
+  /// In ko, this message translates to:
+  /// **'온라인 데이터를 삭제하지 못했습니다. 다시 시도해 주세요.'**
+  String get onlineDataDeleteServerError;
+
   /// No description provided for @privacyIntroduction.
   ///
   /// In ko, this message translates to:
@@ -791,7 +857,7 @@ abstract class AppLocalizations {
   /// No description provided for @privacyOnlineBody.
   ///
   /// In ko, this message translates to:
-  /// **'온라인 랭킹을 열거나 기록을 제출하면 Firebase 익명 UID(Support ID), 닉네임, 점수, 서버 제출 시각, schema version을 처리합니다. STAGE 도전에는 도달 Stage와 완료 여부가 추가됩니다. 종목은 STAGE 및 60초 랭킹 collection으로 구분합니다.'**
+  /// **'온라인 랭킹을 열거나 기록을 제출하면 Firebase는 인증과 서버 내부 소유자 확인을 위해 익명 UID(Support ID)를 처리합니다. 공개 STAGE·60초 랭킹 문서에는 닉네임, 점수, 서버 제출 시각과 schema version만 포함하며 STAGE 도전에는 도달 Stage와 완료 여부가 추가됩니다. UID와 Support ID는 공개 랭킹 필드나 문서 경로에 포함되지 않습니다.'**
   String get privacyOnlineBody;
 
   /// No description provided for @privacyLocalTitle.
@@ -839,7 +905,7 @@ abstract class AppLocalizations {
   /// No description provided for @privacyRetentionBody.
   ///
   /// In ko, this message translates to:
-  /// **'온라인 랭킹 기록과 익명 인증 식별자는 기록이 갱신되거나, 삭제를 요청하거나, 서비스 운영상 더 이상 필요하지 않을 때까지 보관합니다. 확인 가능한 삭제 요청은 원칙적으로 30일 이내 처리합니다. 기기 로컬 정보는 설정의 데이터 초기화, 브라우저 사이트 데이터 삭제 또는 앱 삭제로 제거할 수 있습니다. 운영자는 기기에만 저장된 정보를 원격으로 확인하거나 삭제할 수 없습니다.'**
+  /// **'온라인 랭킹 기록과 익명 인증 식별자는 기록이 갱신되거나, 앱에서 삭제하거나, 이메일로 삭제를 요청하거나, 서비스 운영상 더 이상 필요하지 않을 때까지 보관합니다. 고객지원의 온라인 데이터 삭제를 사용하면 직접 삭제할 수 있습니다. 이메일 요청도 보조 방법으로 유지하며 확인 가능한 요청은 원칙적으로 30일 이내 처리합니다. 기기 로컬 정보는 설정의 데이터 초기화, 브라우저 사이트 데이터 삭제 또는 앱 삭제로 제거할 수 있습니다. 운영자는 기기에만 저장된 정보를 원격으로 확인하거나 삭제할 수 없습니다.'**
   String get privacyRetentionBody;
 
   /// No description provided for @privacyChildrenTitle.
@@ -935,13 +1001,13 @@ abstract class AppLocalizations {
   /// No description provided for @supportDeletionTitle.
   ///
   /// In ko, this message translates to:
-  /// **'온라인 데이터 삭제 요청'**
+  /// **'온라인 데이터 삭제'**
   String get supportDeletionTitle;
 
   /// No description provided for @supportDeletionBody.
   ///
   /// In ko, this message translates to:
-  /// **'아래 Support ID를 복사하세요. 제목을 ‘POPPOP 데이터 삭제 요청’으로 작성하고 본문에 Support ID를 붙여 oopsidestudio@gmail.com으로 보내 주세요. Support ID는 Firebase 익명 UID이며 삭제할 기록을 구분할 수 있습니다. 공개 게시하지 마세요. Support ID가 없으면 기록을 안전하게 특정하고 삭제하기 어려울 수 있습니다.'**
+  /// **'아래 온라인 데이터 삭제 버튼을 사용하면 STAGE·60초 랭킹 기록과 Firebase 익명 계정을 직접 삭제할 수 있습니다. 이메일 방식도 사용할 수 있습니다. 제목을 ‘POPPOP 데이터 삭제 요청’으로 작성하고 아래 Support ID를 oopsidestudio@gmail.com으로 보내 주세요. Support ID는 Firebase와 서버 내부에서 기록을 식별할 때 비공개로 처리되며 공개 랭킹 문서에는 포함되지 않습니다. 공개 게시하지 마세요.'**
   String get supportDeletionBody;
 
   /// No description provided for @supportDataDifferenceTitle.
@@ -953,7 +1019,7 @@ abstract class AppLocalizations {
   /// No description provided for @supportDataDifferenceBody.
   ///
   /// In ko, this message translates to:
-  /// **'확인된 요청으로 해당 Support ID의 STAGE·60초 랭킹 문서와 연결된 Firebase 익명 인증 계정 식별자를 삭제합니다. 진행도, 코인, 아이템, 닉네임과 설정 등 기기 로컬 정보는 이메일 요청으로 지워지지 않으므로 데이터 초기화 또는 앱·사이트 데이터 삭제를 직접 사용해 주세요.'**
+  /// **'직접 삭제하면 STAGE·60초 공개 랭킹, 일치하는 기존 기록과 비공개 서버 기록, 연결된 Firebase 익명 인증 계정을 삭제합니다. 진행도, 코인, 아이템, 닉네임과 설정 등 기기 로컬 정보는 지워지지 않습니다. 삭제한 온라인 기록은 복구할 수 없으며 다시 랭킹을 사용하면 이전 계정과 연결되지 않은 새 익명 계정이 생성됩니다.'**
   String get supportDataDifferenceBody;
 
   /// No description provided for @supportTimingTitle.

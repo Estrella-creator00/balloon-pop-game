@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'l10n/l10n.dart';
+import 'ranking/firebase_online_ranking_repository.dart';
 import 'ranking/firebase_ranking_runtime.dart';
+import 'ranking/ranking_functions_client.dart';
 import 'services/external_links.dart';
 
 class TermsOfServicePage extends StatelessWidget {
@@ -10,10 +12,12 @@ class TermsOfServicePage extends StatelessWidget {
     super.key,
     this.externalLinkOpener = PoppopExternalLinks.open,
     this.supportIdProvider,
+    this.onlineDataDeleter,
   });
 
   final ExternalLinkOpener externalLinkOpener;
   final Future<String> Function()? supportIdProvider;
+  final Future<void> Function()? onlineDataDeleter;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +77,7 @@ class TermsOfServicePage extends StatelessWidget {
               builder: (context) => SupportPage(
                 externalLinkOpener: externalLinkOpener,
                 supportIdProvider: supportIdProvider,
+                onlineDataDeleter: onlineDataDeleter,
               ),
             ),
           ),
@@ -149,23 +154,29 @@ class SupportPage extends StatefulWidget {
     super.key,
     this.externalLinkOpener = PoppopExternalLinks.open,
     this.supportIdProvider,
+    this.onlineDataDeleter,
   });
 
   final ExternalLinkOpener externalLinkOpener;
   final Future<String> Function()? supportIdProvider;
+  final Future<void> Function()? onlineDataDeleter;
 
   @override
   State<SupportPage> createState() => _SupportPageState();
 }
 
 class _SupportPageState extends State<SupportPage> {
-  late final Future<String> _supportIdFuture;
+  Future<String>? _supportIdFuture;
   String? _supportId;
+  bool _deletingOnlineData = false;
+  bool _onlineDataDeleted = false;
 
   @override
   void initState() {
     super.initState();
-    _supportIdFuture = _loadSupportId();
+    _onlineDataDeleted = widget.supportIdProvider == null &&
+        FirebaseRankingRuntime.instance.automaticSignInSuppressed;
+    if (!_onlineDataDeleted) _supportIdFuture = _loadSupportId();
   }
 
   Future<String> _loadSupportId() async {
@@ -185,6 +196,64 @@ class _SupportPageState extends State<SupportPage> {
       ..showSnackBar(
         SnackBar(content: Text(context.l10n.supportIdCopied)),
       );
+  }
+
+  Future<void> _confirmDeleteOnlineData() async {
+    if (_deletingOnlineData || _onlineDataDeleted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('online-data-delete-dialog'),
+        title: Text(dialogContext.l10n.onlineDataDeleteConfirmTitle),
+        content: Text(dialogContext.l10n.onlineDataDeleteConfirmBody),
+        actions: [
+          TextButton(
+            key: const ValueKey('online-data-delete-cancel'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(dialogContext.l10n.cancel),
+          ),
+          FilledButton(
+            key: const ValueKey('online-data-delete-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(dialogContext.l10n.deleteOnlineData),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _deletingOnlineData = true);
+    try {
+      await (widget.onlineDataDeleter?.call() ??
+          FirebaseOnlineRankingRepository.instance.deleteOnlineData());
+      if (!mounted) return;
+      setState(() {
+        _deletingOnlineData = false;
+        _onlineDataDeleted = true;
+        _supportId = null;
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(context.l10n.onlineDataDeleteSuccess)),
+        );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _deletingOnlineData = false);
+      final message = switch (error) {
+        OnlineDataDeletionException(:final failure) => switch (failure) {
+            OnlineDataDeletionFailure.offline =>
+              context.l10n.onlineDataDeleteOffline,
+            OnlineDataDeletionFailure.unauthenticated =>
+              context.l10n.onlineDataDeleteUnauthenticated,
+            OnlineDataDeletionFailure.server =>
+              context.l10n.onlineDataDeleteServerError,
+          },
+        _ => context.l10n.onlineDataDeleteServerError,
+      };
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   @override
@@ -209,12 +278,31 @@ class _SupportPageState extends State<SupportPage> {
         _LegalSection(strings.supportTimingTitle, strings.supportTimingBody),
       ],
       additionalContent: [
-        _SupportIdCard(
-          future: _supportIdFuture,
-          onCopy: _copySupportId,
-        ),
+        if (_onlineDataDeleted)
+          _OnlineDataDeletedCard()
+        else
+          _SupportIdCard(
+            future: _supportIdFuture!,
+            onCopy: _copySupportId,
+          ),
       ],
       actions: [
+        Semantics(
+          button: true,
+          label: strings.deleteOnlineDataSemanticLabel,
+          child: _LegalActionButton(
+            key: const ValueKey('delete-online-data-button'),
+            icon: Icons.delete_forever_rounded,
+            label: _deletingOnlineData
+                ? strings.onlineDataDeleting
+                : _onlineDataDeleted
+                    ? strings.onlineDataDeleted
+                    : strings.deleteOnlineData,
+            onPressed: _deletingOnlineData || _onlineDataDeleted
+                ? null
+                : _confirmDeleteOnlineData,
+          ),
+        ),
         _LegalActionButton(
           key: const ValueKey('support-email-button'),
           icon: Icons.email_rounded,
@@ -434,6 +522,30 @@ class _SupportIdCard extends StatelessWidget {
       );
 }
 
+class _OnlineDataDeletedCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+        key: const ValueKey('online-data-deleted-card'),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF2FAFE),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFD7EDF7)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Text(
+            context.l10n.onlineDataDeletedDescription,
+            style: const TextStyle(
+              color: Color(0xFF526E7D),
+              fontSize: 13,
+              height: 1.45,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      );
+}
+
 class _LegalActionButton extends StatelessWidget {
   const _LegalActionButton({
     super.key,
@@ -444,7 +556,7 @@ class _LegalActionButton extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => SizedBox(

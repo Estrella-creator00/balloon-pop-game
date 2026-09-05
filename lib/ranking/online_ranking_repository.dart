@@ -4,4 +4,6 @@ abstract interface class OnlineRankingRepository {
   Future<OnlineLeaderboard> fetch(RankingCategory category);
 
   Future<void> submitBest(RankedRunResult result, String? nickname);
+
+  Future<void> deleteOnlineData();
 }

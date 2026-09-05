@@ -9,8 +9,18 @@ extension RankingCategoryInfo on RankingCategory {
       };
 
   String get collection => switch (this) {
+        RankingCategory.stage => 'leaderboards_stage_v2',
+        RankingCategory.sixtySeconds => 'leaderboards_60s_v2',
+      };
+
+  String get legacyCollection => switch (this) {
         RankingCategory.stage => 'leaderboards_stage_v1',
         RankingCategory.sixtySeconds => 'leaderboards_60s_v1',
+      };
+
+  String get wireName => switch (this) {
+        RankingCategory.stage => 'stage',
+        RankingCategory.sixtySeconds => 'sixtySeconds',
       };
 }
 
@@ -32,7 +42,7 @@ class RankedRunResult {
 @immutable
 class OnlineRankingEntry {
   const OnlineRankingEntry({
-    required this.uid,
+    required this.entryId,
     required this.displayName,
     required this.score,
     required this.rank,
@@ -41,7 +51,7 @@ class OnlineRankingEntry {
     this.cleared = false,
   });
 
-  final String uid;
+  final String entryId;
   final String displayName;
   final int score;
   final int rank;
@@ -66,8 +76,8 @@ class OnlineLeaderboard {
 }
 
 abstract final class RankingLimits {
-  static const schemaVersion = 1;
+  static const schemaVersion = 2;
   static const topLimit = 100;
   static const maximumStageScore = 600;
-  static const maximumSixtySecondScore = 10000;
+  static const maximumSixtySecondScore = 900;
 }
