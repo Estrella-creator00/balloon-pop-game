@@ -124,15 +124,17 @@ class _CoinBalanceCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 4,
         children: [
           const Icon(
             Icons.monetization_on_rounded,
             color: Color(0xFFFFC928),
             size: 26,
           ),
-          const SizedBox(width: 8),
           Text(
             _formatNumber(balance),
             style: const TextStyle(
@@ -141,7 +143,6 @@ class _CoinBalanceCard extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(width: 8),
           Text(
             context.l10n.ownedCoins,
             style: TextStyle(

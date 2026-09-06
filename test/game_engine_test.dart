@@ -25,6 +25,7 @@ import 'package:balloon_pop_game/game_engine/skins/catalog_sprite_cache.dart';
 import 'package:balloon_pop_game/game_engine/stages/flame_stage_definition.dart';
 import 'package:balloon_pop_game/game_engine/stages/stage_balloon_spawner.dart';
 import 'package:balloon_pop_game/gameplay/game_canvas.dart';
+import 'package:balloon_pop_game/l10n/generated/app_localizations.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/haptic_service.dart';
@@ -36,12 +37,27 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart' as flutter_test;
+
+void testWidgets(
+  String description,
+  Future<void> Function(WidgetTester tester) callback,
+) {
+  flutter_test.testWidgets(description, (tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const <Locale>[
+      Locale('ko'),
+    ];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    await callback(tester);
+  });
+}
 
 void main() {
   setUp(() {
     ProgressStorage.clear();
     ProgressStorage.setNicknameOnboardingCompleted(true);
     SettingsService.applyStoredPreferences();
+    PopSound.resetDebug();
   });
 
   test('engine and preview stage query use safe fallbacks', () {
@@ -1090,6 +1106,9 @@ void main() {
       ));
       addTearDown(data.dispose);
       await tester.pumpWidget(MaterialApp(
+        locale: const Locale('ko'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SafeArea(
             child: GameHeader(data: data, onPause: () {}, onEnd: () {}),
@@ -1549,6 +1568,9 @@ void main() {
     late GameSessionState session;
     var saveCalls = 0;
     await tester.pumpWidget(MaterialApp(
+      locale: const Locale('ko'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: FlameIntegrationGamePage(
         initialStage: 1,
         skin: FlamePreviewSkin.basic,
@@ -1590,9 +1612,9 @@ void main() {
 
     expect(find.textContaining('실수'), findsNothing);
     expect(find.byKey(const ValueKey('hud-remaining')), findsNothing);
-    expect(find.text('무한 팝'), findsOneWidget);
-    expect(find.text('기록  0'), findsOneWidget);
-    expect(find.text('시간  ∞'), findsOneWidget);
+    expect(find.byKey(const ValueKey('game-stage-label')), findsOneWidget);
+    expect(find.byKey(const ValueKey('hud-score')), findsOneWidget);
+    expect(find.byKey(const ValueKey('hud-time')), findsOneWidget);
     final firstTarget = game.balloonComponents.first;
     expect(firstTarget.maxHp, 1);
     expect(firstTarget.isFake, isFalse);

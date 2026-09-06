@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.estrellacreator00.poppop"
+    namespace = "com.oopsidestudio.poppop"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -16,8 +16,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.estrellacreator00.poppop"
+        applicationId = "com.oopsidestudio.poppop"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

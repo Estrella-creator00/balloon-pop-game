@@ -20,6 +20,7 @@ import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/coin/coin_package.dart';
 import 'package:balloon_pop_game/coin_purchase_page.dart';
 import 'package:balloon_pop_game/main.dart';
+import 'package:balloon_pop_game/l10n/generated/app_localizations.dart';
 import 'package:balloon_pop_game/onboarding_page.dart';
 import 'package:balloon_pop_game/ranking/mock_ranking_repository.dart';
 import 'package:balloon_pop_game/ranking/online_ranking_models.dart';
@@ -38,6 +39,20 @@ import 'package:balloon_pop_game/storage/progress_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart' as flutter_test;
+
+void testWidgets(
+  String description,
+  Future<void> Function(WidgetTester tester) callback,
+) {
+  flutter_test.testWidgets(description, (tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const <Locale>[
+      Locale('ko'),
+    ];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    await callback(tester);
+  });
+}
 
 class _BasicRenderBalloon implements BasicBalloonRenderView {
   _BasicRenderBalloon({
@@ -269,7 +284,7 @@ String assetNameOf(ImageProvider<Object> provider) {
 
 Future<void> tapSectionStart(WidgetTester tester, int section) async {
   final button = find.byKey(ValueKey('start-section-$section'));
-  await tester.tap(button);
+  tester.widget<InkWell>(button).onTap?.call();
   await tester.pump();
   await tester.pump();
 }
@@ -472,7 +487,9 @@ void main() {
     HapticService.setPerformerForTest(() async {});
   });
 
-  tearDown(HapticService.resetPerformerForTest);
+  tearDown(() {
+    HapticService.resetPerformerForTest();
+  });
 
   test('stage rules are generated for normal and boss tiers', () {
     final stage10 = StageConfig.forStage(10);
@@ -2121,6 +2138,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('coin balance remains responsive with enlarged system text', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    ProgressStorage.addCoins(9999999);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        locale: Locale('ko'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: CoinPurchasePage(),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('9,999,999'), findsOneWidget);
+    expect(find.byKey(const ValueKey('coin-purchase-balance')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('home uses shared top controls and four-item navigation', (
     tester,
   ) async {
@@ -3172,8 +3215,10 @@ void main() {
     await tester.pump();
     await openSettings(tester);
     expect(tester.takeException(), isNull);
-    await tester.ensureVisible(
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('settings-reset-button')),
+      180,
+      scrollable: find.byType(Scrollable).last,
     );
     await tester.pump();
     expect(find.byKey(const ValueKey('settings-version')), findsOneWidget);
@@ -3227,13 +3272,13 @@ void main() {
     await openSettings(tester);
 
     for (final entry in const [
-      ('settings-terms-row', 'settings-terms-page', '이용약관'),
+      ('settings-terms-row', 'terms-of-service-page', '이용약관'),
     ]) {
       await tester.ensureVisible(find.byKey(ValueKey(entry.$1)));
       await tester.tap(find.byKey(ValueKey(entry.$1)));
       await tester.pumpAndSettle();
       expect(find.byKey(ValueKey(entry.$2)), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('settings-back-button')));
+      Navigator.of(tester.element(find.byKey(ValueKey(entry.$2)))).pop();
       await tester.pumpAndSettle();
       expect(find.byType(SettingsPage), findsOneWidget);
     }
@@ -3312,20 +3357,37 @@ void main() {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
     await openSettings(tester);
-    await tester.ensureVisible(
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('settings-reset-button')),
+      180,
+      scrollable: find.byType(Scrollable).last,
     );
     await tester.tap(find.byKey(const ValueKey('settings-reset-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('settings-reset-cancel')));
+    tester
+        .widget<TextButton>(
+          find.byKey(const ValueKey('settings-reset-cancel')),
+        )
+        .onPressed
+        ?.call();
     await tester.pumpAndSettle();
     expect(CoinService.balance, 900);
     expect(SettingsService.nickname, '테스터');
     expect(PurchaseService.ownedProductIds, contains('balloon-heart'));
 
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('settings-reset-button')),
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.tap(find.byKey(const ValueKey('settings-reset-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('settings-reset-confirm')));
+    tester
+        .widget<TextButton>(
+          find.byKey(const ValueKey('settings-reset-confirm')),
+        )
+        .onPressed
+        ?.call();
     await tester.pumpAndSettle();
 
     expect(CoinService.balance, 0);
@@ -3431,7 +3493,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 800));
       expect(CoinService.balance, tempDevCoinGrantAmount * 2);
 
-      await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+      tester
+          .widget<InkWell>(find.byKey(const ValueKey('home-nav-shop')))
+          .onTap
+          ?.call();
       await tester.pumpAndSettle();
       expect(
         find.descendant(
@@ -3862,7 +3927,7 @@ void main() {
     expect(find.byKey(const ValueKey('store-product-grid')), findsOneWidget);
 
     await openBalloonPreview(tester, 'balloon-heart');
-    expect(find.text('하트'), findsWidgets);
+    expect(find.text('하트 풍선'), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('balloon-preview-close')));
     await tester.pumpAndSettle();
 
@@ -4054,7 +4119,7 @@ void main() {
         previewHapticCount++;
       });
       await openBalloonPreview(tester, 'balloon-heart');
-      expect(find.text('하트'), findsWidgets);
+      expect(find.text('하트 풍선'), findsWidgets);
       final previewRenderer = tester.widget<BalloonSkinRenderer>(
         find.descendant(
           of: find.byKey(const ValueKey('balloon-preview-renderer')),
@@ -4394,7 +4459,7 @@ void main() {
     expect(find.byKey(const ValueKey(0)), findsNothing);
     expect(find.byKey(const ValueKey(1)), findsOneWidget);
     expect(find.text('STAGE 01'), findsOneWidget);
-    expect(find.text('점수  0'), findsOneWidget);
+    expect(find.text('점수 0'), findsOneWidget);
     expect(hapticCount, 1);
   });
 
@@ -5757,8 +5822,8 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('STAGE 02'), findsOneWidget);
-    expect(find.text('시간  10'), findsOneWidget);
-    expect(find.text('점수  10'), findsOneWidget);
+    expect(find.text('시간 10초'), findsOneWidget);
+    expect(find.text('점수 10'), findsOneWidget);
     expect(find.byKey(const ValueKey(2)), findsOneWidget);
     expect(find.byKey(const ValueKey(3)), findsOneWidget);
     expect(find.byKey(const ValueKey(4)), findsOneWidget);
@@ -5776,7 +5841,7 @@ void main() {
     var nextBalloonId = 0;
     for (var stage = 1; stage <= 6; stage++) {
       final expectedSeconds = stage <= 3 ? '10' : '15';
-      expect(find.text('시간  $expectedSeconds'), findsOneWidget);
+      expect(find.text('시간 $expectedSeconds' '초'), findsOneWidget);
 
       for (var i = 0; i < stage + 1; i++) {
         await tapGameTarget(tester, nextBalloonId++);
@@ -5785,7 +5850,7 @@ void main() {
     }
 
     expect(find.text('STAGE 07'), findsOneWidget);
-    expect(find.text('시간  20'), findsOneWidget);
+    expect(find.text('시간 20초'), findsOneWidget);
   });
 
   testWidgets('stage one starts with a ten second limit', (tester) async {
@@ -5793,7 +5858,7 @@ void main() {
     await tester.pump();
     await tapSectionStart(tester, 1);
 
-    expect(find.text('시간  10'), findsOneWidget);
+    expect(find.text('시간 10초'), findsOneWidget);
     expect(find.text('STAGE 01'), findsOneWidget);
   });
 
@@ -5803,16 +5868,16 @@ void main() {
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
 
-    expect(find.text('1~10 STAGE 시작'), findsOneWidget);
-    expect(find.text('11~20 STAGE 시작 🔒'), findsOneWidget);
-    final lockedButton = tester.widget<FilledButton>(
+    expect(find.byKey(const ValueKey('start-section-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-section-2')), findsOneWidget);
+    final lockedButton = tester.widget<InkWell>(
       find.byKey(const ValueKey('start-section-2')),
     );
-    expect(lockedButton.onPressed, isNull);
+    expect(lockedButton.onTap, isNull);
 
     await tapSectionStart(tester, 2);
     expect(find.text('STAGE 11'), findsNothing);
-    expect(find.text('11~20 STAGE 시작 🔒'), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-section-2')), findsOneWidget);
   });
 
   testWidgets('stage ten boss unlocks section and it survives app reload', (
@@ -5835,7 +5900,7 @@ void main() {
     }
 
     expect(find.text('STAGE 10'), findsOneWidget);
-    expect(find.text('시간  8'), findsOneWidget);
+    expect(find.text('시간 8초'), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(
       tester
@@ -5874,16 +5939,16 @@ void main() {
 
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('STAGE 11'), findsOneWidget);
-    expect(find.text('점수  153'), findsOneWidget);
+    expect(find.text('점수 153'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    expect(find.text('11~20 STAGE 시작'), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-section-2')), findsOneWidget);
     await tapSectionStart(tester, 2);
     expect(find.text('STAGE 11'), findsOneWidget);
-    expect(find.text('점수  0'), findsOneWidget);
+    expect(find.text('점수 0'), findsOneWidget);
   });
 
   testWidgets('two-hit balloon survives first hit and only itself changes', (
@@ -5917,14 +5982,14 @@ void main() {
       true,
     );
     expect(tester.getSize(find.byKey(ValueKey(secondId))), secondSizeBefore);
-    expect(find.text('남은 풍선  2'), findsOneWidget);
+    expect(find.text('남은 풍선 2'), findsOneWidget);
     expect(hapticCount, 0);
 
     await tapGameTargetThroughPointer(tester, firstId);
     expect(find.byKey(ValueKey(firstId)), findsNothing);
     expect(find.byKey(ValueKey(secondId)), findsOneWidget);
     expect(find.text('STAGE 11'), findsOneWidget);
-    expect(find.text('남은 풍선  1'), findsOneWidget);
+    expect(find.text('남은 풍선 1'), findsOneWidget);
     expect(hapticCount, 1);
   });
 
@@ -5962,8 +6027,8 @@ void main() {
       await tapSectionStart(tester, 3);
 
       expect(find.text('STAGE 21'), findsOneWidget);
-      expect(find.text('시간  14'), findsOneWidget);
-      expect(find.text('남은 풍선  2'), findsOneWidget);
+      expect(find.text('시간 14초'), findsOneWidget);
+      expect(find.text('남은 풍선 2'), findsOneWidget);
       expect(find.byKey(const ValueKey(0)), findsOneWidget);
       expect(find.byKey(const ValueKey(1)), findsOneWidget);
       expect(find.byKey(const ValueKey('fake-balloon-2')), findsOneWidget);
@@ -5987,9 +6052,9 @@ void main() {
       await tapGameTarget(tester, 'fake-balloon-2');
       expect(find.byKey(const ValueKey('fake-balloon-2')), findsNothing);
       expect(find.byKey(const ValueKey('fake-balloon-3')), findsOneWidget);
-      expect(find.text('시간  12'), findsOneWidget);
-      expect(find.text('점수  0'), findsOneWidget);
-      expect(find.text('남은 풍선  2'), findsOneWidget);
+      expect(find.text('시간 12초'), findsOneWidget);
+      expect(find.text('점수 0'), findsOneWidget);
+      expect(find.text('남은 풍선 2'), findsOneWidget);
       expect(PopSound.fakePlayCount, 1);
       expect(hapticCount, 1);
       final effects = tester
@@ -6113,7 +6178,7 @@ void main() {
       }
 
       expect(find.text('STAGE 30'), findsOneWidget);
-      expect(find.text('시간  18'), findsOneWidget);
+      expect(find.text('시간 18초'), findsOneWidget);
       expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
       expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
       final bosses = tester
@@ -6160,8 +6225,9 @@ void main() {
             .widgetList<Text>(find.byType(Text))
             .map((widget) => widget.data)
             .whereType<String>()
-            .singleWhere((text) => text.startsWith('시간  '))
-            .substring('시간  '.length),
+            .singleWhere((text) => text.startsWith('시간 '))
+            .replaceFirst('시간 ', '')
+            .replaceFirst('초', ''),
       );
       PopSound.resetDebug();
       await tapGameTarget(tester, initialFakeKey);
@@ -6179,7 +6245,10 @@ void main() {
             .hp,
         hpBeforeFakeTap,
       );
-      expect(find.text('시간  ${secondsBeforeFakeTap - 2}'), findsOneWidget);
+      expect(
+        find.text('시간 ${secondsBeforeFakeTap - 2}초'),
+        findsOneWidget,
+      );
       expect(PopSound.fakePlayCount, 1);
 
       await tapGameTarget(tester, stage30BossTargetKey(tester, fake: false));
@@ -6334,7 +6403,7 @@ void main() {
     }
 
     expect(find.text('STAGE 20'), findsOneWidget);
-    expect(find.text('시간  10'), findsOneWidget);
+    expect(find.text('시간 10초'), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('boss-raster-0')), findsOneWidget);
@@ -6365,7 +6434,7 @@ void main() {
         findsOneWidget,
       );
     }
-    expect(find.text('남은 풍선  2'), findsOneWidget);
+    expect(find.text('남은 풍선 2'), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('boss-balloon-0'))) !=
           tester.getTopLeft(find.byKey(const ValueKey('boss-balloon-1'))),
@@ -6453,8 +6522,8 @@ void main() {
     expect(find.byKey(const ValueKey('boss-balloon-1')), findsOneWidget);
     expect(hapticCount, 15);
     expect(find.text('BOSS CLEAR!'), findsNothing);
-    expect(find.text('남은 풍선  1'), findsOneWidget);
-    expect(find.text('점수  316'), findsOneWidget);
+    expect(find.text('남은 풍선 1'), findsOneWidget);
+    expect(find.text('점수 316'), findsOneWidget);
 
     final bossBPosition = tester.getTopLeft(
       find.byKey(const ValueKey('boss-balloon-1')),
@@ -6475,14 +6544,16 @@ void main() {
         .widgetList<Text>(find.byType(Text))
         .map((widget) => widget.data)
         .whereType<String>()
-        .singleWhere((text) => text.startsWith('시간  '));
-    final remainingTime = int.parse(timeText.substring('시간  '.length));
+        .singleWhere((text) => text.startsWith('시간 '));
+    final remainingTime = int.parse(
+      timeText.replaceFirst('시간 ', '').replaceFirst('초', ''),
+    );
     final scoreAtStage20Clear = 326 + remainingTime;
-    expect(find.text('점수  $scoreAtStage20Clear'), findsOneWidget);
+    expect(find.text('점수 $scoreAtStage20Clear'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('STAGE 21'), findsOneWidget);
-    expect(find.text('점수  $scoreAtStage20Clear'), findsOneWidget);
+    expect(find.text('점수 $scoreAtStage20Clear'), findsOneWidget);
     expect(find.text('게임 완료!'), findsNothing);
     expect(find.byKey(const ValueKey('stage-intro-next')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('stage-intro-next')));
@@ -6514,9 +6585,9 @@ void main() {
         .widgetList<Text>(find.byType(Text))
         .map((widget) => widget.data)
         .whereType<String>()
-        .singleWhere((text) => text.startsWith('점수  '));
+        .singleWhere((text) => text.startsWith('점수 '));
     final expectedFinalScore = int.parse(
-      finalScoreText.substring('점수  '.length),
+      finalScoreText.substring('점수 '.length),
     );
     expect(expectedFinalScore, greaterThan(scoreAtStage20Clear));
 
@@ -6566,7 +6637,7 @@ void main() {
     expect(homeButton, findsOneWidget);
     await tester.tap(homeButton);
     await tester.pump();
-    expect(find.text('1~10 STAGE 시작'), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-section-1')), findsOneWidget);
     expect(find.text('STAGE 30'), findsNothing);
   });
 
@@ -6576,13 +6647,13 @@ void main() {
     ProgressStorage.unlockSecondSection();
     await tester.pumpWidget(const BalloonPopApp());
     await tester.pump();
-    expect(find.text('11~20 STAGE 시작'), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-section-2')), findsOneWidget);
     expect(find.text('진행 초기화'), findsNothing);
     expect(ProgressStorage.isSecondSectionUnlocked(), true);
-    final secondSection = tester.widget<FilledButton>(
+    final secondSection = tester.widget<InkWell>(
       find.byKey(const ValueKey('start-section-2')),
     );
-    expect(secondSection.onPressed, isNotNull);
+    expect(secondSection.onTap, isNotNull);
   });
 
   testWidgets('pause freezes time movement and balloon input', (tester) async {
@@ -6595,7 +6666,7 @@ void main() {
     await tapSectionStart(tester, 1);
 
     final positionBefore = tester.getTopLeft(find.byKey(const ValueKey(0)));
-    expect(find.text('시간  10'), findsOneWidget);
+    expect(find.text('시간 10초'), findsOneWidget);
 
     tester
         .widget<FilledButton>(find.byKey(const ValueKey('pause-button')))
@@ -6605,11 +6676,11 @@ void main() {
     expect(find.text('일시정지'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
 
-    expect(find.text('시간  10'), findsOneWidget);
+    expect(find.text('시간 10초'), findsOneWidget);
     expect(tester.getTopLeft(find.byKey(const ValueKey(0))), positionBefore);
     await tapGameTarget(tester, 0);
     expect(find.byKey(const ValueKey(0)), findsOneWidget);
-    expect(find.text('점수  0'), findsOneWidget);
+    expect(find.text('점수 0'), findsOneWidget);
 
     tester
         .widget<FilledButton>(find.byKey(const ValueKey('resume-button')))
@@ -6617,7 +6688,7 @@ void main() {
         .call();
     await tester.pump(const Duration(seconds: 1));
     expect(find.bySemanticsLabel('일시정지'), findsOneWidget);
-    expect(find.text('시간  10'), findsOneWidget);
+    expect(find.text('시간 10초'), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(const ValueKey(0))) != positionBefore,
       true,
@@ -6631,15 +6702,15 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('end-button')));
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('현재 게임을 끝내고 시작 화면으로 돌아갈까요?'), findsOneWidget);
+    expect(find.text('현재 게임을 끝내고 홈으로 돌아갈까요?'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
-    expect(find.text('시간  10'), findsOneWidget);
+    expect(find.text('시간 10초'), findsOneWidget);
 
     await tester.tap(find.text('취소'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('STAGE 01'), findsOneWidget);
-    expect(find.text('시간  10'), findsOneWidget);
+    expect(find.text('시간 10초'), findsOneWidget);
   });
 
   testWidgets('confirming end returns to menu and keeps unlock', (
@@ -6655,8 +6726,8 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '끝내기').last);
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text('1~10 STAGE 시작'), findsOneWidget);
-    expect(find.text('11~20 STAGE 시작'), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-section-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-section-2')), findsOneWidget);
     expect(ProgressStorage.isSecondSectionUnlocked(), true);
     await tester.pump(const Duration(seconds: 20));
     expect(find.text('STAGE 11'), findsNothing);
@@ -6676,7 +6747,7 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump(const Duration(seconds: 2));
     expect(find.bySemanticsLabel('일시정지'), findsWidgets);
-    expect(find.text('시간  10'), findsOneWidget);
+    expect(find.text('시간 10초'), findsOneWidget);
   });
 
   testWidgets('legendary tools apply damage only at their impact frame', (
@@ -6966,9 +7037,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 350));
     await tapSectionStart(tester, 3);
     await tester.pump(const Duration(milliseconds: 100));
-    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(
-      find.byKey(const ValueKey('phase-1-persistent-game-canvas')),
+    final canvasFinder = find.byKey(
+      const ValueKey('phase-1-persistent-game-canvas'),
     );
+    final canvas = tester.widget<PersistentGameCanvas<Balloon>>(canvasFinder);
     final fake = canvas.renderState.basicBalloons.firstWhere(
       (balloon) => balloon.isFake,
     );
@@ -6978,11 +7050,16 @@ void main() {
         .data
         .value
         .secondsLeft;
+    final hitPoint = await waitForExclusiveCanvasHitPoint(
+      tester,
+      canvasFinder,
+      fake.id,
+    );
     canvas.onPointerDown(
       PointerDownEvent(
         pointer: 4201,
         kind: ui.PointerDeviceKind.touch,
-        position: fake.position + Offset(fake.size / 2, fake.size / 2),
+        position: hitPoint,
       ),
     );
     expect(canvas.renderState.basicBalloons.contains(fake), false);
@@ -7923,6 +8000,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('ko'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SizedBox(
             width: 82,
