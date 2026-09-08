@@ -33,6 +33,9 @@ import 'onboarding_page.dart';
 import 'ranking/online_ranking_models.dart';
 import 'ranking/online_ranking_page.dart';
 import 'ranking/online_ranking_repository.dart';
+import 'ranking/ranking_moderation_service.dart';
+import 'ranking/ranking_safety_dialog.dart';
+import 'ranking/ranking_safety_store.dart';
 import 'services/coin_service.dart';
 import 'services/haptic_service.dart';
 import 'services/purchase_service.dart';
@@ -109,6 +112,7 @@ class PoppopAppEntry extends StatefulWidget {
     this.integrationDebugConfig = const FlameIntegrationDebugConfig(),
     this.integrationMetrics,
     this.onlineRankingRepository,
+    this.rankingSafetyStore,
   });
 
   final PoppopEngineMode engineMode;
@@ -123,6 +127,7 @@ class PoppopAppEntry extends StatefulWidget {
   @visibleForTesting
   final FlameIntegrationMetrics? integrationMetrics;
   final OnlineRankingRepository? onlineRankingRepository;
+  final RankingSafetyStore? rankingSafetyStore;
 
   @override
   State<PoppopAppEntry> createState() => _PoppopAppEntryState();
@@ -151,6 +156,7 @@ class _PoppopAppEntryState extends State<PoppopAppEntry> {
         integrationDebugConfig: widget.integrationDebugConfig,
         integrationMetrics: widget.integrationMetrics,
         onlineRankingRepository: widget.onlineRankingRepository,
+        rankingSafetyStore: widget.rankingSafetyStore,
       );
     }
     return MaterialApp(
@@ -179,6 +185,7 @@ class BalloonPopApp extends StatefulWidget {
     this.integrationDebugConfig = const FlameIntegrationDebugConfig(),
     this.integrationMetrics,
     this.onlineRankingRepository,
+    this.rankingSafetyStore,
   });
 
   @visibleForTesting
@@ -197,6 +204,7 @@ class BalloonPopApp extends StatefulWidget {
   @visibleForTesting
   final FlameIntegrationMetrics? integrationMetrics;
   final OnlineRankingRepository? onlineRankingRepository;
+  final RankingSafetyStore? rankingSafetyStore;
 
   @override
   State<BalloonPopApp> createState() => _BalloonPopAppState();
@@ -264,6 +272,7 @@ class _BalloonPopAppState extends State<BalloonPopApp>
               integrationDebugConfig: widget.integrationDebugConfig,
               integrationMetrics: widget.integrationMetrics,
               onlineRankingRepository: widget.onlineRankingRepository,
+              rankingSafetyStore: widget.rankingSafetyStore,
             )
           : NicknameOnboardingPage(onCompleted: _completeNicknameOnboarding),
     );
@@ -1995,6 +2004,7 @@ class BalloonGamePage extends StatefulWidget {
     this.integrationDebugConfig = const FlameIntegrationDebugConfig(),
     this.integrationMetrics,
     this.onlineRankingRepository,
+    this.rankingSafetyStore,
   });
 
   @visibleForTesting
@@ -2013,6 +2023,7 @@ class BalloonGamePage extends StatefulWidget {
   @visibleForTesting
   final FlameIntegrationMetrics? integrationMetrics;
   final OnlineRankingRepository? onlineRankingRepository;
+  final RankingSafetyStore? rankingSafetyStore;
 
   @override
   State<BalloonGamePage> createState() => _BalloonGamePageState();
@@ -2200,6 +2211,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   late final PageController _stagePageController;
   late final ValueNotifier<GameHeaderData> _headerData;
   late final Widget _gameHeader;
+  late final RankingSafetyStore _rankingSafetyStore =
+      widget.rankingSafetyStore ?? SharedPreferencesRankingSafetyStore();
   int _stagePage = 0;
   bool _initialAssetsPrecached = false;
   bool _stageAdvanceScheduled = false;
@@ -4851,8 +4864,10 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) =>
-            SettingsPage(onDataReset: _reloadAfterAllDataReset),
+        builder: (context) => SettingsPage(
+          onDataReset: _reloadAfterAllDataReset,
+          rankingSafetyStore: _rankingSafetyStore,
+        ),
       ),
     );
   }
@@ -4925,12 +4940,22 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   Future<void> _onRankingMenuTap() async {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (!await ensureRankingSafetyConsent(
+          context,
+          store: _rankingSafetyStore,
+        ) ||
+        !mounted) {
+      return;
+    }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (context) => OnlineRankingPage(
           currentNickname: SettingsService.nickname,
           onChallenge: _startRankedChallenge,
           repository: widget.onlineRankingRepository,
+          moderationService: RankingModerationService(
+            safetyStore: _rankingSafetyStore,
+          ),
         ),
       ),
     );

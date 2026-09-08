@@ -43,6 +43,7 @@ class RankedRunResult {
 class OnlineRankingEntry {
   const OnlineRankingEntry({
     required this.entryId,
+    this.publicActorId,
     required this.displayName,
     required this.score,
     required this.rank,
@@ -52,6 +53,7 @@ class OnlineRankingEntry {
   });
 
   final String entryId;
+  final String? publicActorId;
   final String displayName;
   final int score;
   final int rank;

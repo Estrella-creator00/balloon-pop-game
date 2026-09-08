@@ -5,6 +5,8 @@ import 'audio/pop_sound.dart';
 import 'legal_pages.dart';
 import 'l10n/l10n.dart';
 import 'ranking/firebase_ranking_runtime.dart';
+import 'ranking/ranking_safety_store.dart';
+import 'ranking/blocked_ranking_users_page.dart';
 import 'services/external_links.dart';
 import 'services/settings_service.dart';
 
@@ -20,18 +22,35 @@ class SettingsPage extends StatefulWidget {
     this.externalLinkOpener = PoppopExternalLinks.open,
     this.supportIdProvider,
     this.onlineDataDeleter,
+    this.rankingSafetyStore,
   });
 
   final VoidCallback onDataReset;
   final ExternalLinkOpener externalLinkOpener;
   final Future<String> Function()? supportIdProvider;
   final Future<void> Function()? onlineDataDeleter;
+  final RankingSafetyStore? rankingSafetyStore;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  late final RankingSafetyStore _rankingSafetyStore =
+      widget.rankingSafetyStore ?? SharedPreferencesRankingSafetyStore();
+  bool? _onlineRankingEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOnlineRankingSetting();
+  }
+
+  Future<void> _loadOnlineRankingSetting() async {
+    final enabled = await _rankingSafetyStore.isOnlineRankingEnabled();
+    if (mounted) setState(() => _onlineRankingEnabled = enabled);
+  }
+
   Future<void> _showSupportId() async {
     final future = widget.supportIdProvider?.call() ??
         FirebaseRankingRuntime.instance.ensureUid();
@@ -117,6 +136,8 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     if (confirmed != true || !mounted) return;
     SettingsService.resetAllData();
+    await _rankingSafetyStore.clearAll();
+    if (!mounted) return;
     widget.onDataReset();
     setState(() {});
     ScaffoldMessenger.of(context)
@@ -127,6 +148,75 @@ class _SettingsPageState extends State<SettingsPage> {
           content: Text(context.l10n.dataResetDone),
         ),
       );
+  }
+
+  Future<void> _changeOnlineRanking(bool enabled) async {
+    var enteredPin = '';
+    final pin = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        key: ValueKey(enabled
+            ? 'online-ranking-enable-dialog'
+            : 'online-ranking-disable-dialog'),
+        title: Text(enabled
+            ? dialogContext.l10n.parentPinVerifyTitle
+            : dialogContext.l10n.parentPinCreateTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(enabled
+                ? dialogContext.l10n.parentPinVerifyBody
+                : dialogContext.l10n.parentPinCreateBody),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('parent-pin-input'),
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              maxLength: 8,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (value) => enteredPin = value,
+              decoration: InputDecoration(
+                hintText: dialogContext.l10n.parentPinHint,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(dialogContext.l10n.cancel),
+          ),
+          FilledButton(
+            key: const ValueKey('parent-pin-confirm'),
+            onPressed: () => Navigator.pop(dialogContext, enteredPin),
+            child: Text(dialogContext.l10n.confirm),
+          ),
+        ],
+      ),
+    );
+    if (pin == null || !mounted) return;
+    if (enabled) {
+      final accepted = await _rankingSafetyStore.enableWithParentPin(pin);
+      if (!accepted) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.parentPinIncorrect)),
+        );
+        return;
+      }
+    } else {
+      try {
+        await _rankingSafetyStore.disableWithParentPin(pin);
+      } on FormatException {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.parentPinInvalid)),
+        );
+        return;
+      }
+    }
+    if (mounted) setState(() => _onlineRankingEnabled = enabled);
   }
 
   @override
@@ -188,6 +278,33 @@ class _SettingsPageState extends State<SettingsPage> {
                           setState(() {});
                         },
                       ),
+                      const _SettingsDivider(),
+                      _SettingsSwitchRow(
+                        key: const ValueKey('settings-online-ranking-row'),
+                        icon: Icons.emoji_events_rounded,
+                        label: context.l10n.onlineRankingSetting,
+                        value: _onlineRankingEnabled ?? true,
+                        switchKey:
+                            const ValueKey('settings-online-ranking-switch'),
+                        onChanged: _onlineRankingEnabled == null
+                            ? null
+                            : _changeOnlineRanking,
+                      ),
+                      if (_onlineRankingEnabled == true) ...[
+                        const _SettingsDivider(),
+                        _SettingsRow(
+                          key: const ValueKey('settings-blocked-users-row'),
+                          icon: Icons.person_off_rounded,
+                          label: context.l10n.blockedRankingUsers,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => BlockedRankingUsersPage(
+                                safetyStore: _rankingSafetyStore,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       const _SettingsDivider(),
                       _SettingsSwitchRow(
                         key: const ValueKey('settings-haptic-row'),
@@ -449,7 +566,7 @@ class _SettingsSwitchRow extends StatelessWidget {
   final String label;
   final bool value;
   final Key switchKey;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) => SizedBox(

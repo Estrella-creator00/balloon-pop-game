@@ -103,6 +103,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /ranking_reports_v1/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /ranking_reporters_v1/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /ranking_actor_moderation_v1/{document=**} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

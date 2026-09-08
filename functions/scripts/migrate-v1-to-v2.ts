@@ -6,6 +6,8 @@ import {
   legacyCollections,
   publicCollections,
   publicEntryId,
+  publicActorId,
+  rankingSafetyPolicyVersion,
   RankingCategory,
   shouldReplace,
   validateSubmitPayload,
@@ -65,7 +67,11 @@ async function main(): Promise<void> {
             skipped++;
             return;
           }
-          transaction.set(reference, publicMigrationRecord(category, record));
+          transaction.set(reference, publicMigrationRecord(
+            category,
+            record,
+            publicActorId(options.secret, record.uid),
+          ));
           success++;
         });
       } catch {
@@ -101,7 +107,10 @@ export function selectBestLegacyRecords(
   return [...selected.values()];
 }
 
-function legacyRecord(category: RankingCategory, value: unknown): LegacyRecord | null {
+export function legacyRecord(
+  category: RankingCategory,
+  value: unknown,
+): LegacyRecord | null {
   if (typeof value !== 'object' || value === null) return null;
   const data = value as Record<string, unknown>;
   if (typeof data.uid !== 'string') return null;
@@ -110,6 +119,7 @@ function legacyRecord(category: RankingCategory, value: unknown): LegacyRecord |
       category,
       displayName: data.displayName,
       score: data.score,
+      policyVersion: rankingSafetyPolicyVersion,
       ...(category === 'stage' ? {
         reachedStage: data.reachedStage,
         cleared: data.cleared,
@@ -133,8 +143,10 @@ function legacyRecord(category: RankingCategory, value: unknown): LegacyRecord |
 export function publicMigrationRecord(
   category: RankingCategory,
   record: LegacyRecord,
+  actorId: string,
 ): Record<string, unknown> {
   return {
+    publicActorId: actorId,
     displayName: record.displayName,
     score: record.score,
     submittedAt: record.submittedAt,

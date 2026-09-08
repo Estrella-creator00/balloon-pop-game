@@ -7,6 +7,8 @@ import '../l10n/l10n.dart';
 import 'firebase_online_ranking_repository.dart';
 import 'online_ranking_models.dart';
 import 'online_ranking_repository.dart';
+import 'ranking_moderation_service.dart';
+import 'ranking_functions_client.dart';
 
 typedef RankedChallengeLauncher = Future<RankedRunResult?> Function(
   RankingCategory category,
@@ -18,11 +20,14 @@ class OnlineRankingPage extends StatefulWidget {
     required this.currentNickname,
     required this.onChallenge,
     OnlineRankingRepository? repository,
-  }) : repository = repository ?? FirebaseOnlineRankingRepository.instance;
+    RankingModerationService? moderationService,
+  })  : repository = repository ?? FirebaseOnlineRankingRepository.instance,
+        moderationService = moderationService ?? RankingModerationService();
 
   final String? currentNickname;
   final RankedChallengeLauncher onChallenge;
   final OnlineRankingRepository repository;
+  final RankingModerationService moderationService;
 
   @override
   State<OnlineRankingPage> createState() => _OnlineRankingPageState();
@@ -33,11 +38,26 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
   final Map<RankingCategory, Future<OnlineLeaderboard>> _loads = {};
   bool _challengeRunning = false;
   bool _disposed = false;
+  final Map<RankingCategory, Set<String>> _hidden = {};
+  Set<String> _hiddenActors = const {};
 
   @override
   void initState() {
     super.initState();
     _load(_category);
+    _loadHidden(_category);
+  }
+
+  Future<void> _loadHidden(RankingCategory category) async {
+    final results = await Future.wait([
+      widget.moderationService.safetyStore.hiddenEntryIds(category),
+      widget.moderationService.safetyStore.hiddenActorIds(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _hidden[category] = results[0];
+      _hiddenActors = results[1];
+    });
   }
 
   Future<OnlineLeaderboard> _load(
@@ -55,6 +75,7 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
     setState(() {
       _category = category;
       _load(category);
+      _loadHidden(category);
     });
   }
 
@@ -77,6 +98,16 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
           SnackBar(content: Text(context.l10n.rankingSaved)),
         );
         _refresh();
+      } on InvalidRankingNicknameException {
+        if (_disposed || !mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.nicknameSafetyValidation)),
+        );
+      } on OnlineRankingAccessException {
+        if (_disposed || !mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.onlineRankingDisabledBody)),
+        );
       } catch (_) {
         if (_disposed || !mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -131,7 +162,13 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
                     if (snapshot.hasError) {
                       return _RankingError(onRetry: _refresh);
                     }
-                    return _LeaderboardView(board: snapshot.data!);
+                    return _LeaderboardView(
+                      board: snapshot.data!,
+                      hiddenEntryIds: _hidden[_category] ?? const {},
+                      hiddenActorIds: _hiddenActors,
+                      onHide: _hideEntry,
+                      onReport: _reportEntry,
+                    );
                   },
                 ),
               ),
@@ -149,6 +186,59 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
           ),
         ),
       );
+
+  Future<void> _hideEntry(OnlineRankingEntry entry) async {
+    await widget.moderationService.hide(_category, entry);
+    if (!mounted) return;
+    setState(() {
+      if (entry.publicActorId == null) {
+        (_hidden[_category] ??= <String>{}).add(entry.entryId);
+      } else {
+        _hiddenActors = {..._hiddenActors, entry.publicActorId!};
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(entry.publicActorId == null
+            ? context.l10n.rankingLegacyEntryHidden
+            : context.l10n.rankingUserHidden),
+      ),
+    );
+  }
+
+  Future<void> _reportEntry(OnlineRankingEntry entry) async {
+    final reason = await showDialog<RankingReportReason>(
+      context: context,
+      builder: (context) => _ReportReasonDialog(),
+    );
+    if (reason == null || !mounted) return;
+    try {
+      final created = await widget.moderationService.report(
+        category: _category,
+        entryId: entry.entryId,
+        publicActorId: entry.publicActorId,
+        displayName: entry.displayName,
+        reason: reason,
+      );
+      if (!mounted) return;
+      setState(() => _hiddenActors = {
+            ..._hiddenActors,
+            if (entry.publicActorId != null) entry.publicActorId!,
+          });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(created
+              ? context.l10n.rankingReportReceived
+              : context.l10n.rankingAlreadyReported),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.rankingReportError)),
+      );
+    }
+  }
 
   Widget _header() => SizedBox(
         height: 46,
@@ -186,43 +276,69 @@ class _OnlineRankingPageState extends State<OnlineRankingPage> {
 }
 
 class _LeaderboardView extends StatelessWidget {
-  const _LeaderboardView({required this.board});
+  const _LeaderboardView({
+    required this.board,
+    required this.hiddenEntryIds,
+    required this.hiddenActorIds,
+    required this.onHide,
+    required this.onReport,
+  });
 
   final OnlineLeaderboard board;
+  final Set<String> hiddenEntryIds;
+  final Set<String> hiddenActorIds;
+  final ValueChanged<OnlineRankingEntry> onHide;
+  final ValueChanged<OnlineRankingEntry> onReport;
 
   @override
-  Widget build(BuildContext context) => Column(
-        children: [
-          _MyBest(
-              entry: board.currentUser,
-              outside: board.currentUserOutsideTop100),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              SizedBox(
-                  width: 48,
-                  child: Text(context.l10n.rankingColumnRank,
-                      textAlign: TextAlign.center)),
-              Expanded(child: Text(context.l10n.rankingColumnNickname)),
-              Text(context.l10n.rankingColumnRecord),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: board.entries.isEmpty
-                ? Center(
-                    key: ValueKey('online-ranking-empty'),
-                    child: Text(context.l10n.rankingEmpty),
-                  )
-                : ListView.builder(
-                    key: const ValueKey('online-ranking-top-100'),
-                    itemCount: board.entries.length,
-                    itemBuilder: (context, index) => _RankingRow(
-                        entry: board.entries[index], category: board.category),
-                  ),
-          ),
-        ],
-      );
+  Widget build(BuildContext context) {
+    final visibleEntries = board.entries
+        .where((entry) =>
+            !hiddenEntryIds.contains(entry.entryId) &&
+            (entry.publicActorId == null ||
+                !hiddenActorIds.contains(entry.publicActorId)))
+        .toList(growable: false);
+    return Column(
+      children: [
+        _MyBest(
+            entry: board.currentUser, outside: board.currentUserOutsideTop100),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            SizedBox(
+                width: 48,
+                child: Text(context.l10n.rankingColumnRank,
+                    textAlign: TextAlign.center)),
+            Expanded(child: Text(context.l10n.rankingColumnNickname)),
+            Text(context.l10n.rankingColumnRecord),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: visibleEntries.isEmpty
+              ? Center(
+                  key: ValueKey('online-ranking-empty'),
+                  child: Text(context.l10n.rankingEmpty),
+                )
+              : ListView.builder(
+                  key: const ValueKey('online-ranking-top-100'),
+                  itemCount: visibleEntries.length,
+                  itemBuilder: (context, index) {
+                    final entry = visibleEntries[index];
+                    return _RankingRow(
+                      entry: entry,
+                      category: board.category,
+                      isCurrentUser:
+                          entry.entryId == board.currentUser?.entryId,
+                      onHide: () => onHide(entry),
+                      onReport: () => onReport(entry),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
 }
 
 class _MyBest extends StatelessWidget {
@@ -254,9 +370,18 @@ class _MyBest extends StatelessWidget {
 }
 
 class _RankingRow extends StatelessWidget {
-  const _RankingRow({required this.entry, required this.category});
+  const _RankingRow({
+    required this.entry,
+    required this.category,
+    required this.isCurrentUser,
+    required this.onHide,
+    required this.onReport,
+  });
   final OnlineRankingEntry entry;
   final RankingCategory category;
+  final bool isCurrentUser;
+  final VoidCallback onHide;
+  final VoidCallback onReport;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -286,9 +411,71 @@ class _RankingRow extends StatelessWidget {
                   : '${entry.score}',
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
+            if (!isCurrentUser)
+              PopupMenuButton<String>(
+                key: ValueKey('ranking-entry-menu-${entry.entryId}'),
+                tooltip: context.l10n.rankingEntryActions,
+                onSelected: (value) {
+                  if (value == 'hide') onHide();
+                  if (value == 'report') onReport();
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'hide',
+                    child: Text(entry.publicActorId == null
+                        ? context.l10n.hideRankingEntry
+                        : context.l10n.hideRankingUser),
+                  ),
+                  if (entry.publicActorId != null)
+                    PopupMenuItem(
+                      value: 'report',
+                      child: Text(context.l10n.reportNickname),
+                    ),
+                ],
+              ),
           ],
         ),
       );
+}
+
+class _ReportReasonDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        key: const ValueKey('ranking-report-dialog'),
+        title: Text(context.l10n.reportNickname),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: RankingReportReason.values
+              .map(
+                (reason) => ListTile(
+                  key: ValueKey('ranking-report-${reason.name}'),
+                  title: Text(_label(context, reason)),
+                  onTap: () => Navigator.pop(context, reason),
+                ),
+              )
+              .toList(growable: false),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(context.l10n.cancel),
+          ),
+        ],
+      );
+
+  String _label(BuildContext context, RankingReportReason reason) =>
+      switch (reason) {
+        RankingReportReason.personalInformation =>
+          context.l10n.reportReasonPersonalInformation,
+        RankingReportReason.hateOrHarassment =>
+          context.l10n.reportReasonHateOrHarassment,
+        RankingReportReason.sexualContent =>
+          context.l10n.reportReasonSexualContent,
+        RankingReportReason.impersonation =>
+          context.l10n.reportReasonImpersonation,
+        RankingReportReason.otherInappropriate =>
+          context.l10n.reportReasonOther,
+      };
 }
 
 class _RankingError extends StatelessWidget {

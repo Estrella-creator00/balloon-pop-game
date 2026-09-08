@@ -23,7 +23,8 @@ before deployment unless an owner has approved billing and a budget alert.
    **Rollback:** destroy the exposed version and create a new value before any
    migration.
 4. **Deploy Functions.** Build and test locally, then deploy only
-   `submitLeaderboard`, `getMyLeaderboardEntry`, and `deleteOnlineData` to the
+   `submitLeaderboard`, `getMyLeaderboardEntry`, `reportLeaderboardEntry`, and
+   `deleteOnlineData` to the
    explicitly selected project. **Stop:** region, project, runtime, secret
    binding, or callable authentication differs from this repository.
    **Rollback:** restore the previous Functions revision or delete only these
@@ -66,7 +67,17 @@ before deployment unless an owner has approved billing and a budget alert.
     **Stop:** partial deletion or pending resubmission occurs. **Rollback:** stop
     exposing the deletion action and keep email-assisted deletion available;
     deleted data itself cannot be restored.
-14. **Set v1 retention and deletion date.** Document a retention period, legal
+14. **Verify nickname safety and private reports.** Before releasing the child-
+    directed ranking UI, deploy the reviewed Functions revision, deploy rules
+    that deny all client access to `ranking_reports_v1` and
+    `ranking_reporters_v1`, then deploy the Firestore index configuration that
+    enables TTL on `ranking_reports_v1.expiresAt`. Use dedicated anonymous test
+    accounts to verify normalization, rejection, self-report protection,
+    idempotency, the five-per-24-hours limit, and deletion of reports made by
+    the account. Confirm public v2 documents still contain no UID, Support ID,
+    reporter ID, or report fields. **Stop:** TTL is not enabled, a private
+    collection is client-readable/writable, or any identifier is exposed.
+15. **Set v1 retention and deletion date.** Document a retention period, legal
     review, backup implications, final count, and approval before deleting v1.
     **Stop:** rollback/support window or deletion authority is unclear.
     **Rollback:** postpone deletion; never use an unbounded delete command.
@@ -75,3 +86,48 @@ The admin deletion script accepts exactly one Support ID, defaults to dry-run,
 and requires both an explicit project and `--execute` for writes. Neither admin
 script should be run from an untrusted workstation or against production as
 part of normal application deployment.
+
+## Public actor ID safety rollout
+
+`publicActorId` is `HMAC-SHA256(LEADERBOARD_HMAC_SECRET, "actor:" + uid)`.
+The `actor:` domain is distinct from category-scoped entry IDs. It is a
+lowercase 64-character hex value that cannot be reversed without the secret and
+is shared only by the same anonymous account's Stage and 60-second entries. It
+must never be used for advertising, tracking, analytics, or profiling.
+
+Deploy this revision in the following guarded order:
+
+1. Run Functions tests, lint, typecheck, Flutter tests/analyze, and Firestore
+   emulator tests. Do not use production credentials during local validation.
+2. Deploy the four reviewed callable functions, including
+   `reportLeaderboardEntry`, with existing secret version 1. Confirm runtime,
+   region, callable IAM, and secret binding before continuing.
+3. Deploy the reviewed rules and indexes. Confirm clients cannot access
+   `ranking_reports_v1`, `ranking_reporters_v1`, or
+   `ranking_actor_moderation_v1`.
+4. Run `backfill:actor-id` without `--execute` against the explicitly selected
+   project. Require zero errors, exact v1/v2 protected-field digests, and only
+   missing `publicActorId` updates. This dry run logs counts, never identifiers.
+5. Run the same command once with `--execute`. It may add only
+   `publicActorId`; score, nickname, reachedStage, cleared, submittedAt,
+   entryId, and v1 documents must remain unchanged.
+6. Repeat the dry run. Require zero updates and zero errors, compare all v1/v2
+   counts and protected digests, and inspect the public schema for UID or
+   Support ID leakage before releasing the client.
+7. Smoke-test one dedicated anonymous account: submit both categories, verify
+   one shared actor ID and two different entry IDs, report a different actor,
+   hide/unhide locally, then delete only the dedicated test account.
+
+For a confirmed safety case, an operator first reviews private reports and then
+runs `moderate:actor` in its default dry-run mode with an exact project and
+actor ID. The result must show at most one matching entry per category. Execute
+requires both `--execute` and `--confirm-actor=<same-id>`; it writes one private
+`ranking_actor_moderation_v1/{publicActorId}` document with `status: blocked`
+and removes only that actor's public entries. New submissions check that private
+record and are rejected while blocked. Review records are retained only while
+needed to enforce a safety restriction and are periodically reviewed; reports,
+including their target actor ID, expire after 180 days. Self-service online-data
+deletion removes the user's own moderation record and reporter-side records,
+while reports submitted by other users about a former public entry may remain
+until their scheduled expiry. All operations use Admin SDK credentials and are
+never available to clients.

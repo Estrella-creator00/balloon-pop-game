@@ -29,6 +29,7 @@ import 'package:balloon_pop_game/ranking/online_ranking_repository.dart';
 import 'package:balloon_pop_game/ranking/ranking_entry.dart';
 import 'package:balloon_pop_game/ranking/ranking_page.dart';
 import 'package:balloon_pop_game/ranking/ranking_repository.dart';
+import 'package:balloon_pop_game/ranking/ranking_safety_store.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
 import 'package:balloon_pop_game/services/coin_purchase_service.dart';
 import 'package:balloon_pop_game/services/haptic_service.dart';
@@ -108,6 +109,72 @@ class _WidgetRankingRepository implements OnlineRankingRepository {
 
   @override
   Future<void> deleteOnlineData() async {}
+}
+
+class _WidgetRankingSafetyStore implements RankingSafetyStore {
+  bool enabled = true;
+  bool consented = true;
+  final Map<RankingCategory, Set<String>> _hidden = {};
+  final Map<RankingCategory, Set<String>> _reported = {};
+  final Map<String, String> _actors = {};
+
+  @override
+  Future<void> acceptCurrentPolicy() async => consented = true;
+
+  @override
+  Future<void> clearAll() async {
+    consented = false;
+    enabled = true;
+    _hidden.clear();
+    _reported.clear();
+    _actors.clear();
+  }
+
+  @override
+  Future<void> disableWithParentPin(String pin) async => enabled = false;
+
+  @override
+  Future<bool> enableWithParentPin(String pin) async {
+    enabled = true;
+    return true;
+  }
+
+  @override
+  Future<bool> hasCurrentConsent() async => consented;
+
+  @override
+  Future<void> hide(RankingCategory category, String entryId) async =>
+      (_hidden[category] ??= <String>{}).add(entryId);
+
+  @override
+  Future<Set<String>> hiddenEntryIds(RankingCategory category) async =>
+      {...?_hidden[category]};
+
+  @override
+  Future<void> hideActor(String actorId, String displayName) async =>
+      _actors[actorId] = displayName;
+  @override
+  Future<Set<String>> hiddenActorIds() async => _actors.keys.toSet();
+  @override
+  Future<List<BlockedRankingActor>> blockedActors() async => _actors.entries
+      .map((entry) => BlockedRankingActor(
+            actorId: entry.key,
+            displayName: entry.value,
+          ))
+      .toList();
+  @override
+  Future<void> unhideActor(String actorId) async => _actors.remove(actorId);
+
+  @override
+  Future<bool> isOnlineRankingEnabled() async => enabled;
+
+  @override
+  Future<void> markReported(RankingCategory category, String entryId) async =>
+      (_reported[category] ??= <String>{}).add(entryId);
+
+  @override
+  Future<bool> wasReported(RankingCategory category, String entryId) async =>
+      _reported[category]?.contains(entryId) ?? false;
 }
 
 class _BasicRenderBoss implements BossBalloonRenderView {
@@ -3053,6 +3120,7 @@ void main() {
       SettingsService.saveNickname('시원이');
       await tester.pumpWidget(BalloonPopApp(
         onlineRankingRepository: _WidgetRankingRepository(),
+        rankingSafetyStore: _WidgetRankingSafetyStore(),
       ));
       await tester.pump();
 
@@ -3239,7 +3307,10 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('nickname-input')), ' ');
       await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
       await tester.pump();
-      expect(find.text('닉네임은 2자 이상 10자 이하로 입력해 주세요.'), findsOneWidget);
+      expect(
+        find.text('한글·영문·숫자와 한 칸 공백으로 2~16자를 입력해 주세요.'),
+        findsOneWidget,
+      );
 
       await tester.enterText(find.byKey(const ValueKey('nickname-input')), 'A');
       await tester.tap(find.byKey(const ValueKey('nickname-save-button')));
@@ -3354,7 +3425,9 @@ void main() {
     SettingsService.setSoundEnabled(false);
     SettingsService.setHapticEnabled(false);
 
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      BalloonPopApp(rankingSafetyStore: _WidgetRankingSafetyStore()),
+    );
     await tester.pump();
     await openSettings(tester);
     await tester.scrollUntilVisible(
@@ -3399,6 +3472,11 @@ void main() {
     expect(ProgressStorage.isSecondSectionUnlocked(), isFalse);
     expect(ProgressStorage.bestScore(), 0);
     expect(SettingsService.nicknameOnboardingCompleted, isFalse);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('settings-nickname-row')),
+      -180,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('설정 안 됨'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('settings-back-button')));
@@ -3513,7 +3591,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(
+      BalloonPopApp(rankingSafetyStore: _WidgetRankingSafetyStore()),
+    );
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('home-nav-shop')));

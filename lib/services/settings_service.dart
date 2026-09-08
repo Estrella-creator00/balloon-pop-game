@@ -1,11 +1,12 @@
 import '../audio/pop_sound.dart';
 import '../storage/progress_storage.dart';
+import '../ranking/ranking_nickname.dart';
 import 'haptic_service.dart';
 
 /// Shared local player/settings state for SET-01 and future ranking onboarding.
 abstract final class SettingsService {
-  static const int minNicknameLength = 2;
-  static const int maxNicknameLength = 10;
+  static const int minNicknameLength = RankingNickname.minimumLength;
+  static const int maxNicknameLength = RankingNickname.maximumLength;
 
   static String? get nickname => ProgressStorage.nickname();
   static bool get nicknameOnboardingCompleted =>
@@ -13,14 +14,8 @@ abstract final class SettingsService {
   static bool get soundEnabled => ProgressStorage.soundEnabled();
   static bool get hapticEnabled => ProgressStorage.hapticEnabled();
 
-  static String? normalizeNickname(String input) {
-    final normalized = input.trim();
-    if (normalized.length < minNicknameLength ||
-        normalized.length > maxNicknameLength) {
-      return null;
-    }
-    return normalized;
-  }
+  static String? normalizeNickname(String input) =>
+      RankingNickname.normalize(input);
 
   static bool saveNickname(String input) {
     final normalized = normalizeNickname(input);

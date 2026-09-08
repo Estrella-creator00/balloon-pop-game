@@ -32,6 +32,20 @@ class FirebaseRankingFunctionsClient implements RankingFunctionsClient {
 
 enum OnlineDataDeletionFailure { offline, unauthenticated, server }
 
+enum OnlineRankingAccessFailure { disabled, consentRequired }
+
+class OnlineRankingAccessException implements Exception {
+  const OnlineRankingAccessException(this.failure);
+
+  final OnlineRankingAccessFailure failure;
+}
+
+class InvalidRankingNicknameException implements Exception {
+  const InvalidRankingNicknameException(this.reason);
+
+  final Object reason;
+}
+
 class OnlineDataDeletionException implements Exception {
   const OnlineDataDeletionException(this.failure);
 

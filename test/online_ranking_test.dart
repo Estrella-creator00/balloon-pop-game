@@ -11,7 +11,9 @@ import 'package:balloon_pop_game/ranking/online_ranking_page.dart';
 import 'package:balloon_pop_game/ranking/online_ranking_repository.dart';
 import 'package:balloon_pop_game/ranking/ranking_nickname.dart';
 import 'package:balloon_pop_game/ranking/ranking_functions_client.dart';
+import 'package:balloon_pop_game/ranking/ranking_moderation_service.dart';
 import 'package:balloon_pop_game/ranking/ranking_pending_store.dart';
+import 'package:balloon_pop_game/ranking/ranking_safety_store.dart';
 import 'package:balloon_pop_game/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -146,6 +148,7 @@ void main() {
       runtime: runtime,
       functionsClient: functions,
       pendingStore: _MemoryPendingStore(),
+      safetyStore: _MemorySafetyStore(),
     );
     await repository.submitBest(
       const RankedRunResult(
@@ -160,11 +163,48 @@ void main() {
       'category': 'stage',
       'displayName': 'Player',
       'score': 40,
+      'policyVersion': 1,
       'reachedStage': 12,
       'cleared': false,
     });
     expect(functions.calls.single.data, isNot(contains('uid')));
     expect(functions.calls.single.data, isNot(contains('entryId')));
+    expect(functions.calls.single.data, isNot(contains('publicActorId')));
+  });
+
+  test('disabled or unsafe submissions create no Auth and no pending record',
+      () async {
+    var signIns = 0;
+    final pending = _MemoryPendingStore();
+    final safety = _MemorySafetyStore()..enabled = false;
+    final repository = FirebaseOnlineRankingRepository(
+      runtime: FirebaseRankingRuntime(
+        initialize: () async {},
+        currentUid: () => null,
+        signInAnonymously: () async {
+          signIns++;
+          return 'unused';
+        },
+      ),
+      functionsClient: _FakeRankingFunctionsClient(),
+      pendingStore: pending,
+      safetyStore: safety,
+    );
+    const result = RankedRunResult(
+      category: RankingCategory.sixtySeconds,
+      score: 1,
+    );
+    await expectLater(
+      repository.submitBest(result, 'Safe Player'),
+      throwsA(isA<OnlineRankingAccessException>()),
+    );
+    safety.enabled = true;
+    await expectLater(
+      repository.submitBest(result, '010 1234 5678'),
+      throwsA(isA<InvalidRankingNicknameException>()),
+    );
+    expect(signIns, 0);
+    expect(pending.values, isEmpty);
   });
 
   test('online deletion clears pending and does not recreate Auth immediately',
@@ -350,6 +390,153 @@ void main() {
     expect(repository.fetchCount[RankingCategory.stage], 2);
   });
 
+  testWidgets('ranking entries can be hidden and self-report is unavailable',
+      (tester) async {
+    final currentId = List.filled(64, 'a').join();
+    final otherId = List.filled(64, 'b').join();
+    final current = OnlineRankingEntry(
+      entryId: currentId,
+      publicActorId: List.filled(64, 'c').join(),
+      displayName: 'Me',
+      score: 10,
+      rank: 1,
+      submittedAt: DateTime(2026),
+      reachedStage: 3,
+    );
+    final other = OnlineRankingEntry(
+      entryId: otherId,
+      publicActorId: List.filled(64, 'd').join(),
+      displayName: 'Other',
+      score: 9,
+      rank: 2,
+      submittedAt: DateTime(2026),
+      reachedStage: 2,
+    );
+    final repository = _FakeOnlineRankingRepository(
+      board: OnlineLeaderboard(
+        category: RankingCategory.stage,
+        entries: [current, other],
+        currentUser: current,
+        currentUserOutsideTop100: false,
+      ),
+    );
+    final moderation = RankingModerationService(
+      functionsClient: _FakeRankingFunctionsClient(),
+      safetyStore: _MemorySafetyStore(),
+    );
+    await tester.pumpWidget(MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: OnlineRankingPage(
+        currentNickname: 'Me',
+        repository: repository,
+        moderationService: moderation,
+        onChallenge: (_) async => null,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('ranking-entry-menu-$currentId')), findsNothing);
+    expect(find.text('Report nickname'), findsNothing);
+    await tester.tap(find.byKey(ValueKey('ranking-entry-menu-$otherId')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hide this user'));
+    await tester.pumpAndSettle();
+    expect(find.text('Me'), findsOneWidget);
+    expect(find.text('Other'), findsNothing);
+    expect(await moderation.safetyStore.hiddenActorIds(), {
+      List.filled(64, 'd').join(),
+    });
+  });
+
+  testWidgets('nickname report uses fixed reasons without free text',
+      (tester) async {
+    final otherId = List.filled(64, 'b').join();
+    final other = OnlineRankingEntry(
+      entryId: otherId,
+      publicActorId: List.filled(64, 'd').join(),
+      displayName: 'Other',
+      score: 9,
+      rank: 1,
+      submittedAt: DateTime(2026),
+      reachedStage: 2,
+    );
+    final repository = _FakeOnlineRankingRepository(
+      board: OnlineLeaderboard(
+        category: RankingCategory.stage,
+        entries: [other],
+        currentUser: null,
+        currentUserOutsideTop100: false,
+      ),
+    );
+    await tester.pumpWidget(MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: OnlineRankingPage(
+        currentNickname: 'Me',
+        repository: repository,
+        moderationService: RankingModerationService(
+          functionsClient: _FakeRankingFunctionsClient(),
+          safetyStore: _MemorySafetyStore(),
+        ),
+        onChallenge: (_) async => null,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('ranking-entry-menu-$otherId')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Report nickname'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('ranking-report-dialog')), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Personal information'), findsOneWidget);
+    expect(find.text('Hate or harassment'), findsOneWidget);
+    expect(find.text('Impersonation'), findsOneWidget);
+  });
+
+  testWidgets('legacy entries fall back to entry-only hiding', (tester) async {
+    final legacyId = List.filled(64, 'e').join();
+    final safety = _MemorySafetyStore();
+    final entry = OnlineRankingEntry(
+      entryId: legacyId,
+      displayName: 'Legacy Player',
+      score: 3,
+      rank: 1,
+      submittedAt: DateTime(2026),
+      reachedStage: 1,
+    );
+    await tester.pumpWidget(MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: OnlineRankingPage(
+        currentNickname: 'Me',
+        repository: _FakeOnlineRankingRepository(
+          board: OnlineLeaderboard(
+            category: RankingCategory.stage,
+            entries: [entry],
+            currentUser: null,
+            currentUserOutsideTop100: false,
+          ),
+        ),
+        moderationService: RankingModerationService(
+          functionsClient: _FakeRankingFunctionsClient(),
+          safetyStore: safety,
+        ),
+        onChallenge: (_) async => null,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('ranking-entry-menu-$legacyId')));
+    await tester.pumpAndSettle();
+    expect(find.text('Report nickname'), findsNothing);
+    await tester.tap(find.text('Hide this entry'));
+    await tester.pumpAndSettle();
+    expect(await safety.hiddenEntryIds(RankingCategory.stage), {legacyId});
+    expect(await safety.hiddenActorIds(), isEmpty);
+  });
+
   test('Firestore rules expose read-only v2 and preserve transition v1', () {
     final rules = File('firestore.rules').readAsStringSync();
     expect(rules, contains('request.auth.uid == uid'));
@@ -385,17 +572,21 @@ void main() {
 }
 
 class _FakeOnlineRankingRepository implements OnlineRankingRepository {
+  _FakeOnlineRankingRepository({this.board});
+
+  final OnlineLeaderboard? board;
   final Map<RankingCategory, int> fetchCount = {};
 
   @override
   Future<OnlineLeaderboard> fetch(RankingCategory category) async {
     fetchCount[category] = (fetchCount[category] ?? 0) + 1;
-    return OnlineLeaderboard(
-      category: category,
-      entries: const [],
-      currentUser: null,
-      currentUserOutsideTop100: false,
-    );
+    return board ??
+        OnlineLeaderboard(
+          category: category,
+          entries: const [],
+          currentUser: null,
+          currentUserOutsideTop100: false,
+        );
   }
 
   @override
@@ -435,4 +626,68 @@ class _MemoryPendingStore implements RankingPendingStore {
   Future<void> saveBest(RankedRunResult result) async {
     values[result.category] = result;
   }
+}
+
+class _MemorySafetyStore implements RankingSafetyStore {
+  bool enabled = true;
+  bool consented = true;
+  final Set<String> hidden = {};
+  final Set<String> reported = {};
+  final Map<String, String> actors = {};
+
+  String _key(RankingCategory category, String entryId) =>
+      '${category.wireName}:$entryId';
+
+  @override
+  Future<void> acceptCurrentPolicy() async => consented = true;
+  @override
+  Future<void> clearAll() async {
+    enabled = true;
+    consented = false;
+    hidden.clear();
+    reported.clear();
+    actors.clear();
+  }
+
+  @override
+  Future<void> disableWithParentPin(String pin) async => enabled = false;
+  @override
+  Future<bool> enableWithParentPin(String pin) async => enabled = true;
+  @override
+  Future<bool> hasCurrentConsent() async => consented;
+  @override
+  Future<void> hide(RankingCategory category, String entryId) async =>
+      hidden.add(_key(category, entryId));
+  @override
+  Future<Set<String>> hiddenEntryIds(RankingCategory category) async {
+    final prefix = '${category.wireName}:';
+    return hidden
+        .where((value) => value.startsWith(prefix))
+        .map((value) => value.substring(prefix.length))
+        .toSet();
+  }
+
+  @override
+  Future<void> hideActor(String actorId, String displayName) async =>
+      actors[actorId] = displayName;
+  @override
+  Future<Set<String>> hiddenActorIds() async => actors.keys.toSet();
+  @override
+  Future<List<BlockedRankingActor>> blockedActors() async => actors.entries
+      .map((entry) => BlockedRankingActor(
+            actorId: entry.key,
+            displayName: entry.value,
+          ))
+      .toList();
+  @override
+  Future<void> unhideActor(String actorId) async => actors.remove(actorId);
+
+  @override
+  Future<bool> isOnlineRankingEnabled() async => enabled;
+  @override
+  Future<void> markReported(RankingCategory category, String entryId) async =>
+      reported.add(_key(category, entryId));
+  @override
+  Future<bool> wasReported(RankingCategory category, String entryId) async =>
+      reported.contains(_key(category, entryId));
 }

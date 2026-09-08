@@ -50,11 +50,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nicknameSubtitle => 'This name will appear in the game';
 
   @override
-  String get nicknameHint => 'Nickname (2–10 characters)';
+  String get nicknameHint => 'Nickname (2–16 characters)';
 
   @override
   String get nicknameValidation =>
-      'Enter a nickname between 2 and 10 characters.';
+      'Use 2–16 Korean or English letters, numbers, and single spaces.';
+
+  @override
+  String get nicknameSafetyValidation =>
+      'Choose a safe nickname without personal information or harmful language.';
 
   @override
   String get start => 'Start';
@@ -85,6 +89,119 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rankingPending => 'We’ll send it again when you’re back online.';
+
+  @override
+  String get rankingSafetyTitle => 'Stay safe online';
+
+  @override
+  String get rankingSafetyBody =>
+      'Your nickname and game record can be seen by other players. Do not reveal personal information, and never share private details with someone you do not know online.';
+
+  @override
+  String get rankingSafetyPersonalInfo =>
+      'Do not use a real name, phone number, email, school, social media ID, or contact information in your nickname.';
+
+  @override
+  String get rankingSafetyCheckbox => 'I read the online safety reminder.';
+
+  @override
+  String get rankingTermsCheckbox =>
+      'I agree to the Terms of Use and nickname rules.';
+
+  @override
+  String get agreeAndContinue => 'Agree and Continue';
+
+  @override
+  String get onlineRankingDisabledTitle => 'Online Ranking is Off';
+
+  @override
+  String get onlineRankingDisabledBody =>
+      'A parent or guardian turned off online ranking. You can still play every local game mode.';
+
+  @override
+  String get onlineRankingSetting => 'Online Ranking';
+
+  @override
+  String get parentPinCreateTitle => 'Parent or guardian setting';
+
+  @override
+  String get parentPinCreateBody =>
+      'Create a 4–8 digit parent PIN to turn off online ranking. This PIN stays only on this device.';
+
+  @override
+  String get parentPinVerifyTitle => 'Parent or guardian check';
+
+  @override
+  String get parentPinVerifyBody =>
+      'Enter the parent PIN to turn online ranking back on.';
+
+  @override
+  String get parentPinHint => 'Parent PIN (4–8 digits)';
+
+  @override
+  String get parentPinIncorrect => 'The parent PIN is incorrect.';
+
+  @override
+  String get parentPinInvalid => 'Use a 4–8 digit parent PIN.';
+
+  @override
+  String get rankingEntryActions => 'Ranking entry actions';
+
+  @override
+  String get hideRankingEntry => 'Hide this entry';
+
+  @override
+  String get hideRankingUser => 'Hide this user';
+
+  @override
+  String get rankingUserHidden =>
+      'This user’s Stage and 60-second entries are hidden on this device.';
+
+  @override
+  String get rankingLegacyEntryHidden =>
+      'This older entry is hidden on this device.';
+
+  @override
+  String get blockedRankingUsers => 'Hidden Ranking Users';
+
+  @override
+  String get blockedRankingUsersEmpty =>
+      'You have not hidden any ranking users.';
+
+  @override
+  String get unblockRankingUser => 'Show Again';
+
+  @override
+  String get reportNickname => 'Report nickname';
+
+  @override
+  String get rankingEntryHidden => 'This entry is hidden on this device.';
+
+  @override
+  String get rankingReportReceived =>
+      'Report received. This user’s ranking entries are hidden on this device.';
+
+  @override
+  String get rankingAlreadyReported => 'You already reported this entry.';
+
+  @override
+  String get rankingReportError =>
+      'Could not send the report. Please try again later.';
+
+  @override
+  String get reportReasonPersonalInformation => 'Personal information';
+
+  @override
+  String get reportReasonHateOrHarassment => 'Hate or harassment';
+
+  @override
+  String get reportReasonSexualContent => 'Sexual or inappropriate content';
+
+  @override
+  String get reportReasonImpersonation => 'Impersonation';
+
+  @override
+  String get reportReasonOther => 'Other inappropriate nickname';
 
   @override
   String get rankedStageExitTitle => 'End the ranked challenge?';
@@ -423,14 +540,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get privacyOnlineBody =>
-      'When you open online ranking or submit a record, Firebase processes an anonymous UID (Support ID) for authentication and server-side ownership. Public Stage and 60-second leaderboard documents contain only nickname, score, server submission time, and schema version; Stage Challenge also includes reached stage and clear status. The UID and Support ID are not included in public leaderboard fields or document paths.';
+      'When you use online ranking, Firebase processes an anonymous UID (Support ID) for authentication and server-side ownership. Public Stage and 60-second leaderboard documents contain nickname, score, server submission time, schema version, and a non-reversible anonymous HMAC actor identifier; Stage Challenge also includes reached stage and clear status. The actor identifier is shared only between the same user\'s two ranking entries for blocking and safety review. It is not used to identify a person, advertise, track, analyze, or profile. UID and Support ID remain private. A report privately stores the target actor identifier and minimum report details for safety review and abuse prevention.';
 
   @override
   String get privacyLocalTitle => 'Information stored only on your device';
 
   @override
   String get privacyLocalBody =>
-      'Stage progress and unlocks, recent and best scores, Endless Pop records and intro state, coins, purchased and equipped items, nickname and onboarding state, sound and haptic settings are stored in browser localStorage or app-local storage. A best leaderboard result may be stored temporarily while waiting to retry after a network error.';
+      'Stage progress and unlocks, recent and best scores, Endless Pop records and intro state, coins, purchased and equipped items, nickname and onboarding state, sound and haptic settings, and your hidden-ranking-user list are stored in browser localStorage or app-local storage. The block list is not sent to the server. A best leaderboard result may be stored temporarily while waiting to retry after a network error.';
 
   @override
   String get privacyFirebaseTitle => 'Firebase and purpose';
@@ -451,14 +568,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get privacyRetentionBody =>
-      'Online leaderboard records and the anonymous authentication identifier remain until replaced, deleted in the app, deletion is requested by email, or they are no longer needed to operate the service. Use Delete Online Data in Customer Support for immediate self-service deletion. Email requests remain available and are normally handled within 30 days when they can be verified. Device-local information can be removed with Reset Data, by clearing browser site data, or by uninstalling the app. We cannot remotely view or erase information stored only on your device.';
+      'Online leaderboard records and the anonymous authentication identifier remain until replaced, deleted in the app, deletion is requested by email, or they are no longer needed. Reports, including the target actor ID, are scheduled for deletion after 180 days. A private actor moderation record is kept only while needed to enforce a safety restriction and is periodically reviewed. Delete Online Data removes reports made by that account and its moderation record; a report about its former public entry may remain until expiry for safety review. Email requests are normally handled within 30 days when verified. Device-local information can be removed with Reset Data, by clearing site data, or by uninstalling the app.';
 
   @override
   String get privacyChildrenTitle => 'Children and safe nicknames';
 
   @override
   String get privacyChildrenBody =>
-      'Do not use a real name, school, phone number, email, address, or other identifying details in a nickname. Parents and guardians should guide a child\'s use of online ranking and may request deletion where appropriate.';
+      'Do not use a real name, school, phone number, email, address, contact details, or social media ID in a nickname, and never share personal information with strangers online. Harmful, sexual, hateful, harassing, or impersonating names are not allowed. Parents and guardians can turn Online Ranking off in Settings with a PIN stored only on the device; local game modes remain available.';
 
   @override
   String get privacySecurityTitle => 'Security';
@@ -500,11 +617,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Check your network connection and use Refresh on the ranking screen. A best record that could not be sent may remain on the device and retry later. If the issue continues, include the category (Stage Challenge or 60-Second Pop), time, and affected screen in your email.';
 
   @override
-  String get supportNicknameTitle => 'Safe nicknames';
+  String get supportNicknameTitle => 'Safe nicknames and reports';
 
   @override
   String get supportNicknameBody =>
-      'Do not include a real name, school, phone number, email, address, or other identifying information in your nickname.';
+      'Do not include a real name, school, phone number, email, address, contact information, or social media ID in a nickname. Use the menu beside a ranking entry to hide that user\'s Stage and 60-second entries on this device or report an inappropriate nickname using a fixed reason. The block list stays only on this device and can be managed in Settings. For additional help, email oopsidestudio@gmail.com with the category and nickname; never send another player\'s private information.';
 
   @override
   String get supportDeletionTitle => 'Delete online data';
@@ -564,14 +681,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get termsRankingBody =>
-      'You are responsible for choosing an appropriate nickname. Do not include a real name, school, phone number, email, address, or other identifying information. Online rankings may display your nickname and game record to other players. Scores that violate these Terms or are invalid may be removed or corrected.';
+      'Choose a safe nickname and follow the in-app safety notice and nickname policy before submitting. Do not include personal information or harmful, sexual, hateful, harassing, or impersonating content. A non-reversible anonymous identifier lets players hide the same user\'s Stage and 60-second entries on their device or report a nickname. It is used only for safety, not identity, advertising, tracking, usage measurement, or profiling. Reports may be reviewed and appropriate records removed or online access limited.';
 
   @override
   String get termsProhibitedTitle => '6. Prohibited conduct';
 
   @override
   String get termsProhibitedBody =>
-      'Do not manipulate scores or progress dishonestly; use bots, automation, modified clients, or vulnerabilities; impersonate another person; use a nickname containing personal information or harmful content; interfere with the service or another player\'s use; or attempt unauthorized access to the game, ranking, or related systems.';
+      'Do not manipulate scores or progress; use bots, automation, modified clients, or vulnerabilities; impersonate or harass others; use sexual, hateful, harmful, or privacy-invasive nicknames; submit false or abusive reports; disrupt the service; or attempt unauthorized access to the game, ranking, or related systems.';
 
   @override
   String get termsProgressTitle => '7. Game progress and local storage';
@@ -624,11 +741,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'We work to provide a safe and stable service, but temporary interruption, device-specific issues, network failure, or loss of device-local data may occur. To the extent allowed by law, OOPSIDE STUDIO is not responsible for losses caused without its intent or gross negligence. Nothing in these Terms limits consumer rights or responsibilities that cannot lawfully be excluded.';
 
   @override
-  String get termsRestrictionTitle => '14. Restriction of use';
+  String get termsRestrictionTitle => '14. Reports and restriction of use';
 
   @override
   String get termsRestrictionBody =>
-      'If a user seriously or repeatedly violates these Terms, harms other users, manipulates ranking records, or threatens service security, we may remove invalid records or limit access to online features to a reasonable extent. We will consider the nature and seriousness of the conduct.';
+      'We may review reports about inappropriate nicknames. If a user seriously or repeatedly violates these Terms, harms others, manipulates records or reports, or threatens service security, we may remove the relevant record or limit online features to a reasonable extent after considering the conduct and severity.';
 
   @override
   String get termsUpdatesTitle => '15. Changes to these Terms';

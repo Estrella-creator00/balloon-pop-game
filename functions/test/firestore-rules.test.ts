@@ -40,11 +40,20 @@ async function seed(environment: RulesTestEnvironment): Promise<void> {
     const database = context.firestore();
     await database.doc('leaderboards_stage_v2/public-stage').set({
       displayName: 'Player', score: 10, reachedStage: 3, cleared: false,
-      submittedAt: new Date(), schemaVersion: 2,
+      submittedAt: new Date(), schemaVersion: 2, publicActorId: 'a'.repeat(64),
     });
     await database.doc('leaderboards_stage_v1/user-a').set({
       uid: 'user-a', displayName: 'Player', score: 9, reachedStage: 2,
       cleared: false, submittedAt: new Date(), schemaVersion: 1,
+    });
+    await database.doc('ranking_reports_v1/private-report').set({
+      category: 'stage', targetEntryId: 'public-stage', status: 'pending',
+    });
+    await database.doc('ranking_reporters_v1/private-reporter').set({
+      count: 1,
+    });
+    await database.doc('ranking_actor_moderation_v1/private-actor').set({
+      status: 'blocked',
     });
   });
 }
@@ -62,6 +71,15 @@ test('transition rules allow signed-in v2 reads and deny client writes', async (
   await assertFails(signedIn.doc('leaderboards_stage_v2/injected').set({score: 99}));
   await assertFails(signedIn.doc('leaderboards_stage_v2/public-stage').delete());
   await assertSucceeds(signedIn.doc('leaderboards_stage_v1/user-a').get());
+  await assertFails(signedIn.doc('ranking_reports_v1/private-report').get());
+  await assertFails(signedIn.doc('ranking_reporters_v1/private-reporter').get());
+  await assertFails(
+    signedIn.doc('ranking_actor_moderation_v1/private-actor').get(),
+  );
+  await assertFails(
+    signedIn.doc('ranking_actor_moderation_v1/injected').set({status: 'blocked'}),
+  );
+  await assertFails(signedIn.doc('ranking_reports_v1/injected').set({status: 'pending'}));
 });
 
 test('final rules block v1 clients while retaining read-only v2', async () => {
@@ -71,6 +89,11 @@ test('final rules block v1 clients while retaining read-only v2', async () => {
   await assertSucceeds(signedIn.doc('leaderboards_stage_v2/public-stage').get());
   await assertFails(signedIn.doc('leaderboards_stage_v1/user-a').get());
   await assertFails(signedIn.doc('ranking_private/user-a').get());
+  await assertFails(signedIn.doc('ranking_reports_v1/private-report').get());
+  await assertFails(signedIn.doc('ranking_reporters_v1/private-reporter').get());
+  await assertFails(
+    signedIn.doc('ranking_actor_moderation_v1/private-actor').get(),
+  );
   await assertFails(signedIn.doc('leaderboards_60s_v2/injected').set({score: 1}));
   assert.ok(true);
 });

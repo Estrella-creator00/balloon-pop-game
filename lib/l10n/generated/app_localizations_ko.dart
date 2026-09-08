@@ -50,10 +50,13 @@ class AppLocalizationsKo extends AppLocalizations {
   String get nicknameSubtitle => '게임에서 사용할 이름이에요';
 
   @override
-  String get nicknameHint => '닉네임 (2~10자)';
+  String get nicknameHint => '닉네임 (2~16자)';
 
   @override
-  String get nicknameValidation => '닉네임은 2자 이상 10자 이하로 입력해 주세요.';
+  String get nicknameValidation => '한글·영문·숫자와 한 칸 공백으로 2~16자를 입력해 주세요.';
+
+  @override
+  String get nicknameSafetyValidation => '개인정보나 유해한 표현이 없는 안전한 닉네임을 사용해 주세요.';
 
   @override
   String get start => '시작하기';
@@ -84,6 +87,112 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get rankingPending => '인터넷 연결 후 자동으로 다시 전송할게요.';
+
+  @override
+  String get rankingSafetyTitle => '온라인에서 안전하게 이용해요';
+
+  @override
+  String get rankingSafetyBody =>
+      '닉네임과 게임 기록은 다른 이용자에게 보일 수 있어요. 개인정보를 공개하지 말고, 온라인에서 모르는 사람에게 나의 정보를 알려주지 마세요.';
+
+  @override
+  String get rankingSafetyPersonalInfo =>
+      '실명, 전화번호, 이메일, 학교명, SNS 아이디와 연락처를 닉네임에 사용하지 마세요.';
+
+  @override
+  String get rankingSafetyCheckbox => '온라인 안전 안내를 확인했습니다.';
+
+  @override
+  String get rankingTermsCheckbox => '이용약관과 닉네임 정책에 동의합니다.';
+
+  @override
+  String get agreeAndContinue => '동의하고 계속';
+
+  @override
+  String get onlineRankingDisabledTitle => '온라인 랭킹이 꺼져 있어요';
+
+  @override
+  String get onlineRankingDisabledBody =>
+      '보호자가 온라인 랭킹을 껐습니다. 일반 게임과 기기 기록은 계속 이용할 수 있어요.';
+
+  @override
+  String get onlineRankingSetting => '온라인 랭킹';
+
+  @override
+  String get parentPinCreateTitle => '보호자 설정';
+
+  @override
+  String get parentPinCreateBody =>
+      '온라인 랭킹을 끄려면 보호자용 숫자 PIN 4~8자리를 설정해 주세요. PIN은 이 기기에만 저장됩니다.';
+
+  @override
+  String get parentPinVerifyTitle => '보호자 확인';
+
+  @override
+  String get parentPinVerifyBody => '온라인 랭킹을 다시 켜려면 보호자 PIN을 입력해 주세요.';
+
+  @override
+  String get parentPinHint => '보호자 PIN (숫자 4~8자리)';
+
+  @override
+  String get parentPinIncorrect => '보호자 PIN이 맞지 않습니다.';
+
+  @override
+  String get parentPinInvalid => '숫자 4~8자리의 보호자 PIN을 사용해 주세요.';
+
+  @override
+  String get rankingEntryActions => '랭킹 항목 메뉴';
+
+  @override
+  String get hideRankingEntry => '이 항목 숨기기';
+
+  @override
+  String get hideRankingUser => '이 사용자 숨기기';
+
+  @override
+  String get rankingUserHidden => '이 기기에서 해당 사용자의 STAGE·60초 항목을 숨겼습니다.';
+
+  @override
+  String get rankingLegacyEntryHidden => '사용자 식별값이 없는 이전 항목만 이 기기에서 숨겼습니다.';
+
+  @override
+  String get blockedRankingUsers => '숨긴 랭킹 사용자';
+
+  @override
+  String get blockedRankingUsersEmpty => '숨긴 랭킹 사용자가 없습니다.';
+
+  @override
+  String get unblockRankingUser => '숨김 해제';
+
+  @override
+  String get reportNickname => '닉네임 신고';
+
+  @override
+  String get rankingEntryHidden => '이 기기에서 해당 항목을 숨겼습니다.';
+
+  @override
+  String get rankingReportReceived => '신고를 접수하고 이 기기에서 해당 사용자의 랭킹 항목을 숨겼습니다.';
+
+  @override
+  String get rankingAlreadyReported => '이미 신고한 항목입니다.';
+
+  @override
+  String get rankingReportError => '신고를 보내지 못했습니다. 나중에 다시 시도해 주세요.';
+
+  @override
+  String get reportReasonPersonalInformation => '개인정보 포함';
+
+  @override
+  String get reportReasonHateOrHarassment => '혐오·괴롭힘 표현';
+
+  @override
+  String get reportReasonSexualContent => '성적·부적절한 표현';
+
+  @override
+  String get reportReasonImpersonation => '다른 사람 사칭';
+
+  @override
+  String get reportReasonOther => '그 밖의 부적절한 닉네임';
 
   @override
   String get rankedStageExitTitle => '랭킹 도전을 끝낼까요?';
@@ -413,14 +522,14 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get privacyOnlineBody =>
-      '온라인 랭킹을 열거나 기록을 제출하면 Firebase는 인증과 서버 내부 소유자 확인을 위해 익명 UID(Support ID)를 처리합니다. 공개 STAGE·60초 랭킹 문서에는 닉네임, 점수, 서버 제출 시각과 schema version만 포함하며 STAGE 도전에는 도달 Stage와 완료 여부가 추가됩니다. UID와 Support ID는 공개 랭킹 필드나 문서 경로에 포함되지 않습니다.';
+      '온라인 랭킹을 이용하면 Firebase는 인증과 서버 내부 소유자 확인을 위해 익명 UID(Support ID)를 처리합니다. 공개 STAGE·60초 랭킹에는 닉네임, 점수, 서버 제출 시각, schema version과 복원 불가능한 익명 HMAC 사용자 식별값이 포함되며 STAGE에는 도달 Stage와 완료 여부가 추가됩니다. 이 식별값은 같은 사용자의 두 랭킹 항목 차단과 안전 검토에만 공통 사용하며 실제 신원 확인, 광고, 추적, 분석 또는 프로파일링에는 사용하지 않습니다. UID와 Support ID는 비공개입니다. 신고 시 대상 익명 사용자 식별값과 최소 신고 정보를 안전 검토와 남용 방지를 위해 비공개 처리합니다.';
 
   @override
   String get privacyLocalTitle => '기기에만 저장되는 정보';
 
   @override
   String get privacyLocalBody =>
-      'Stage 진행·해금 상태, 최근·최고 점수, 무한 팝 기록과 안내 확인 상태, 코인, 구매·장착 아이템, 닉네임과 온보딩 상태, 효과음·진동 설정은 브라우저 localStorage 또는 앱의 로컬 저장소에 보관합니다. 네트워크 오류 후 다시 전송할 최고 랭킹 기록도 기기에 일시 저장될 수 있습니다.';
+      'Stage 진행·해금 상태, 최근·최고 점수, 무한 팝 기록과 안내 확인 상태, 코인, 구매·장착 아이템, 닉네임과 온보딩 상태, 효과음·진동 설정과 숨긴 랭킹 사용자 목록은 브라우저 localStorage 또는 앱의 로컬 저장소에 보관합니다. 차단 목록은 서버에 전송되지 않습니다. 네트워크 오류 후 다시 전송할 최고 랭킹 기록도 기기에 일시 저장될 수 있습니다.';
 
   @override
   String get privacyFirebaseTitle => 'Firebase 사용 및 처리 목적';
@@ -441,14 +550,14 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get privacyRetentionBody =>
-      '온라인 랭킹 기록과 익명 인증 식별자는 기록이 갱신되거나, 앱에서 삭제하거나, 이메일로 삭제를 요청하거나, 서비스 운영상 더 이상 필요하지 않을 때까지 보관합니다. 고객지원의 온라인 데이터 삭제를 사용하면 직접 삭제할 수 있습니다. 이메일 요청도 보조 방법으로 유지하며 확인 가능한 요청은 원칙적으로 30일 이내 처리합니다. 기기 로컬 정보는 설정의 데이터 초기화, 브라우저 사이트 데이터 삭제 또는 앱 삭제로 제거할 수 있습니다. 운영자는 기기에만 저장된 정보를 원격으로 확인하거나 삭제할 수 없습니다.';
+      '온라인 랭킹 기록과 익명 인증 식별자는 갱신·앱 내 삭제·확인된 이메일 요청 또는 운영상 불필요할 때까지 보관합니다. 대상 actor ID를 포함한 신고 정보는 180일 뒤 삭제되도록 설정합니다. 비공개 actor 조치 기록은 안전 제한에 필요한 동안만 보관하고 정기 검토합니다. 온라인 데이터 삭제는 해당 계정이 제출한 신고와 조치 기록을 삭제하지만, 삭제 전 공개 항목을 대상으로 접수된 신고는 안전 검토를 위해 만료 시점까지 보관될 수 있습니다. 이메일 요청은 원칙적으로 30일 이내 처리합니다. 기기 정보는 데이터 초기화, 사이트 데이터 삭제 또는 앱 삭제로 제거할 수 있습니다.';
 
   @override
   String get privacyChildrenTitle => '어린이 이용자와 안전한 닉네임';
 
   @override
   String get privacyChildrenBody =>
-      '닉네임에는 실명, 학교명, 전화번호, 이메일, 주소 등 본인이나 다른 사람을 알아볼 수 있는 정보를 사용하지 마세요. 보호자는 어린이의 온라인 랭킹 이용을 지도하고 필요하면 데이터 삭제를 요청할 수 있습니다.';
+      '닉네임에 실명, 학교명, 전화번호, 이메일, 주소, 연락처 또는 SNS 아이디를 쓰지 말고 온라인에서 모르는 사람에게 개인정보를 공개하지 마세요. 유해·성적·혐오·괴롭힘·사칭 표현은 허용되지 않습니다. 보호자는 설정에서 이 기기에만 저장되는 PIN으로 온라인 랭킹을 끌 수 있으며 일반 게임은 계속 이용할 수 있습니다.';
 
   @override
   String get privacySecurityTitle => '보안';
@@ -490,11 +599,11 @@ class AppLocalizationsKo extends AppLocalizations {
       '네트워크 연결을 확인하고 랭킹 화면에서 새로고침을 사용해 주세요. 전송에 실패한 최고 기록은 기기에 보관되었다가 나중에 다시 전송될 수 있습니다. 문제가 계속되면 종목(STAGE 도전 또는 60초 팝), 발생 시각과 화면을 이메일에 적어 주세요.';
 
   @override
-  String get supportNicknameTitle => '안전한 닉네임';
+  String get supportNicknameTitle => '안전한 닉네임과 신고';
 
   @override
   String get supportNicknameBody =>
-      '닉네임에는 실명, 학교명, 전화번호, 이메일, 주소 또는 다른 개인 식별 정보를 사용하지 마세요.';
+      '닉네임에 실명, 학교명, 전화번호, 이메일, 주소, 연락처 또는 SNS 아이디를 쓰지 마세요. 랭킹 항목 옆 메뉴에서 같은 사용자의 STAGE·60초 항목을 이 기기에 숨기거나 정해진 사유로 신고할 수 있습니다. 숨김 목록은 이 기기에만 저장되며 설정에서 해제할 수 있습니다. 추가 문의는 종목과 닉네임을 적어 oopsidestudio@gmail.com으로 보내되 다른 이용자의 개인정보는 보내지 마세요.';
 
   @override
   String get supportDeletionTitle => '온라인 데이터 삭제';
@@ -554,14 +663,14 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get termsRankingBody =>
-      '이용자는 적절한 닉네임을 선택해야 합니다. 실명, 학교명, 전화번호, 이메일, 주소 등 개인을 알아볼 수 있는 정보는 사용하지 마세요. 온라인 랭킹에는 닉네임과 게임 기록이 다른 이용자에게 표시될 수 있습니다. 약관을 위반했거나 유효하지 않은 기록은 삭제 또는 정정될 수 있습니다.';
+      '기록 제출 전에 안전 안내와 닉네임 정책을 확인하고 개인정보나 유해·성적·혐오·괴롭힘·사칭 표현을 사용하지 않아야 합니다. 복원 불가능한 익명 식별값을 통해 같은 사용자의 STAGE·60초 항목을 이 기기에서 함께 숨기거나 신고할 수 있습니다. 이 값은 안전 목적으로만 사용되며 실제 신원 확인, 광고, 추적, 이용 통계 측정 또는 프로파일링에 사용하지 않습니다. 검토 결과에 따라 관련 기록을 삭제하거나 온라인 이용을 제한할 수 있습니다.';
 
   @override
   String get termsProhibitedTitle => '6. 금지 행위';
 
   @override
   String get termsProhibitedBody =>
-      '점수나 진행도를 부정하게 조작하는 행위, 봇·자동화 도구·변조된 프로그램 또는 취약점을 이용하는 행위, 다른 이용자를 사칭하는 행위, 개인정보나 유해한 내용이 포함된 닉네임을 사용하는 행위, 서비스나 다른 이용자의 이용을 방해하는 행위, 게임·랭킹·관련 시스템에 무단 접근을 시도하는 행위를 금지합니다.';
+      '점수·진행도 조작, 봇·자동화 도구·변조 프로그램·취약점 이용, 사칭·괴롭힘, 성적·혐오·유해·개인정보 침해 닉네임, 허위 또는 남용 신고, 서비스 방해, 게임·랭킹·관련 시스템에 대한 무단 접근을 금지합니다.';
 
   @override
   String get termsProgressTitle => '7. 게임 진행도와 로컬 저장';
@@ -613,11 +722,11 @@ class AppLocalizationsKo extends AppLocalizations {
       '안전하고 안정적인 서비스를 제공하기 위해 노력하지만 일시적인 중단, 기기별 문제, 네트워크 장애 또는 기기 로컬 데이터 손실이 발생할 수 있습니다. 법이 허용하는 범위에서 웁사이드 스튜디오의 고의 또는 중대한 과실 없이 발생한 손해에 대해서는 책임을 지지 않습니다. 이 약관은 관계 법령상 배제할 수 없는 소비자의 권리나 책임을 제한하지 않습니다.';
 
   @override
-  String get termsRestrictionTitle => '14. 이용 제한';
+  String get termsRestrictionTitle => '14. 신고와 이용 제한';
 
   @override
   String get termsRestrictionBody =>
-      '약관을 중대하게 또는 반복해서 위반하거나, 다른 이용자에게 피해를 주거나, 랭킹 기록을 조작하거나, 서비스 보안을 위협하는 경우 행위의 내용과 정도를 고려해 유효하지 않은 기록을 삭제하거나 온라인 기능 이용을 합리적인 범위에서 제한할 수 있습니다.';
+      '부적절한 닉네임 신고를 검토할 수 있습니다. 약관을 중대하게 또는 반복해서 위반하거나, 다른 이용자에게 피해를 주거나, 랭킹·신고를 조작하거나, 서비스 보안을 위협하면 행위와 정도를 고려해 관련 기록을 삭제하거나 온라인 기능을 합리적인 범위에서 제한할 수 있습니다.';
 
   @override
   String get termsUpdatesTitle => '15. 약관 변경과 시행일';

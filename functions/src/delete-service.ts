@@ -1,7 +1,9 @@
 import {
   legacyCollections,
   publicCollections,
+  publicActorId,
   publicEntryId,
+  reporterPublicId,
 } from './domain';
 
 export type OnlineDataDeletionDependencies = {
@@ -18,6 +20,8 @@ export function ownedOnlineDataPaths(uid: string, secret: string): string[] {
     );
   }
   paths.push(`ranking_private/${uid}`);
+  paths.push(`ranking_reporters_v1/${reporterPublicId(secret, uid)}`);
+  paths.push(`ranking_actor_moderation_v1/${publicActorId(secret, uid)}`);
   return paths;
 }
 
@@ -25,8 +29,9 @@ export async function deleteOwnedOnlineData(
   uid: string,
   secret: string,
   dependencies: OnlineDataDeletionDependencies,
+  additionalPaths: readonly string[] = [],
 ): Promise<void> {
-  const paths = ownedOnlineDataPaths(uid, secret);
+  const paths = [...ownedOnlineDataPaths(uid, secret), ...additionalPaths];
   await dependencies.deleteFirestoreDocuments(paths);
   await dependencies.deleteAuthUser(uid);
 }

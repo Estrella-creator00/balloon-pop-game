@@ -9,6 +9,7 @@ import 'online_ranking_repository.dart';
 import 'ranking_functions_client.dart';
 import 'ranking_nickname.dart';
 import 'ranking_pending_store.dart';
+import 'ranking_safety_store.dart';
 
 class FirebaseOnlineRankingRepository implements OnlineRankingRepository {
   FirebaseOnlineRankingRepository({
@@ -16,10 +17,12 @@ class FirebaseOnlineRankingRepository implements OnlineRankingRepository {
     FirebaseFirestore? firestore,
     RankingPendingStore? pendingStore,
     RankingFunctionsClient? functionsClient,
+    RankingSafetyStore? safetyStore,
   })  : _runtime = runtime ?? FirebaseRankingRuntime.instance,
         _firestore = firestore,
         _pendingStore = pendingStore ?? SharedPreferencesRankingPendingStore(),
-        _functionsClient = functionsClient ?? FirebaseRankingFunctionsClient();
+        _functionsClient = functionsClient ?? FirebaseRankingFunctionsClient(),
+        _safetyStore = safetyStore ?? SharedPreferencesRankingSafetyStore();
 
   static final FirebaseOnlineRankingRepository instance =
       FirebaseOnlineRankingRepository();
@@ -28,6 +31,7 @@ class FirebaseOnlineRankingRepository implements OnlineRankingRepository {
   final FirebaseFirestore? _firestore;
   final RankingPendingStore _pendingStore;
   final RankingFunctionsClient _functionsClient;
+  final RankingSafetyStore _safetyStore;
   final Map<RankingCategory, Future<void>> _activeSubmissions = {};
   Future<void>? _activeDeletion;
   bool _deleting = false;
@@ -36,6 +40,7 @@ class FirebaseOnlineRankingRepository implements OnlineRankingRepository {
 
   @override
   Future<OnlineLeaderboard> fetch(RankingCategory category) async {
+    await _requireOnlineAccess();
     await _runtime.ensureUid(reactivateAfterDeletion: true);
     await _retryPending(category);
     final collection = _db.collection(category.collection);
@@ -97,11 +102,28 @@ class FirebaseOnlineRankingRepository implements OnlineRankingRepository {
         ),
       );
     }
+    final validation = RankingNickname.validate(nickname);
+    if (!validation.isValid) {
+      return Future.error(
+        InvalidRankingNicknameException(validation.reason!),
+      );
+    }
     return _activeSubmissions.putIfAbsent(result.category, () async {
       try {
+        await _requireOnlineAccess();
         await _runtime.ensureUid(reactivateAfterDeletion: true);
-        await _submit(result, RankingNickname.sanitize(nickname));
+        await _submit(result, validation.normalized!);
         await _pendingStore.clear(result.category);
+      } on OnlineRankingAccessException {
+        rethrow;
+      } on FirebaseFunctionsException catch (error) {
+        if (error.code == 'invalid-argument') {
+          throw const InvalidRankingNicknameException(
+            NicknameInvalidReason.unsafe,
+          );
+        }
+        await _pendingStore.saveBest(result);
+        rethrow;
       } catch (_) {
         await _pendingStore.saveBest(result);
         rethrow;
@@ -130,11 +152,25 @@ class FirebaseOnlineRankingRepository implements OnlineRankingRepository {
       'category': result.category.wireName,
       'displayName': displayName,
       'score': result.score,
+      'policyVersion': SharedPreferencesRankingSafetyStore.currentPolicyVersion,
       if (result.category == RankingCategory.stage) ...{
         'reachedStage': result.reachedStage ?? 1,
         'cleared': result.cleared,
       },
     });
+  }
+
+  Future<void> _requireOnlineAccess() async {
+    if (!await _safetyStore.isOnlineRankingEnabled()) {
+      throw const OnlineRankingAccessException(
+        OnlineRankingAccessFailure.disabled,
+      );
+    }
+    if (!await _safetyStore.hasCurrentConsent()) {
+      throw const OnlineRankingAccessException(
+        OnlineRankingAccessFailure.consentRequired,
+      );
+    }
   }
 
   @override
@@ -201,6 +237,11 @@ class FirebaseOnlineRankingRepository implements OnlineRankingRepository {
     };
     return OnlineRankingEntry(
       entryId: entryId,
+      publicActorId: switch (data['publicActorId']) {
+        final String value when RegExp(r'^[a-f0-9]{64}$').hasMatch(value) =>
+          value,
+        _ => null,
+      },
       displayName: data['displayName'] as String? ?? RankingNickname.fallback,
       score: data['score'] as int? ?? 0,
       rank: rank,
