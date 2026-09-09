@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.estrellacreator00.poppop</string>
+	<string>com.oopsidestudio.poppop</string>
 	<key>PROJECT_ID</key>
 	<string>poppop-c8bc6</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:855480037727:ios:704f0f0de7d2bf46ff46ea</string>
+	<string>1:855480037727:ios:655a4c337a007f16ff46ea</string>
 </dict>
 </plist>
