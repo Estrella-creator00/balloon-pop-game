@@ -1,11 +1,40 @@
 import 'dart:async';
 
 import 'package:balloon_pop_game/coin/coin_package.dart';
+import 'package:balloon_pop_game/config/release_features.dart';
 import 'package:balloon_pop_game/services/coin_purchase_gateway.dart';
 import 'package:balloon_pop_game/services/coin_purchase_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('free release never subscribes to or calls the store gateway', () async {
+    final gateway = _FakeGateway(offers: _allOffers());
+    final service = CoinPurchaseService(
+      gateway: gateway,
+      verifier: _FakeVerifier(
+        const PurchaseVerificationResult.approved(
+          grantId: 'unused-grant',
+          coinAmount: 300,
+        ),
+      ),
+      grantSink: _FakeGrantSink(),
+      enabled: ReleaseFeatures.cashCoinPurchasesEnabled,
+    );
+
+    expect(ReleaseFeatures.cashCoinPurchasesEnabled, false);
+    await service.start();
+    expect(service.snapshot.status, CoinPurchaseStatus.unavailable);
+    expect(gateway.purchaseStreamReads, 0);
+    expect(gateway.availabilityChecks, 0);
+    expect(gateway.queriedIds, isNull);
+    expect(
+      await service.purchase(coinPackages.first),
+      CoinPurchaseStatus.unavailable,
+    );
+    expect(gateway.buyCount, 0);
+    await service.close();
+  });
+
   test('queries all consumable products and keeps store-localized prices',
       () async {
     final gateway = _FakeGateway(
@@ -186,12 +215,20 @@ class _FakeGateway implements CoinPurchaseGateway {
       StreamController<List<StorePurchaseEvent>>.broadcast();
   Set<String>? queriedIds;
   int buyCount = 0;
+  int purchaseStreamReads = 0;
+  int availabilityChecks = 0;
 
   @override
-  Stream<List<StorePurchaseEvent>> get purchaseStream => _events.stream;
+  Stream<List<StorePurchaseEvent>> get purchaseStream {
+    purchaseStreamReads++;
+    return _events.stream;
+  }
 
   @override
-  Future<bool> isAvailable() async => available;
+  Future<bool> isAvailable() async {
+    availabilityChecks++;
+    return available;
+  }
 
   @override
   Future<StoreProductQuery> queryProducts(Set<String> productIds) async {

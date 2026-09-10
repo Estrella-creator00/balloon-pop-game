@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../coin/coin_package.dart';
+import '../config/release_features.dart';
 import '../storage/progress_storage.dart';
 import 'coin_purchase_gateway.dart';
 import 'coin_purchase_gateway_factory.dart';
@@ -144,9 +145,11 @@ class CoinPurchaseService extends ChangeNotifier {
     required CoinPurchaseVerifier verifier,
     required VerifiedCoinGrantSink grantSink,
     this.packages = coinPackages,
+    bool enabled = true,
   })  : _gateway = gateway,
         _verifier = verifier,
-        _grantSink = grantSink;
+        _grantSink = grantSink,
+        _enabled = enabled;
 
   factory CoinPurchaseService.platform({
     CoinPurchaseVerifier verifier = const UnconfiguredCoinPurchaseVerifier(),
@@ -155,12 +158,14 @@ class CoinPurchaseService extends ChangeNotifier {
       gateway: createPlatformCoinPurchaseGateway(),
       verifier: verifier,
       grantSink: const ProgressStorageVerifiedCoinGrantSink(),
+      enabled: ReleaseFeatures.cashCoinPurchasesEnabled,
     );
   }
 
   final CoinPurchaseGateway _gateway;
   final CoinPurchaseVerifier _verifier;
   final VerifiedCoinGrantSink _grantSink;
+  final bool _enabled;
   final List<CoinPackage> packages;
   final Set<String> _processingTransactions = <String>{};
   StreamSubscription<List<StorePurchaseEvent>>? _subscription;
@@ -169,12 +174,16 @@ class CoinPurchaseService extends ChangeNotifier {
   CoinPurchaseSnapshot _snapshot = const CoinPurchaseSnapshot();
 
   CoinPurchaseSnapshot get snapshot => _snapshot;
-  bool get verificationConfigured => _verifier.isConfigured;
+  bool get verificationConfigured => _enabled && _verifier.isConfigured;
 
   Future<void> start() => _startFuture ??= _start();
 
   Future<void> _start() async {
     if (_closed) return;
+    if (!_enabled) {
+      _publish(_snapshot.copyWith(status: CoinPurchaseStatus.unavailable));
+      return;
+    }
     _subscription = _gateway.purchaseStream.listen(
       _handlePurchaseEvents,
       onError: (_) => _publish(_snapshot.copyWith(
@@ -209,6 +218,7 @@ class CoinPurchaseService extends ChangeNotifier {
 
   bool canPurchase(CoinPackage package) =>
       !_closed &&
+      _enabled &&
       _verifier.isConfigured &&
       _snapshot.status != CoinPurchaseStatus.loading &&
       _snapshot.busyProductId == null &&

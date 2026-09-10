@@ -2,8 +2,15 @@
 
 POPPOP uses the official Flutter `in_app_purchase` plugin for the Android and
 iOS store clients. The app never treats a `purchased` stream event as proof of
-payment. Coin packs stay disabled in release builds until a production
-`CoinPurchaseVerifier` is configured.
+payment. The free launch build fixes
+`ReleaseFeatures.cashCoinPurchasesEnabled` to `false`, so it does not show a
+coin-pack route, construct the platform purchase gateway, subscribe to the
+purchase stream, query products, or call purchase/restore/receipt APIs. This
+flag is compile-time code and has no remote or user-controlled override.
+
+The implementation below is intentionally retained for a future release. Coin
+packs must remain disabled until both the release flag is deliberately changed
+in source and a production `CoinPurchaseVerifier` is configured.
 
 ## Server contract required before enabling purchases
 

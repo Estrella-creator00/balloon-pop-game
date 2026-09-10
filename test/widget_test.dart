@@ -19,6 +19,7 @@ import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
 import 'package:balloon_pop_game/coin/coin_package.dart';
 import 'package:balloon_pop_game/coin_purchase_page.dart';
+import 'package:balloon_pop_game/config/release_features.dart';
 import 'package:balloon_pop_game/main.dart';
 import 'package:balloon_pop_game/l10n/generated/app_localizations.dart';
 import 'package:balloon_pop_game/onboarding_page.dart';
@@ -31,6 +32,7 @@ import 'package:balloon_pop_game/ranking/ranking_page.dart';
 import 'package:balloon_pop_game/ranking/ranking_repository.dart';
 import 'package:balloon_pop_game/ranking/ranking_safety_store.dart';
 import 'package:balloon_pop_game/services/coin_service.dart';
+import 'package:balloon_pop_game/services/coin_purchase_gateway.dart';
 import 'package:balloon_pop_game/services/coin_purchase_service.dart';
 import 'package:balloon_pop_game/services/haptic_service.dart';
 import 'package:balloon_pop_game/services/purchase_service.dart';
@@ -455,13 +457,6 @@ Future<void> openSettings(WidgetTester tester) async {
   await tester.tap(find.byKey(const ValueKey('home-settings-button')));
   await tester.pumpAndSettle();
   expect(find.byType(SettingsPage), findsOneWidget);
-}
-
-Future<void> openCoinPurchase(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey('home-coin-add-button')));
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 350));
-  expect(find.byType(CoinPurchasePage), findsOneWidget);
 }
 
 class _LoadingRankingRepository implements RankingRepository {
@@ -2143,83 +2138,89 @@ void main() {
     expect(find.text('1,234'), findsOneWidget);
   });
 
-  testWidgets('home coin add opens C-01 without granting local coins', (
+  testWidgets('free release hides cash purchase entry points in both locales', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(320, 568);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    expect(ReleaseFeatures.cashCoinPurchasesEnabled, false);
     ProgressStorage.addCoins(9133);
 
-    await tester.pumpWidget(const BalloonPopApp());
-    await tester.pump();
-    expect(find.text('9,133'), findsOneWidget);
-    expect(find.byKey(const ValueKey('home-coin-add-button')), findsOneWidget);
+    for (final variant in <(Locale, Size)>[
+      (const Locale('ko'), const Size(360, 640)),
+      (const Locale('en'), const Size(390, 844)),
+    ]) {
+      tester.binding.platformDispatcher.localesTestValue = [variant.$1];
+      tester.view.physicalSize = variant.$2;
+      await tester.pumpWidget(const BalloonPopApp());
+      await tester.pump();
 
-    await openCoinPurchase(tester);
-    expect(find.text('코인 충전'), findsOneWidget);
-    expect(find.byKey(const ValueKey('coin-purchase-balance')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('coin-purchase-balance')),
-        matching: find.text('9,133'),
-      ),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('coin-package-list')), findsOneWidget);
-    for (final package in coinPackages) {
-      expect(
-        find.byKey(ValueKey('coin-package-${package.id}')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('home-coin-hud')), findsOneWidget);
+      expect(find.text('9,133'), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-coin-add-button')), findsNothing);
+      expect(find.byType(CoinPurchasePage), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('home-nav-shop')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('home-coin-add-button')), findsNothing);
+      expect(find.byType(CoinPurchasePage), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('home-settings-button')));
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-coin-add-button')), findsNothing);
+      expect(find.byType(CoinPurchasePage), findsNothing);
+      expect(CoinService.balance, 9133);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     }
-    expect(find.text('구매 불가'), findsNWidgets(4));
-    expect(find.text('300 코인'), findsOneWidget);
-    expect(find.text('700 코인'), findsOneWidget);
-    expect(find.text('1,500 코인'), findsOneWidget);
-    expect(find.text('3,500 코인'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-
-    expect(find.textContaining('스토어에 연결할 수 없습니다'), findsOneWidget);
-    expect(CoinService.balance, 9133);
-
-    tester
-        .widget<IconButton>(find.byKey(const ValueKey('coin-purchase-back')))
-        .onPressed!();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(CoinPurchasePage), findsNothing);
-    expect(find.byKey(const ValueKey('home-coin-hud')), findsOneWidget);
-    expect(find.text('9,133'), findsOneWidget);
-    expect(CoinService.balance, 9133);
-    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('coin balance remains responsive with enlarged system text', (
+  testWidgets('app startup does not initialize an injected purchase service', (
     tester,
   ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(320, 568);
-    tester.platformDispatcher.textScaleFactorTestValue = 1.6;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    ProgressStorage.addCoins(9999999);
+    final service = CoinPurchaseService(
+      gateway: const DisabledCoinPurchaseGateway(),
+      verifier: const UnconfiguredCoinPurchaseVerifier(),
+      grantSink: const ProgressStorageVerifiedCoinGrantSink(),
+    );
+
+    await tester.pumpWidget(BalloonPopApp(coinPurchaseService: service));
+    await tester.pump();
+
+    expect(service.snapshot.status, CoinPurchaseStatus.idle);
+    expect(find.byKey(const ValueKey('home-coin-add-button')), findsNothing);
+    await service.close();
+  });
+
+  testWidgets('direct purchase page construction exposes no payment UI', (
+    tester,
+  ) async {
+    final service = CoinPurchaseService(
+      gateway: const DisabledCoinPurchaseGateway(),
+      verifier: const UnconfiguredCoinPurchaseVerifier(),
+      grantSink: const ProgressStorageVerifiedCoinGrantSink(),
+    );
 
     await tester.pumpWidget(
-      const MaterialApp(
-        locale: Locale('ko'),
+      MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: CoinPurchasePage(),
+        home: CoinPurchasePage(purchaseService: service),
       ),
     );
     await tester.pump();
 
-    expect(find.text('9,999,999'), findsOneWidget);
-    expect(find.byKey(const ValueKey('coin-purchase-balance')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('coin-purchase-disabled')), findsOneWidget);
+    expect(find.byKey(const ValueKey('coin-purchase-page')), findsNothing);
+    expect(find.byKey(const ValueKey('coin-package-list')), findsNothing);
+    expect(service.snapshot.status, CoinPurchaseStatus.idle);
     expect(tester.takeException(), isNull);
+    await service.close();
   });
 
   testWidgets('home uses shared top controls and four-item navigation', (
@@ -2242,7 +2243,7 @@ void main() {
     expect(find.text('v0.6 UI REFRESH'), findsOneWidget);
     expect(find.byType(BackdropFilter), findsNothing);
     expect(find.byKey(const ValueKey('home-coin-hud')), findsOneWidget);
-    expect(find.byKey(const ValueKey('home-coin-add-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-coin-add-button')), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('home-coin-hud')),

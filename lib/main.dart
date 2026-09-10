@@ -14,6 +14,7 @@ import 'audio/pop_sound_runtime.dart';
 import 'balloon_background.dart';
 import 'balloon_skin_catalog.dart';
 import 'coin_purchase_page.dart';
+import 'config/release_features.dart';
 import 'dev/dev_coin_tool.dart';
 import 'game_engine/flame_game_page.dart';
 import 'game_engine/integration/flame_integration_contract.dart';
@@ -222,7 +223,7 @@ class BalloonPopApp extends StatefulWidget {
 class _BalloonPopAppState extends State<BalloonPopApp>
     with WidgetsBindingObserver {
   late bool _nicknameOnboardingCompleted;
-  late final CoinPurchaseService _coinPurchaseService;
+  CoinPurchaseService? _coinPurchaseService;
   late final bool _ownsCoinPurchaseService;
 
   @override
@@ -230,10 +231,13 @@ class _BalloonPopAppState extends State<BalloonPopApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ProgressStorage.initializeNewUserCoins();
-    _ownsCoinPurchaseService = widget.coinPurchaseService == null;
-    _coinPurchaseService =
-        widget.coinPurchaseService ?? CoinPurchaseService.platform();
-    unawaited(_coinPurchaseService.start());
+    _ownsCoinPurchaseService = ReleaseFeatures.cashCoinPurchasesEnabled &&
+        widget.coinPurchaseService == null;
+    if (ReleaseFeatures.cashCoinPurchasesEnabled) {
+      _coinPurchaseService =
+          widget.coinPurchaseService ?? CoinPurchaseService.platform();
+      unawaited(_coinPurchaseService!.start());
+    }
     SettingsService.applyStoredPreferences();
     unawaited(GameBgm.startHome());
     _nicknameOnboardingCompleted = SettingsService.nicknameOnboardingCompleted;
@@ -264,7 +268,7 @@ class _BalloonPopAppState extends State<BalloonPopApp>
     stopActiveNativePopSound();
     unawaited(GameBgm.shutdown());
     unawaited(flushProgressStorage());
-    if (_ownsCoinPurchaseService) _coinPurchaseService.dispose();
+    if (_ownsCoinPurchaseService) _coinPurchaseService?.dispose();
     super.dispose();
   }
 
@@ -3920,7 +3924,8 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           height: 38,
                           child: _mainTopOverlay(
                             enableDevCoinTap: kDebugMode,
-                            showCoinAddButton: true,
+                            showCoinAddButton:
+                                ReleaseFeatures.cashCoinPurchasesEnabled,
                           ),
                         ),
                         Positioned(
@@ -4199,6 +4204,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
 
   // C-01 코인 충전 화면
   Future<void> _openCoinPurchasePage() async {
+    if (!ReleaseFeatures.cashCoinPurchasesEnabled) return;
     PopSound.playUiClick();
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     await Navigator.of(context).push<void>(

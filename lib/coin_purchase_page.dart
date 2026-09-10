@@ -3,6 +3,7 @@ import 'l10n/l10n.dart';
 
 import 'audio/pop_sound.dart';
 import 'coin/coin_package.dart';
+import 'config/release_features.dart';
 import 'services/coin_purchase_gateway.dart';
 import 'services/coin_purchase_service.dart';
 import 'services/coin_service.dart';
@@ -23,30 +24,31 @@ class CoinPurchasePage extends StatefulWidget {
 }
 
 class _CoinPurchasePageState extends State<CoinPurchasePage> {
-  late final CoinPurchaseService _purchaseService;
-  late final bool _ownsService;
-  late int _lastEventSerial;
+  CoinPurchaseService? _purchaseService;
+  bool _ownsService = false;
+  int _lastEventSerial = 0;
 
   @override
   void initState() {
     super.initState();
+    if (!ReleaseFeatures.cashCoinPurchasesEnabled) return;
     _ownsService = widget.purchaseService == null;
     _purchaseService = widget.purchaseService ?? CoinPurchaseService.platform();
-    _lastEventSerial = _purchaseService.snapshot.eventSerial;
-    _purchaseService.addListener(_onPurchaseChanged);
-    _purchaseService.start();
+    _lastEventSerial = _purchaseService!.snapshot.eventSerial;
+    _purchaseService!.addListener(_onPurchaseChanged);
+    _purchaseService!.start();
   }
 
   @override
   void dispose() {
-    _purchaseService.removeListener(_onPurchaseChanged);
-    if (_ownsService) _purchaseService.dispose();
+    _purchaseService?.removeListener(_onPurchaseChanged);
+    if (_ownsService) _purchaseService?.dispose();
     super.dispose();
   }
 
   void _onPurchaseChanged() {
     if (!mounted) return;
-    final snapshot = _purchaseService.snapshot;
+    final snapshot = _purchaseService!.snapshot;
     setState(() {});
     if (snapshot.eventSerial == _lastEventSerial) return;
     _lastEventSerial = snapshot.eventSerial;
@@ -62,6 +64,10 @@ class _CoinPurchasePageState extends State<CoinPurchasePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!ReleaseFeatures.cashCoinPurchasesEnabled) {
+      return const SizedBox.shrink(key: ValueKey('coin-purchase-disabled'));
+    }
+    final purchaseService = _purchaseService!;
     return Scaffold(
       key: const ValueKey('coin-purchase-page'),
       backgroundColor: const Color(0xFFE8F8FF),
@@ -102,8 +108,8 @@ class _CoinPurchasePageState extends State<CoinPurchasePage> {
             _CoinBalanceCard(balance: CoinService.balance),
             const SizedBox(height: 10),
             _PurchaseAvailability(
-              snapshot: _purchaseService.snapshot,
-              verificationConfigured: _purchaseService.verificationConfigured,
+              snapshot: purchaseService.snapshot,
+              verificationConfigured: purchaseService.verificationConfigured,
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -114,16 +120,16 @@ class _CoinPurchasePageState extends State<CoinPurchasePage> {
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) => _CoinPackageCard(
                   package: widget.packages[index],
-                  offer: _purchaseService
+                  offer: purchaseService
                       .snapshot.offers[widget.packages[index].id],
-                  loading: _purchaseService.snapshot.status ==
+                  loading: purchaseService.snapshot.status ==
                       CoinPurchaseStatus.loading,
-                  busy: _purchaseService.snapshot.busyProductId ==
+                  busy: purchaseService.snapshot.busyProductId ==
                       widget.packages[index].id,
-                  enabled: _purchaseService.canPurchase(widget.packages[index]),
+                  enabled: purchaseService.canPurchase(widget.packages[index]),
                   onTap: () {
                     PopSound.playUiClick();
-                    _purchaseService.purchase(widget.packages[index]);
+                    purchaseService.purchase(widget.packages[index]);
                   },
                 ),
               ),
