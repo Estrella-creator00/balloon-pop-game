@@ -3,19 +3,62 @@ import 'l10n/l10n.dart';
 
 import 'audio/pop_sound.dart';
 import 'coin/coin_package.dart';
+import 'services/coin_purchase_gateway.dart';
 import 'services/coin_purchase_service.dart';
 import 'services/coin_service.dart';
 
 // C-01 코인 충전 화면
-class CoinPurchasePage extends StatelessWidget {
+class CoinPurchasePage extends StatefulWidget {
   const CoinPurchasePage({
     super.key,
-    this.purchaseService = const DisabledCoinPurchaseService(),
+    this.purchaseService,
     this.packages = coinPackages,
   });
 
-  final CoinPurchaseService purchaseService;
+  final CoinPurchaseService? purchaseService;
   final List<CoinPackage> packages;
+
+  @override
+  State<CoinPurchasePage> createState() => _CoinPurchasePageState();
+}
+
+class _CoinPurchasePageState extends State<CoinPurchasePage> {
+  late final CoinPurchaseService _purchaseService;
+  late final bool _ownsService;
+  late int _lastEventSerial;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsService = widget.purchaseService == null;
+    _purchaseService = widget.purchaseService ?? CoinPurchaseService.platform();
+    _lastEventSerial = _purchaseService.snapshot.eventSerial;
+    _purchaseService.addListener(_onPurchaseChanged);
+    _purchaseService.start();
+  }
+
+  @override
+  void dispose() {
+    _purchaseService.removeListener(_onPurchaseChanged);
+    if (_ownsService) _purchaseService.dispose();
+    super.dispose();
+  }
+
+  void _onPurchaseChanged() {
+    if (!mounted) return;
+    final snapshot = _purchaseService.snapshot;
+    setState(() {});
+    if (snapshot.eventSerial == _lastEventSerial) return;
+    _lastEventSerial = snapshot.eventSerial;
+    final message = _eventMessage(context, snapshot.status);
+    if (message == null) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(message),
+      ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,18 +100,30 @@ class CoinPurchasePage extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _CoinBalanceCard(balance: CoinService.balance),
+            const SizedBox(height: 10),
+            _PurchaseAvailability(
+              snapshot: _purchaseService.snapshot,
+              verificationConfigured: _purchaseService.verificationConfigured,
+            ),
             const SizedBox(height: 16),
             Expanded(
               child: ListView.separated(
                 key: const ValueKey('coin-package-list'),
                 padding: const EdgeInsets.fromLTRB(2, 2, 2, 16),
-                itemCount: packages.length,
+                itemCount: widget.packages.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) => _CoinPackageCard(
-                  package: packages[index],
+                  package: widget.packages[index],
+                  offer: _purchaseService
+                      .snapshot.offers[widget.packages[index].id],
+                  loading: _purchaseService.snapshot.status ==
+                      CoinPurchaseStatus.loading,
+                  busy: _purchaseService.snapshot.busyProductId ==
+                      widget.packages[index].id,
+                  enabled: _purchaseService.canPurchase(widget.packages[index]),
                   onTap: () {
                     PopSound.playUiClick();
-                    _requestPurchase(context, packages[index]);
+                    _purchaseService.purchase(widget.packages[index]);
                   },
                 ),
               ),
@@ -79,25 +134,54 @@ class CoinPurchasePage extends StatelessWidget {
     );
   }
 
-  Future<void> _requestPurchase(
-    BuildContext context,
-    CoinPackage package,
-  ) async {
-    if (!package.enabled) return;
-    final result = await purchaseService.purchase(package);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(
-            result.status == CoinPurchaseStatus.unavailable
-                ? context.l10n.purchaseComingSoon
-                : result.message,
-          ),
+  String? _eventMessage(BuildContext context, CoinPurchaseStatus status) {
+    return switch (status) {
+      CoinPurchaseStatus.purchasing => context.l10n.purchaseInProgress,
+      CoinPurchaseStatus.pending => context.l10n.purchasePending,
+      CoinPurchaseStatus.cancelled => context.l10n.purchaseCancelled,
+      CoinPurchaseStatus.failed => context.l10n.purchaseFailed,
+      CoinPurchaseStatus.verificationFailed =>
+        context.l10n.purchaseVerificationFailed,
+      CoinPurchaseStatus.completed => context.l10n.purchaseCompleted,
+      _ => null,
+    };
+  }
+}
+
+class _PurchaseAvailability extends StatelessWidget {
+  const _PurchaseAvailability({
+    required this.snapshot,
+    required this.verificationConfigured,
+  });
+
+  final CoinPurchaseSnapshot snapshot;
+  final bool verificationConfigured;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = switch (snapshot.status) {
+      CoinPurchaseStatus.loading => context.l10n.purchaseLoading,
+      CoinPurchaseStatus.unavailable => context.l10n.purchaseStoreUnavailable,
+      CoinPurchaseStatus.productNotFound =>
+        context.l10n.purchaseProductsNotRegistered,
+      _ when !verificationConfigured =>
+        context.l10n.purchaseVerificationUnavailable,
+      _ => null,
+    };
+    if (text == null) return const SizedBox.shrink();
+    return Semantics(
+      liveRegion: true,
+      child: Text(
+        text,
+        key: const ValueKey('coin-purchase-status'),
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Color(0xFF5D7483),
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -158,9 +242,20 @@ class _CoinBalanceCard extends StatelessWidget {
 }
 
 class _CoinPackageCard extends StatelessWidget {
-  const _CoinPackageCard({required this.package, required this.onTap});
+  const _CoinPackageCard({
+    required this.package,
+    required this.offer,
+    required this.enabled,
+    required this.loading,
+    required this.busy,
+    required this.onTap,
+  });
 
   final CoinPackage package;
+  final StoreProductOffer? offer;
+  final bool enabled;
+  final bool loading;
+  final bool busy;
   final VoidCallback onTap;
 
   @override
@@ -172,7 +267,7 @@ class _CoinPackageCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         key: ValueKey('coin-package-${package.id}'),
-        onTap: package.enabled ? onTap : null,
+        onTap: enabled ? onTap : null,
         borderRadius: BorderRadius.circular(18),
         child: Container(
           constraints: const BoxConstraints(minHeight: 76),
@@ -214,7 +309,9 @@ class _CoinPackageCard extends StatelessWidget {
                 alignment: Alignment.center,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B9D),
+                  color: enabled || busy
+                      ? const Color(0xFFFF6B9D)
+                      : const Color(0xFFAAB8C0),
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: const [
                     BoxShadow(
@@ -223,14 +320,26 @@ class _CoinPackageCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Text(
-                  package.displayPrice,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        loading
+                            ? context.l10n.purchaseLoadingShort
+                            : offer?.localizedPrice ??
+                                context.l10n.purchasePriceUnavailable,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
               ),
             ],
           ),

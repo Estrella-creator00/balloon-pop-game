@@ -318,6 +318,43 @@ class AppLocalizationsKo extends AppLocalizations {
   String get purchaseComingSoon => '결제 기능 준비 중입니다.';
 
   @override
+  String get purchaseLoading => '스토어 상품을 불러오는 중입니다.';
+
+  @override
+  String get purchaseLoadingShort => '불러오는 중';
+
+  @override
+  String get purchaseStoreUnavailable =>
+      '현재 스토어에 연결할 수 없습니다. 게임과 보유 코인은 그대로 이용할 수 있어요.';
+
+  @override
+  String get purchaseProductsNotRegistered => '아직 등록된 코인 상품이 없습니다.';
+
+  @override
+  String get purchaseVerificationUnavailable => '안전한 결제 검증이 준비된 뒤 구매할 수 있습니다.';
+
+  @override
+  String get purchasePriceUnavailable => '구매 불가';
+
+  @override
+  String get purchaseInProgress => '구매 화면을 여는 중입니다.';
+
+  @override
+  String get purchasePending => '결제 승인을 기다리고 있습니다. 코인은 검증 후 지급됩니다.';
+
+  @override
+  String get purchaseCancelled => '구매를 취소했습니다.';
+
+  @override
+  String get purchaseFailed => '결제를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+
+  @override
+  String get purchaseVerificationFailed => '결제를 안전하게 확인하지 못해 코인이 지급되지 않았습니다.';
+
+  @override
+  String get purchaseCompleted => '결제가 확인되어 코인이 지급되었습니다.';
+
+  @override
   String get productsEmpty => '표시할 상품이 없습니다';
 
   @override

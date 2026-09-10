@@ -37,6 +37,7 @@ import 'ranking/ranking_moderation_service.dart';
 import 'ranking/ranking_safety_dialog.dart';
 import 'ranking/ranking_safety_store.dart';
 import 'services/coin_service.dart';
+import 'services/coin_purchase_service.dart';
 import 'services/haptic_service.dart';
 import 'services/purchase_service.dart';
 import 'services/settings_service.dart';
@@ -113,6 +114,7 @@ class PoppopAppEntry extends StatefulWidget {
     this.integrationMetrics,
     this.onlineRankingRepository,
     this.rankingSafetyStore,
+    this.coinPurchaseService,
   });
 
   final PoppopEngineMode engineMode;
@@ -128,6 +130,8 @@ class PoppopAppEntry extends StatefulWidget {
   final FlameIntegrationMetrics? integrationMetrics;
   final OnlineRankingRepository? onlineRankingRepository;
   final RankingSafetyStore? rankingSafetyStore;
+  @visibleForTesting
+  final CoinPurchaseService? coinPurchaseService;
 
   @override
   State<PoppopAppEntry> createState() => _PoppopAppEntryState();
@@ -157,6 +161,7 @@ class _PoppopAppEntryState extends State<PoppopAppEntry> {
         integrationMetrics: widget.integrationMetrics,
         onlineRankingRepository: widget.onlineRankingRepository,
         rankingSafetyStore: widget.rankingSafetyStore,
+        coinPurchaseService: widget.coinPurchaseService,
       );
     }
     return MaterialApp(
@@ -186,6 +191,7 @@ class BalloonPopApp extends StatefulWidget {
     this.integrationMetrics,
     this.onlineRankingRepository,
     this.rankingSafetyStore,
+    this.coinPurchaseService,
   });
 
   @visibleForTesting
@@ -205,6 +211,8 @@ class BalloonPopApp extends StatefulWidget {
   final FlameIntegrationMetrics? integrationMetrics;
   final OnlineRankingRepository? onlineRankingRepository;
   final RankingSafetyStore? rankingSafetyStore;
+  @visibleForTesting
+  final CoinPurchaseService? coinPurchaseService;
 
   @override
   State<BalloonPopApp> createState() => _BalloonPopAppState();
@@ -213,12 +221,18 @@ class BalloonPopApp extends StatefulWidget {
 class _BalloonPopAppState extends State<BalloonPopApp>
     with WidgetsBindingObserver {
   late bool _nicknameOnboardingCompleted;
+  late final CoinPurchaseService _coinPurchaseService;
+  late final bool _ownsCoinPurchaseService;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ProgressStorage.initializeNewUserCoins();
+    _ownsCoinPurchaseService = widget.coinPurchaseService == null;
+    _coinPurchaseService =
+        widget.coinPurchaseService ?? CoinPurchaseService.platform();
+    unawaited(_coinPurchaseService.start());
     SettingsService.applyStoredPreferences();
     _nicknameOnboardingCompleted = SettingsService.nicknameOnboardingCompleted;
   }
@@ -245,6 +259,7 @@ class _BalloonPopAppState extends State<BalloonPopApp>
     WidgetsBinding.instance.removeObserver(this);
     stopActiveNativePopSound();
     unawaited(flushProgressStorage());
+    if (_ownsCoinPurchaseService) _coinPurchaseService.dispose();
     super.dispose();
   }
 
@@ -273,6 +288,7 @@ class _BalloonPopAppState extends State<BalloonPopApp>
               integrationMetrics: widget.integrationMetrics,
               onlineRankingRepository: widget.onlineRankingRepository,
               rankingSafetyStore: widget.rankingSafetyStore,
+              coinPurchaseService: _coinPurchaseService,
             )
           : NicknameOnboardingPage(onCompleted: _completeNicknameOnboarding),
     );
@@ -2005,6 +2021,7 @@ class BalloonGamePage extends StatefulWidget {
     this.integrationMetrics,
     this.onlineRankingRepository,
     this.rankingSafetyStore,
+    this.coinPurchaseService,
   });
 
   @visibleForTesting
@@ -2024,6 +2041,7 @@ class BalloonGamePage extends StatefulWidget {
   final FlameIntegrationMetrics? integrationMetrics;
   final OnlineRankingRepository? onlineRankingRepository;
   final RankingSafetyStore? rankingSafetyStore;
+  final CoinPurchaseService? coinPurchaseService;
 
   @override
   State<BalloonGamePage> createState() => _BalloonGamePageState();
@@ -4163,7 +4181,11 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     PopSound.playUiClick();
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (context) => const CoinPurchasePage()),
+      MaterialPageRoute<void>(
+        builder: (context) => CoinPurchasePage(
+          purchaseService: widget.coinPurchaseService,
+        ),
+      ),
     );
     if (!mounted) return;
     setState(() => _coinBalance = CoinService.balance);

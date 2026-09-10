@@ -22,6 +22,7 @@ abstract final class ProgressStorageKeys {
   static const bestScore = 'poppop_best_score';
   static const lastScore = 'poppop_last_score';
   static const coinBalance = 'poppop_coin_balance';
+  static const verifiedCoinGrantIds = 'poppop_verified_coin_grant_ids';
   static const ownedProductIds = 'poppop_owned_product_ids';
   static const equippedProductIds = 'poppop_equipped_product_ids';
   static const nickname = 'poppop_nickname';
@@ -39,6 +40,7 @@ abstract final class ProgressStorageKeys {
     bestScore,
     lastScore,
     coinBalance,
+    verifiedCoinGrantIds,
     ownedProductIds,
     equippedProductIds,
     nickname,

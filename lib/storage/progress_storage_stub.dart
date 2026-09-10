@@ -7,6 +7,7 @@ abstract final class ProgressStorage {
   static int _bestScore = 0;
   static int _lastScore = 0;
   static int _coinBalance = 0;
+  static final Set<String> _verifiedCoinGrantIds = <String>{};
   static String? _nickname;
   static bool _nicknameOnboardingCompleted = false;
   static bool _soundEnabled = true;
@@ -110,6 +111,14 @@ abstract final class ProgressStorage {
     return _coinBalance;
   }
 
+  static bool applyVerifiedCoinGrant(String grantId, int amount) {
+    if (grantId.isEmpty || amount <= 0 || !_verifiedCoinGrantIds.add(grantId)) {
+      return false;
+    }
+    addCoins(amount);
+    return true;
+  }
+
   static Set<String> ownedProductIds() => Set.unmodifiable(_ownedProductIds);
 
   static bool tryPurchaseProduct(String productId, int price) {
@@ -147,6 +156,7 @@ abstract final class ProgressStorage {
     _bestScore = 0;
     _lastScore = 0;
     _coinBalance = 0;
+    _verifiedCoinGrantIds.clear();
     _nickname = null;
     _nicknameOnboardingCompleted = false;
     _soundEnabled = true;

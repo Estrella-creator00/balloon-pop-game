@@ -55,6 +55,30 @@ void main() {
     expect(ProgressStorage.coinBalance(), 20321);
   });
 
+  test('verified coin grant is persisted and cannot be applied twice',
+      () async {
+    final store = _MemoryPersistentStore();
+    await _initialize(store);
+
+    expect(
+      ProgressStorage.applyVerifiedCoinGrant('opaque-grant-1', 300),
+      isTrue,
+    );
+    expect(
+      ProgressStorage.applyVerifiedCoinGrant('opaque-grant-1', 300),
+      isFalse,
+    );
+    await ProgressStorage.flush();
+    await _restart(store);
+
+    expect(ProgressStorage.coinBalance(), 300);
+    expect(
+      ProgressStorage.applyVerifiedCoinGrant('opaque-grant-1', 300),
+      isFalse,
+    );
+    expect(ProgressStorage.coinBalance(), 300);
+  });
+
   test('purchased products survive adapter recreation', () async {
     final store = _MemoryPersistentStore();
     await _initialize(store);

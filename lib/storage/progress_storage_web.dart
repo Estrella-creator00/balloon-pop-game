@@ -17,6 +17,7 @@ abstract final class ProgressStorage {
   static const _bestKey = 'poppop_best_score';
   static const _lastKey = 'poppop_last_score';
   static const _coinKey = 'poppop_coin_balance';
+  static const _verifiedCoinGrantIdsKey = 'poppop_verified_coin_grant_ids';
   static const _ownedProductsKey = 'poppop_owned_product_ids';
   static const _equippedProductsKey = 'poppop_equipped_product_ids';
   static const _nicknameKey = 'poppop_nickname';
@@ -112,6 +113,7 @@ abstract final class ProgressStorage {
         _bestKey,
         _lastKey,
         _coinKey,
+        _verifiedCoinGrantIdsKey,
         _ownedProductsKey,
         _equippedProductsKey,
         _nicknameKey,
@@ -182,6 +184,26 @@ abstract final class ProgressStorage {
       return updated;
     } catch (_) {
       return coinBalance();
+    }
+  }
+
+  static bool applyVerifiedCoinGrant(String grantId, int amount) {
+    if (grantId.isEmpty || amount <= 0) return false;
+    try {
+      final stored =
+          _localStorage.getItem(_verifiedCoinGrantIdsKey.toJS)?.toDart;
+      final grantIds = stored == null || stored.isEmpty
+          ? <String>{}
+          : stored.split('|').where((id) => id.isNotEmpty).toSet();
+      if (!grantIds.add(grantId)) return false;
+      _localStorage.setItem(
+        _verifiedCoinGrantIdsKey.toJS,
+        grantIds.join('|').toJS,
+      );
+      addCoins(amount);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -294,6 +316,7 @@ abstract final class ProgressStorage {
       _localStorage.removeItem(_bestKey.toJS);
       _localStorage.removeItem(_lastKey.toJS);
       _localStorage.removeItem(_coinKey.toJS);
+      _localStorage.removeItem(_verifiedCoinGrantIdsKey.toJS);
       _localStorage.removeItem(_ownedProductsKey.toJS);
       _localStorage.removeItem(_equippedProductsKey.toJS);
       _localStorage.removeItem(_nicknameKey.toJS);

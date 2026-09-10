@@ -328,6 +328,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get purchaseComingSoon => 'Purchases are coming soon.';
 
   @override
+  String get purchaseLoading => 'Loading store products…';
+
+  @override
+  String get purchaseLoadingShort => 'Loading';
+
+  @override
+  String get purchaseStoreUnavailable =>
+      'The store is unavailable right now. You can keep playing and use your existing coins.';
+
+  @override
+  String get purchaseProductsNotRegistered =>
+      'No coin packs are registered yet.';
+
+  @override
+  String get purchaseVerificationUnavailable =>
+      'Purchases will be enabled after secure verification is configured.';
+
+  @override
+  String get purchasePriceUnavailable => 'Unavailable';
+
+  @override
+  String get purchaseInProgress => 'Opening the purchase screen…';
+
+  @override
+  String get purchasePending =>
+      'Waiting for payment approval. Coins are added only after verification.';
+
+  @override
+  String get purchaseCancelled => 'Purchase cancelled.';
+
+  @override
+  String get purchaseFailed =>
+      'The purchase could not be completed. Please try again later.';
+
+  @override
+  String get purchaseVerificationFailed =>
+      'The purchase could not be securely verified, so no coins were added.';
+
+  @override
+  String get purchaseCompleted => 'Purchase verified. Your coins were added.';
+
+  @override
   String get productsEmpty => 'No products to show';
 
   @override

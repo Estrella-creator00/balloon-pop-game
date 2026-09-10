@@ -1981,7 +1981,7 @@ void main() {
   });
 
   test(
-    'coin packages and disabled purchase service never grant coins',
+    'coin package catalog has only product IDs and entitlement amounts',
     () async {
       expect(
         coinPackages.map((package) => package.id),
@@ -1991,23 +1991,16 @@ void main() {
         coinPackages.map((package) => package.coinAmount),
         orderedEquals([300, 700, 1500, 3500]),
       );
-      expect(
-        coinPackages.map((package) => package.priceWon),
-        orderedEquals([1500, 3000, 5900, 11900]),
-      );
-      expect(
-        coinPackages.map((package) => package.displayPrice),
-        orderedEquals(['₩1,500', '₩3,000', '₩5,900', '₩11,900']),
-      );
-
       ProgressStorage.addCoins(9133);
       final before = CoinService.balance;
-      final result = await const DisabledCoinPurchaseService().purchase(
-        coinPackages.first,
+      final service = CoinPurchaseService.platform();
+      await service.start();
+      expect(
+        await service.purchase(coinPackages.first),
+        CoinPurchaseStatus.unavailable,
       );
-      expect(result.status, CoinPurchaseStatus.unavailable);
-      expect(result.message, '결제 기능 준비 중입니다.');
       expect(CoinService.balance, before);
+      await service.close();
     },
   );
 
@@ -2180,17 +2173,15 @@ void main() {
         find.byKey(ValueKey('coin-package-${package.id}')),
         findsOneWidget,
       );
-      expect(find.text(package.displayPrice), findsOneWidget);
     }
+    expect(find.text('구매 불가'), findsNWidgets(4));
     expect(find.text('300 코인'), findsOneWidget);
     expect(find.text('700 코인'), findsOneWidget);
     expect(find.text('1,500 코인'), findsOneWidget);
     expect(find.text('3,500 코인'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byKey(const ValueKey('coin-package-coin_300')));
-    await tester.pump();
-    expect(find.text('결제 기능 준비 중입니다.'), findsWidgets);
+    expect(find.textContaining('스토어에 연결할 수 없습니다'), findsOneWidget);
     expect(CoinService.balance, 9133);
 
     tester

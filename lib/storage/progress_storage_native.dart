@@ -61,6 +61,7 @@ abstract final class ProgressStorage {
   static int _bestScore = 0;
   static int _lastScore = 0;
   static int _coinBalance = 0;
+  static final Set<String> _verifiedCoinGrantIds = <String>{};
   static String? _nickname;
   static bool _nicknameOnboardingCompleted = false;
   static bool _soundEnabled = true;
@@ -112,6 +113,12 @@ abstract final class ProgressStorage {
     );
     _coinBalance = _nonNegative(
       _readInt(backend, ProgressStorageKeys.coinBalance),
+    );
+    _verifiedCoinGrantIds.addAll(
+      _decodeIds(_readNonEmptyString(
+        backend,
+        ProgressStorageKeys.verifiedCoinGrantIds,
+      )),
     );
     _nickname = _readNonEmptyString(backend, ProgressStorageKeys.nickname);
     _nicknameOnboardingCompleted = _readBool(
@@ -361,6 +368,24 @@ abstract final class ProgressStorage {
     return updated;
   }
 
+  static bool applyVerifiedCoinGrant(String grantId, int amount) {
+    if (grantId.isEmpty || amount <= 0 || !_verifiedCoinGrantIds.add(grantId)) {
+      return false;
+    }
+    _hasStoredData = true;
+    _coinBalance += amount;
+    final updatedCoins = _coinBalance;
+    final updatedGrantIds = _verifiedCoinGrantIds.join('|');
+    _enqueue((backend) async {
+      await backend.setInt(ProgressStorageKeys.coinBalance, updatedCoins);
+      await backend.setString(
+        ProgressStorageKeys.verifiedCoinGrantIds,
+        updatedGrantIds,
+      );
+    });
+    return true;
+  }
+
   static Set<String> ownedProductIds() => Set.unmodifiable(_ownedProductIds);
 
   static bool tryPurchaseProduct(String productId, int price) {
@@ -421,6 +446,7 @@ abstract final class ProgressStorage {
     _bestScore = 0;
     _lastScore = 0;
     _coinBalance = 0;
+    _verifiedCoinGrantIds.clear();
     _nickname = null;
     _nicknameOnboardingCompleted = false;
     _soundEnabled = true;

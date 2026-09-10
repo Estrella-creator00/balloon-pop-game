@@ -686,6 +686,78 @@ abstract class AppLocalizations {
   /// **'결제 기능 준비 중입니다.'**
   String get purchaseComingSoon;
 
+  /// No description provided for @purchaseLoading.
+  ///
+  /// In ko, this message translates to:
+  /// **'스토어 상품을 불러오는 중입니다.'**
+  String get purchaseLoading;
+
+  /// No description provided for @purchaseLoadingShort.
+  ///
+  /// In ko, this message translates to:
+  /// **'불러오는 중'**
+  String get purchaseLoadingShort;
+
+  /// No description provided for @purchaseStoreUnavailable.
+  ///
+  /// In ko, this message translates to:
+  /// **'현재 스토어에 연결할 수 없습니다. 게임과 보유 코인은 그대로 이용할 수 있어요.'**
+  String get purchaseStoreUnavailable;
+
+  /// No description provided for @purchaseProductsNotRegistered.
+  ///
+  /// In ko, this message translates to:
+  /// **'아직 등록된 코인 상품이 없습니다.'**
+  String get purchaseProductsNotRegistered;
+
+  /// No description provided for @purchaseVerificationUnavailable.
+  ///
+  /// In ko, this message translates to:
+  /// **'안전한 결제 검증이 준비된 뒤 구매할 수 있습니다.'**
+  String get purchaseVerificationUnavailable;
+
+  /// No description provided for @purchasePriceUnavailable.
+  ///
+  /// In ko, this message translates to:
+  /// **'구매 불가'**
+  String get purchasePriceUnavailable;
+
+  /// No description provided for @purchaseInProgress.
+  ///
+  /// In ko, this message translates to:
+  /// **'구매 화면을 여는 중입니다.'**
+  String get purchaseInProgress;
+
+  /// No description provided for @purchasePending.
+  ///
+  /// In ko, this message translates to:
+  /// **'결제 승인을 기다리고 있습니다. 코인은 검증 후 지급됩니다.'**
+  String get purchasePending;
+
+  /// No description provided for @purchaseCancelled.
+  ///
+  /// In ko, this message translates to:
+  /// **'구매를 취소했습니다.'**
+  String get purchaseCancelled;
+
+  /// No description provided for @purchaseFailed.
+  ///
+  /// In ko, this message translates to:
+  /// **'결제를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.'**
+  String get purchaseFailed;
+
+  /// No description provided for @purchaseVerificationFailed.
+  ///
+  /// In ko, this message translates to:
+  /// **'결제를 안전하게 확인하지 못해 코인이 지급되지 않았습니다.'**
+  String get purchaseVerificationFailed;
+
+  /// No description provided for @purchaseCompleted.
+  ///
+  /// In ko, this message translates to:
+  /// **'결제가 확인되어 코인이 지급되었습니다.'**
+  String get purchaseCompleted;
+
   /// No description provided for @productsEmpty.
   ///
   /// In ko, this message translates to:
