@@ -92,7 +92,8 @@ flutter:
     - assets/sounds/boss_clear.mp3.mp3
     - assets/sounds/shop_purchase.mp3.mp3
     - assets/sounds/shop_equip.mp3.mp3
-    - assets/sounds/bouncy_loop.mp3
+    - assets/sounds/bouncing_notes.mp3
+    - assets/sounds/arcade_bounce.mp3
     - assets/sounds/native/native_basic_pop.wav
     - assets/sounds/native/native_heart_pop.wav
     - assets/sounds/native/native_light_tap.wav

@@ -37,7 +37,7 @@ abstract final class EndlessModeRules {
 
 abstract final class RankedSixtySecondRules {
   static const int durationSeconds = 60;
-  static const int activeBalloonLimit = 6;
+  static const int activeBalloonLimit = 10;
 
   static EndlessBalloonProfile profileFor({required int spawnOrdinal}) =>
       EndlessBalloonProfile(

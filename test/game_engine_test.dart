@@ -453,6 +453,33 @@ void main() {
     expect(EndlessModeRules.activeBalloonLimit, 6);
   });
 
+  test('ranked 60 second mode starts with and replenishes ten balloons',
+      () async {
+    final session = GameSessionState();
+    final game = PoppopGame(session, rankedSixtySecondMode: true);
+    game.onGameResize(Vector2(320, 480));
+    await game.onLoad();
+
+    expect(RankedSixtySecondRules.durationSeconds, 60);
+    expect(RankedSixtySecondRules.activeBalloonLimit, 10);
+    expect(game.activeBalloonCount, 10);
+    expect(session.remainingBalloons, 10);
+    expect(
+      game.balloonComponents
+          .map((balloon) => '${balloon.position.x}:${balloon.position.y}')
+          .toSet(),
+      hasLength(10),
+    );
+
+    expect(game.balloonComponents.first.requestHit(), isTrue);
+    expect(session.score, 1);
+    expect(game.activeBalloonCount, 10);
+    expect(session.remainingBalloons, 10);
+
+    game.shutdown();
+    session.dispose();
+  });
+
   test('endless session counts one per pop and only explicit finish ends it',
       () {
     final session = GameSessionState();

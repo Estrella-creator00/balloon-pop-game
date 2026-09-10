@@ -81,5 +81,5 @@ abstract final class RankingLimits {
   static const schemaVersion = 2;
   static const topLimit = 100;
   static const maximumStageScore = 600;
-  static const maximumSixtySecondScore = 900;
+  static const maximumSixtySecondScore = 9999;
 }

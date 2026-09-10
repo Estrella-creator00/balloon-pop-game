@@ -238,5 +238,9 @@ class StageBalloonSpawner {
     Offset(0.06, 0.68),
     Offset(0.72, 0.66),
     Offset(0.42, 0.82),
+    Offset(0.25, 0.08),
+    Offset(0.55, 0.22),
+    Offset(0.23, 0.52),
+    Offset(0.56, 0.55),
   ];
 }

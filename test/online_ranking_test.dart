@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:balloon_pop_game/game_engine/game_session_state.dart';
+import 'package:balloon_pop_game/game_engine/endless/endless_mode.dart';
 import 'package:balloon_pop_game/game_engine/session/game_session_snapshot.dart';
 import 'package:balloon_pop_game/game_engine/stages/flame_stage_definition.dart';
 import 'package:balloon_pop_game/ranking/firebase_ranking_runtime.dart';
@@ -308,21 +309,24 @@ void main() {
     session.dispose();
   });
 
-  test('60 second challenge has six one-hit targets and stops while paused',
+  test('60 second challenge keeps ten one-hit targets and stops while paused',
       () {
     final session = GameSessionState();
     session.startRankedSixtySeconds(
-      {for (var id = 1; id <= 6; id++) id: 1},
+      {
+        for (var id = 1; id <= RankedSixtySecondRules.activeBalloonLimit; id++)
+          id: 1,
+      },
       generation: 1,
     );
     expect(session.secondsLeft, 60);
-    expect(session.remainingBalloons, 6);
+    expect(session.remainingBalloons, 10);
     expect(session.fakeCount, 0);
     expect(session.activeBossCount, 0);
     expect(session.hitBalloon(1), BalloonHitResult.popped);
     expect(session.score, 1);
-    session.addContinuousBalloon(7);
-    expect(session.remainingBalloons, 6);
+    session.addContinuousBalloon(11);
+    expect(session.remainingBalloons, 10);
     session.pause();
     session.recordUpdate(20);
     expect(session.secondsLeft, 60);
@@ -554,7 +558,7 @@ void main() {
     expect(RankingCategory.sixtySeconds.collection, 'leaderboards_60s_v2');
     expect(RankingCategory.stage.legacyCollection, 'leaderboards_stage_v1');
     expect(RankingLimits.maximumStageScore, 600);
-    expect(RankingLimits.maximumSixtySecondScore, 900);
+    expect(RankingLimits.maximumSixtySecondScore, 9999);
   });
 
   test('repository reads v2 and submits through callable without a client UID',

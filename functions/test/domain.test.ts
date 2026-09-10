@@ -42,7 +42,7 @@ test('authentication and payload validation reject untrusted input', () => {
     category: 'sixtySeconds', displayName: 'Player', score: 1,
   }));
   assert.throws(() => validateSubmitPayload({
-    category: 'sixtySeconds', displayName: 'Player', score: 901,
+    category: 'sixtySeconds', displayName: 'Player', score: 10000,
     policyVersion: 1,
   }));
   assert.throws(() => validateSubmitPayload({
@@ -59,6 +59,13 @@ test('authentication and payload validation reject untrusted input', () => {
   }), {
     category: 'stage', displayName: 'Player 7', score: 600,
     policyVersion: 1, reachedStage: 30, cleared: true,
+  });
+  assert.deepEqual(validateSubmitPayload({
+    category: 'sixtySeconds', displayName: 'Player 7', score: 9999,
+    policyVersion: 1,
+  }), {
+    category: 'sixtySeconds', displayName: 'Player 7', score: 9999,
+    policyVersion: 1,
   });
 });
 

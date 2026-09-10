@@ -235,6 +235,7 @@ class _BalloonPopAppState extends State<BalloonPopApp>
         widget.coinPurchaseService ?? CoinPurchaseService.platform();
     unawaited(_coinPurchaseService.start());
     SettingsService.applyStoredPreferences();
+    unawaited(GameBgm.startHome());
     _nicknameOnboardingCompleted = SettingsService.nicknameOnboardingCompleted;
   }
 
@@ -249,9 +250,11 @@ class _BalloonPopAppState extends State<BalloonPopApp>
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
       pauseNativePopSound();
+      unawaited(GameBgm.pauseForLifecycle());
       unawaited(flushProgressStorage());
     } else if (state == AppLifecycleState.resumed) {
       resumeNativePopSound();
+      unawaited(GameBgm.resumeFromLifecycle());
     }
   }
 
@@ -274,6 +277,11 @@ class _BalloonPopAppState extends State<BalloonPopApp>
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       localeListResolutionCallback: poppopLocaleResolution,
+      builder: (context, child) => Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => unawaited(GameBgm.handleUserInteraction()),
+        child: child ?? const SizedBox.shrink(),
+      ),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF6B9D)),
         useMaterial3: true,
@@ -2741,7 +2749,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _scheduleStagePageJump(stagePage);
     _publishHeader();
     stopActiveNativePopSound();
-    unawaited(GameBgm.stopGameplay());
+    unawaited(GameBgm.startHome());
     unawaited(flushProgressStorage());
   }
 

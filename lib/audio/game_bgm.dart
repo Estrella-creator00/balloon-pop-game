@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 abstract interface class GameBgmBackend {
   Future<void> startLoop(String assetPath, double volume);
 
+  Future<void> setVolume(double volume);
+
   Future<void> pause();
 
   Future<void> resume();
@@ -40,6 +42,9 @@ final class AudioplayersGameBgmBackend implements GameBgmBackend {
   }
 
   @override
+  Future<void> setVolume(double volume) => _player.setVolume(volume);
+
+  @override
   Future<void> pause() => _player.pause();
 
   @override
@@ -60,6 +65,9 @@ final class _NoopGameBgmBackend implements GameBgmBackend {
   Future<void> startLoop(String assetPath, double volume) async {}
 
   @override
+  Future<void> setVolume(double volume) async {}
+
+  @override
   Future<void> pause() async {}
 
   @override
@@ -72,40 +80,78 @@ final class _NoopGameBgmBackend implements GameBgmBackend {
   Future<void> dispose() async {}
 }
 
-/// Owns the single looping gameplay music player across stage transitions.
+enum _GameBgmTrack { home, gameplay }
+
+/// Owns one looping music player and switches it only at gameplay boundaries.
 abstract final class GameBgm {
-  static const String assetPath = 'assets/sounds/bouncy_loop.mp3';
-  static const double volume = 0.16;
+  static const String homeAssetPath = 'assets/sounds/bouncing_notes.mp3';
+  static const String gameplayAssetPath = 'assets/sounds/arcade_bounce.mp3';
+  static const double homeVolume = 0.12;
+  static const double gameplayVolume = 0.16;
+  static const Duration fadeDuration = Duration(milliseconds: 400);
+  static const int _fadeSteps = 5;
 
   static GameBgmBackend? _backend;
   static Future<void> _operations = Future<void>.value();
   static bool _soundEnabled = true;
-  static bool _gameplayActive = false;
+  static _GameBgmTrack? _desiredTrack;
+  static _GameBgmTrack? _loadedTrack;
   static bool _gameplayPaused = false;
-  static bool _started = false;
+  static bool _lifecyclePaused = false;
   static bool _playing = false;
+  static double _currentVolume = 0;
+  static Duration _fadeStepDuration =
+      Duration(milliseconds: fadeDuration.inMilliseconds ~/ _fadeSteps);
+
+  static Future<void> startHome() {
+    _desiredTrack = _GameBgmTrack.home;
+    _gameplayPaused = false;
+    return _scheduleSync();
+  }
 
   static Future<void> startGameplay() {
-    _gameplayActive = true;
+    _desiredTrack = _GameBgmTrack.gameplay;
     _gameplayPaused = false;
     return _scheduleSync();
   }
 
   static Future<void> pauseGameplay() {
-    if (!_gameplayActive) return Future<void>.value();
+    if (_desiredTrack != _GameBgmTrack.gameplay) return Future<void>.value();
     _gameplayPaused = true;
     return _scheduleSync();
   }
 
   static Future<void> resumeGameplay() {
-    if (!_gameplayActive) return Future<void>.value();
+    if (_desiredTrack != _GameBgmTrack.gameplay) return Future<void>.value();
     _gameplayPaused = false;
     return _scheduleSync();
   }
 
   static Future<void> stopGameplay() {
-    _gameplayActive = false;
+    if (_desiredTrack != _GameBgmTrack.gameplay) return Future<void>.value();
+    _desiredTrack = null;
     _gameplayPaused = false;
+    return _scheduleSync();
+  }
+
+  static Future<void> pauseForLifecycle() {
+    _lifecyclePaused = true;
+    return _scheduleSync();
+  }
+
+  static Future<void> resumeFromLifecycle() {
+    _lifecyclePaused = false;
+    return _scheduleSync();
+  }
+
+  /// Retries a blocked web autoplay once the player provides a user gesture.
+  static Future<void> handleUserInteraction() {
+    if (!_soundEnabled ||
+        _lifecyclePaused ||
+        _desiredTrack == null ||
+        _playing) {
+      return Future<void>.value();
+    }
     return _scheduleSync();
   }
 
@@ -115,13 +161,15 @@ abstract final class GameBgm {
   }
 
   static Future<void> shutdown() async {
-    _gameplayActive = false;
+    _desiredTrack = null;
     _gameplayPaused = false;
+    _lifecyclePaused = false;
     await _scheduleSync();
     final backend = _backend;
     _backend = null;
-    _started = false;
+    _loadedTrack = null;
     _playing = false;
+    _currentVolume = 0;
     await backend?.dispose();
   }
 
@@ -130,7 +178,7 @@ abstract final class GameBgm {
       try {
         await _synchronize();
       } catch (_) {
-        _started = false;
+        _loadedTrack = null;
         _playing = false;
       }
     });
@@ -138,34 +186,81 @@ abstract final class GameBgm {
   }
 
   static Future<void> _synchronize() async {
-    if (!_gameplayActive) {
-      if (_started) await _player.stop();
-      _started = false;
+    final desiredTrack = _desiredTrack;
+    if (desiredTrack == null) {
+      if (_loadedTrack != null) await _fadeOutAndStop();
+      _loadedTrack = null;
       _playing = false;
       return;
     }
 
-    final shouldPlay = _soundEnabled && !_gameplayPaused;
+    final shouldPlay = _soundEnabled &&
+        !_lifecyclePaused &&
+        (desiredTrack != _GameBgmTrack.gameplay || !_gameplayPaused);
+
+    if (_loadedTrack != null && _loadedTrack != desiredTrack) {
+      await _fadeOutAndStop();
+      _loadedTrack = null;
+      _playing = false;
+    }
+
     if (!shouldPlay) {
-      if (_playing) await _player.pause();
+      if (_playing) {
+        await _fadeTo(0);
+        await _player.pause();
+      }
       _playing = false;
       return;
     }
 
-    if (!_started) {
-      await _player.startLoop(assetPath, volume);
-      _started = true;
+    if (_loadedTrack == null) {
+      _currentVolume = 0;
+      await _player.startLoop(_assetPathFor(desiredTrack), 0);
+      _loadedTrack = desiredTrack;
       _playing = true;
+      await _fadeTo(_volumeFor(desiredTrack));
       return;
     }
 
     if (!_playing) {
+      _currentVolume = 0;
+      await _player.setVolume(0);
       await _player.resume();
       _playing = true;
+      await _fadeTo(_volumeFor(desiredTrack));
+    }
+  }
+
+  static Future<void> _fadeOutAndStop() async {
+    if (_playing) await _fadeTo(0);
+    await _player.stop();
+    _currentVolume = 0;
+  }
+
+  static Future<void> _fadeTo(double target) async {
+    final start = _currentVolume;
+    if (start == target) return;
+    for (var step = 1; step <= _fadeSteps; step++) {
+      if (_fadeStepDuration > Duration.zero) {
+        await Future<void>.delayed(_fadeStepDuration);
+      }
+      final next = start + (target - start) * step / _fadeSteps;
+      await _player.setVolume(next);
+      _currentVolume = next;
     }
   }
 
   static GameBgmBackend get _player => _backend ??= _createBackend();
+
+  static String _assetPathFor(_GameBgmTrack track) => switch (track) {
+        _GameBgmTrack.home => homeAssetPath,
+        _GameBgmTrack.gameplay => gameplayAssetPath,
+      };
+
+  static double _volumeFor(_GameBgmTrack track) => switch (track) {
+        _GameBgmTrack.home => homeVolume,
+        _GameBgmTrack.gameplay => gameplayVolume,
+      };
 
   static GameBgmBackend _createBackend() {
     if (kIsWeb ||
@@ -180,14 +275,18 @@ abstract final class GameBgm {
   static Future<void> debugReset({
     required GameBgmBackend backend,
     bool soundEnabled = true,
+    Duration fadeStepDuration = Duration.zero,
   }) async {
     await shutdown();
     _backend = backend;
     _soundEnabled = soundEnabled;
-    _gameplayActive = false;
+    _desiredTrack = null;
+    _loadedTrack = null;
     _gameplayPaused = false;
-    _started = false;
+    _lifecyclePaused = false;
     _playing = false;
+    _currentVolume = 0;
+    _fadeStepDuration = fadeStepDuration;
     _operations = Future<void>.value();
   }
 }

@@ -124,7 +124,7 @@ export function validateSubmitPayload(value: unknown): SubmitPayload {
   if (!displayName || value.policyVersion !== rankingSafetyPolicyVersion) {
     throw new Error('invalid-argument');
   }
-  const maximum = category === 'stage' ? 600 : 900;
+  const maximum = category === 'stage' ? 600 : 9999;
   if (!Number.isInteger(value.score) ||
       (value.score as number) < 0 ||
       (value.score as number) > maximum) {
