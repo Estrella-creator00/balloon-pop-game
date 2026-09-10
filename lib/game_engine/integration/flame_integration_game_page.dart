@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
+import '../../audio/game_bgm.dart';
 import '../../audio/pop_sound.dart';
 import '../../balloon_background.dart';
 import '../../balloon_skin_catalog.dart';
@@ -212,6 +213,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     if (phase == GameSessionPhase.endlessComplete && phaseChanged) {
       _endlessResult = _reportEndlessRunOnce();
       widget.onAudioPause?.call();
+      unawaited(GameBgm.stopGameplay());
       _game.pausePreview();
       setState(() {});
       return;
@@ -243,6 +245,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     );
     _metrics.recordShutdown(_game.updateCallCount);
     widget.onAudioPause?.call();
+    unawaited(GameBgm.stopGameplay());
     _game.shutdown();
     _metrics.observePostShutdownUpdateCount(_game.updateCallCount);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -255,12 +258,14 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     if (_manualPause || _session.phase != GameSessionPhase.playing) return;
     setState(() => _manualPause = true);
     widget.onAudioPause?.call();
+    unawaited(GameBgm.pauseGameplay());
     _game.pausePreview();
   }
 
   void _resume() {
     if (!_manualPause) return;
     setState(() => _manualPause = false);
+    unawaited(GameBgm.resumeGameplay());
     if (!_backgroundPause) _game.resumePreview();
   }
 
@@ -271,6 +276,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
       _reportedEndlessRecord = null;
     });
     await _game.restartEndless();
+    await GameBgm.startGameplay();
   }
 
   EndlessRecordResult _reportEndlessRunOnce() {
@@ -300,6 +306,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     final wasPaused = _manualPause;
     if (!wasPaused) {
       widget.onAudioPause?.call();
+      unawaited(GameBgm.pauseGameplay());
       _game.pausePreview();
     }
     final confirmed = await showDialog<bool>(
@@ -345,6 +352,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
       }
     } else if (!wasPaused && !_backgroundPause) {
       _game.resumePreview();
+      unawaited(GameBgm.resumeGameplay());
     }
   }
 
@@ -357,10 +365,14 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     if (backgrounded) {
       _backgroundPause = true;
       widget.onAudioPause?.call();
+      unawaited(GameBgm.pauseGameplay());
       _game.pausePreview();
     } else if (state == AppLifecycleState.resumed) {
       _backgroundPause = false;
-      if (!_manualPause && !_sectionIntroVisible) _game.resumePreview();
+      if (!_manualPause && !_sectionIntroVisible) {
+        _game.resumePreview();
+        unawaited(GameBgm.resumeGameplay());
+      }
     }
   }
 
@@ -371,6 +383,7 @@ class _FlameIntegrationGamePageState extends State<FlameIntegrationGamePage>
     _session.removeListener(_onSessionChanged);
     _metrics.recordShutdown(_game.updateCallCount);
     _game.shutdown();
+    unawaited(GameBgm.stopGameplay());
     _metrics.observePostShutdownUpdateCount(_game.updateCallCount);
     _metrics.activeGameInstances--;
     _session.dispose();

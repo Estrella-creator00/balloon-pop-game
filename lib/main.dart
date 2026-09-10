@@ -8,6 +8,7 @@ import 'l10n/generated/app_localizations.dart';
 import 'l10n/l10n.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
+import 'audio/game_bgm.dart';
 import 'audio/pop_sound.dart';
 import 'audio/pop_sound_runtime.dart';
 import 'balloon_background.dart';
@@ -258,6 +259,7 @@ class _BalloonPopAppState extends State<BalloonPopApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     stopActiveNativePopSound();
+    unawaited(GameBgm.shutdown());
     unawaited(flushProgressStorage());
     if (_ownsCoinPurchaseService) _coinPurchaseService.dispose();
     super.dispose();
@@ -2447,6 +2449,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stage = startStage;
     _secondsLeft = StageConfig.forStage(startStage).duration.inSeconds;
     _phase = GamePhase.playing;
+    unawaited(GameBgm.startGameplay());
     _balloons.clear();
     _pieces.clear();
     _rings.clear();
@@ -2509,6 +2512,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       releaseNativeSemanticGameplaySounds();
       return;
     }
+    unawaited(GameBgm.startGameplay());
     setState(() {});
     FlameIntegrationResult? result;
     try {
@@ -2556,6 +2560,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
     } finally {
+      await GameBgm.stopGameplay();
       PopSound.releaseGameplayAssets(gameplaySoundPaths);
       releaseNativeSemanticGameplaySounds();
     }
@@ -2623,6 +2628,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
       releaseNativeSemanticGameplaySounds();
       return null;
     }
+    unawaited(GameBgm.startGameplay());
     FlameIntegrationResult? result;
     try {
       result = await Navigator.of(context).push<FlameIntegrationResult>(
@@ -2649,6 +2655,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
         ),
       );
     } finally {
+      await GameBgm.stopGameplay();
       PopSound.releaseGameplayAssets(gameplaySoundPaths);
       releaseNativeSemanticGameplaySounds();
       if (mounted && sessionId == _flameSessionId) {
@@ -2734,6 +2741,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _scheduleStagePageJump(stagePage);
     _publishHeader();
     stopActiveNativePopSound();
+    unawaited(GameBgm.stopGameplay());
     unawaited(flushProgressStorage());
   }
 
@@ -2758,6 +2766,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     if (_phase != GamePhase.playing) return;
     _stopGameLoop();
     _stopwatch.stop();
+    unawaited(GameBgm.pauseGameplay());
     setState(() {
       _phase = GamePhase.paused;
     });
@@ -2777,6 +2786,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
   void _resumeGame() {
     if (_phase != GamePhase.paused) return;
     _stopwatch.start();
+    unawaited(GameBgm.resumeGameplay());
     setState(() {
       _phase = GamePhase.playing;
     });
@@ -3553,6 +3563,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
+    unawaited(GameBgm.stopGameplay());
     _recordResult();
     _phase = GamePhase.completed;
     _pieces.clear();
@@ -3757,6 +3768,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stageTimer?.cancel();
     _stopwatch.stop();
     _frameStopwatch.stop();
+    unawaited(GameBgm.stopGameplay());
     _recordResult();
     setState(() {
       _secondsLeft = 0;
@@ -3774,6 +3786,7 @@ class _BalloonGamePageState extends State<BalloonGamePage>
     _stopGameLoop();
     _stageTimer?.cancel();
     _stopwatch.stop();
+    unawaited(GameBgm.stopGameplay());
     _headerData.dispose();
     _gameplayFrame.dispose();
     _effectsFrame.dispose();

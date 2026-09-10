@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import '../audio/game_bgm.dart';
 import '../audio/pop_sound.dart';
 import '../storage/progress_storage.dart';
 import '../ranking/ranking_nickname.dart';
@@ -35,6 +38,7 @@ abstract final class SettingsService {
   static void setSoundEnabled(bool enabled) {
     ProgressStorage.setSoundEnabled(enabled);
     PopSound.setEnabled(enabled);
+    unawaited(GameBgm.setEnabled(enabled));
   }
 
   static void setHapticEnabled(bool enabled) {
@@ -45,6 +49,7 @@ abstract final class SettingsService {
   /// Applies persisted preferences to the runtime service gates at app start.
   static void applyStoredPreferences() {
     PopSound.setEnabled(soundEnabled);
+    unawaited(GameBgm.setEnabled(soundEnabled));
     HapticService.setEnabled(hapticEnabled);
   }
 
