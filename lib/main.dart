@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'l10n/l10n.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
@@ -99,8 +100,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeProgressStorage();
   await initializeNativePopSound();
+  final packageInfo = await PackageInfo.fromPlatform();
   final uri = Uri.base;
   runApp(PoppopAppEntry(
+    appVersion: packageInfo.version,
     engineMode: poppopEngineModeFromUri(uri),
     integrationDebugConfig: FlameIntegrationDebugConfig.fromUri(uri),
   ));
@@ -109,6 +112,7 @@ Future<void> main() async {
 class PoppopAppEntry extends StatefulWidget {
   const PoppopAppEntry({
     super.key,
+    this.appVersion = '',
     this.engineMode = defaultPoppopEngineMode,
     this.flameGameFactory,
     this.integrationGameFactory,
@@ -118,6 +122,8 @@ class PoppopAppEntry extends StatefulWidget {
     this.rankingSafetyStore,
     this.coinPurchaseService,
   });
+
+  final String appVersion;
 
   final PoppopEngineMode engineMode;
 
@@ -157,6 +163,7 @@ class _PoppopAppEntryState extends State<PoppopAppEntry> {
   Widget build(BuildContext context) {
     if (_engineMode != PoppopEngineMode.flamePreview) {
       return BalloonPopApp(
+        appVersion: widget.appVersion,
         useFlameGameplay: _engineMode == PoppopEngineMode.flameIntegration,
         integrationGameFactory: widget.integrationGameFactory,
         integrationDebugConfig: widget.integrationDebugConfig,
@@ -184,6 +191,7 @@ class _PoppopAppEntryState extends State<PoppopAppEntry> {
 class BalloonPopApp extends StatefulWidget {
   const BalloonPopApp({
     super.key,
+    this.appVersion = '',
     this.stage30SwapRollForTest,
     this.toolHitDeltaForTest,
     this.gameplayRendererMode = defaultGameplayRendererMode,
@@ -195,6 +203,8 @@ class BalloonPopApp extends StatefulWidget {
     this.rankingSafetyStore,
     this.coinPurchaseService,
   });
+
+  final String appVersion;
 
   @visibleForTesting
   final double Function()? stage30SwapRollForTest;
@@ -293,6 +303,7 @@ class _BalloonPopAppState extends State<BalloonPopApp>
       ),
       home: _nicknameOnboardingCompleted
           ? BalloonGamePage(
+              appVersion: widget.appVersion,
               stage30SwapRollForTest: widget.stage30SwapRollForTest,
               toolHitDeltaForTest: widget.toolHitDeltaForTest,
               gameplayRendererMode: widget.gameplayRendererMode,
@@ -2026,6 +2037,7 @@ class SinglePeriodicGameLoop {
 class BalloonGamePage extends StatefulWidget {
   const BalloonGamePage({
     super.key,
+    this.appVersion = '',
     this.stage30SwapRollForTest,
     this.toolHitDeltaForTest,
     this.gameplayRendererMode = defaultGameplayRendererMode,
@@ -2037,6 +2049,8 @@ class BalloonGamePage extends StatefulWidget {
     this.rankingSafetyStore,
     this.coinPurchaseService,
   });
+
+  final String appVersion;
 
   @visibleForTesting
   final double Function()? stage30SwapRollForTest;
@@ -4021,16 +4035,16 @@ class _BalloonGamePageState extends State<BalloonGamePage>
                           height: 86,
                           child: _bottomMenu(selectedTab: MainTab.home),
                         ),
-                        const Positioned(
+                        Positioned(
                           bottom: 12,
                           left: 0,
                           right: 0,
                           height: 20,
                           child: Text(
-                            key: ValueKey('home-version-label'),
-                            'v0.6 UI REFRESH',
+                            key: const ValueKey('home-version-label'),
+                            widget.appVersion,
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Color(0xFF214D66),
                               fontSize: 15,
                               fontWeight: FontWeight.w900,

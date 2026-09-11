@@ -1,7 +1,7 @@
 name: balloon_pop_game
 description: A cute balloon popping game for Flutter Web.
 publish_to: "none"
-version: 1.0.0+3
+version: 1.0.0+4
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -21,6 +21,7 @@ dependencies:
   intl: ^0.20.2
   in_app_purchase: ^3.3.0
   in_app_purchase_android: ^0.5.3
+  package_info_plus: ^10.2.1
   shared_preferences: ^2.5.5
   unorm_dart: ^0.3.2
   url_launcher: ^6.3.2

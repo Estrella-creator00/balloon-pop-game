@@ -2123,7 +2123,7 @@ void main() {
     tester,
   ) async {
     ProgressStorage.addCoins(1234);
-    await tester.pumpWidget(const BalloonPopApp());
+    await tester.pumpWidget(const BalloonPopApp(appVersion: '1.0.0'));
     await tester.pump();
     expect(find.text('1,234'), findsOneWidget);
 
@@ -2240,7 +2240,8 @@ void main() {
     expect(find.text('BEST SCORE'), findsNothing);
     expect(find.text('LAST SCORE'), findsNothing);
     expect(find.text('추천!'), findsNothing);
-    expect(find.text('v0.6 UI REFRESH'), findsOneWidget);
+    expect(find.text('1.0.0'), findsOneWidget);
+    expect(find.textContaining('+4'), findsNothing);
     expect(find.byType(BackdropFilter), findsNothing);
     expect(find.byKey(const ValueKey('home-coin-hud')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-coin-add-button')), findsNothing);
