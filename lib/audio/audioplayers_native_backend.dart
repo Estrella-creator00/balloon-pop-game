@@ -34,7 +34,11 @@ final class AudioplayersNativeAudioBackend implements NativeAudioBackend {
       source: AssetSource(_assetSourcePath(assetPath)),
       minPlayers: voiceCount,
       maxPlayers: voiceCount,
-      playerMode: PlayerMode.lowLatency,
+      // AudioPool only listens for natural completion and returns players to
+      // the available pool outside low-latency mode. In low-latency mode each
+      // completed iOS sound remained in currentPlayers, exhausting the fixed
+      // voice pool after exactly [voiceCount] plays.
+      playerMode: PlayerMode.mediaPlayer,
       audioContext: soundEffectContext,
     );
     if (_disposed) {

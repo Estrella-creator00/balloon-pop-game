@@ -133,6 +133,23 @@ void main() {
     expect(backend.poolCreateCount, 1);
   });
 
+  test('completed four-voice pool is reused for sequential playback', () async {
+    const path = 'assets/images/gemi_pickaxe_hit.mp3.mp3';
+    await PopSound.prepareGameplayAsset(path);
+
+    for (var round = 0; round < 8; round++) {
+      for (var voice = 0; voice < PopSound.gameplayVoiceCount; voice++) {
+        PopSound.playGameplayAsset(path);
+      }
+      expect(backend.active[path], PopSound.gameplayVoiceCount);
+      backend.complete(path);
+    }
+
+    expect(backend.plays.where((played) => played == path), hasLength(32));
+    expect(backend.poolCreateCount, 1);
+    expect(backend.active[path], 0);
+  });
+
   test('sound off blocks dispatch', () async {
     await PopSound.prepareGameplayAsset(PopSound.basicPopAssetPath);
     PopSound.setEnabled(false);
@@ -318,7 +335,8 @@ void main() {
     expect(context.android.usageType, AndroidUsageType.game);
     expect(context.android.audioFocus, AndroidAudioFocus.none);
     expect(context.android.stayAwake, isFalse);
-    expect(source, contains('playerMode: PlayerMode.lowLatency'));
+    expect(source, contains('playerMode: PlayerMode.mediaPlayer'));
+    expect(source, isNot(contains('playerMode: PlayerMode.lowLatency')));
   });
 
   test('web audio implementation and voice contract remain unchanged', () {
@@ -413,6 +431,10 @@ final class _FakeNativeAudioBackend implements NativeAudioBackend {
   bool disposed = false;
 
   int get totalActive => active.values.fold(0, (sum, value) => sum + value);
+
+  void complete(String assetPath) {
+    if (active.containsKey(assetPath)) active[assetPath] = 0;
+  }
 
   @override
   Future<void> prepare(String assetPath, int voiceCount) async {

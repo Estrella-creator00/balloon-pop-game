@@ -43,7 +43,7 @@ final class SharedPreferencesProgressStorageBackend
 }
 
 abstract final class ProgressStorage {
-  static const int initialCoinBalance = 20000;
+  static const int initialCoinBalance = 1000;
 
   static ProgressStorageBackend? _backend;
   static ProgressStorageBackendFactory _backendFactory =

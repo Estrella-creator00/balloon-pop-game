@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:balloon_pop_game/balloon_skin_catalog.dart';
@@ -6,6 +7,7 @@ import 'package:balloon_pop_game/balloon_background.dart';
 import 'package:balloon_pop_game/game_engine/components/balloon_component.dart';
 import 'package:balloon_pop_game/game_engine/components/basic_pop_effect.dart';
 import 'package:balloon_pop_game/game_engine/components/game_diagnostics_component.dart';
+import 'package:balloon_pop_game/game_engine/components/legendary_burst_effect.dart';
 import 'package:balloon_pop_game/game_engine/endless/endless_mode.dart';
 import 'package:balloon_pop_game/game_engine/flame_game_page.dart';
 import 'package:balloon_pop_game/game_engine/game_session_state.dart';
@@ -228,6 +230,39 @@ void main() {
     );
     expect(shushu.cleansTransparentMatte, isFalse);
     expect(shushu.idleStyle, LegendaryIdleStyle.breathe);
+  });
+
+  testWidgets('Flame GEMI pickaxe travels downward with a descending swing',
+      (tester) async {
+    final definition = legendaryDefinitionFor(FlamePreviewSkin.gemi);
+    final cache = LegendarySpriteCache(
+      definition,
+      imageLoader: _testLegendaryImageLoader,
+      includeBackground: false,
+    );
+    addTearDown(cache.dispose);
+    await tester.runAsync(() => cache.prepareForStage(boss: false));
+    final effect = LegendaryEffectFactory(random: math.Random(1)).create(
+      definition: definition,
+      cache: cache,
+      kind: LegendaryHitKind.firstHit,
+      center: Vector2(180, 240),
+      sourceSize: 80,
+      color: definition.palette.first,
+      playfieldSize: Vector2(360, 640),
+      onFinished: (_) {},
+    );
+    final pickaxe = effect.particles.first;
+    final startY = pickaxe.position.y;
+    final startRotation = pickaxe.rotation;
+
+    effect.update(0.14);
+
+    expect(pickaxe.position.y, greaterThan(startY));
+    expect(pickaxe.rotation, lessThan(startRotation));
+    expect(pickaxe.velocity.y, 360);
+    expect(pickaxe.size, 116);
+    expect(pickaxe.maxLife, 0.24);
   });
 
   testWidgets('SHUSHU Flame body decodes directly with transparent alpha',

@@ -6822,6 +6822,37 @@ void main() {
     expect(find.text('시간 10초'), findsOneWidget);
   });
 
+  test('GEMI pickaxe moves and rotates as a downward strike', () {
+    final definition = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
+    final start = legendaryToolVisual(
+      definition: definition,
+      targetCenter: const Offset(180, 240),
+      approach: 0,
+      easedProgress: 0,
+      opacity: 1,
+      size: 116,
+      gemiStart: const Offset(-68, -30),
+      gemiEnd: const Offset(0, 55),
+    );
+    final impact = legendaryToolVisual(
+      definition: definition,
+      targetCenter: const Offset(180, 240),
+      approach: 0,
+      easedProgress: 1,
+      opacity: 1,
+      size: 116,
+      gemiStart: const Offset(-68, -30),
+      gemiEnd: const Offset(0, 55),
+    );
+
+    expect(impact.topLeft.dy - start.topLeft.dy, 85);
+    expect(impact.rotation, lessThan(start.rotation));
+    expect(start.rotation, closeTo(-0.08, 0.0001));
+    expect(impact.rotation, closeTo(-1.12, 0.0001));
+    expect(impact.size, start.size);
+    expect(impact.pivot, start.pivot);
+  });
+
   testWidgets('legendary tools apply damage only at their impact frame', (
     tester,
   ) async {

@@ -1,5 +1,5 @@
 abstract final class ProgressStorage {
-  static const int initialCoinBalance = 20000;
+  static const int initialCoinBalance = 1000;
 
   static bool _hasStoredData = false;
   static bool _secondSectionUnlocked = false;

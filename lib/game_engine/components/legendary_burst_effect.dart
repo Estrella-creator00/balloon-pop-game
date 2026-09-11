@@ -163,8 +163,8 @@ class LegendaryEffectFactory {
         ..add(isShushu ? Vector2(0, -72) : Vector2(-56, -32)),
       velocity: isShushu ? Vector2(0, 300) : Vector2(230, 360),
       size: isShushu ? 100 : 116,
-      rotation: isShushu ? -2.72 : -1.12,
-      spin: isShushu ? 1.2 : 3.8,
+      rotation: isShushu ? -2.72 : -0.08,
+      spin: isShushu ? 1.2 : -3.8,
       life: 0.24,
     ));
   }

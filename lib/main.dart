@@ -1888,7 +1888,7 @@ LegendaryToolVisual legendaryToolVisual({
   final offset = isFork
       ? forkMotion.offset
       : Offset.lerp(gemiStart, gemiEnd, easedProgress)!;
-  final angle = isFork ? forkMotion.angle : -1.12 + 1.04 * easedProgress;
+  final angle = isFork ? forkMotion.angle : -0.08 - 1.04 * easedProgress;
   final center = targetCenter + offset;
   final topLeft = isFork
       ? Offset(center.dx - size * 0.35, center.dy - size * 0.05)

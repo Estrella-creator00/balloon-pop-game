@@ -22,7 +22,7 @@ void main() {
     expect(ProgressStorage.hapticEnabled(), isTrue);
   });
 
-  test('initial 20000 coins are granted only once', () async {
+  test('initial 1000 coins are granted only once', () async {
     final store = _MemoryPersistentStore();
     await _initialize(store);
 
@@ -41,7 +41,7 @@ void main() {
       ProgressStorage.initializeNewUserCoins(),
       ProgressStorage.initialCoinBalance,
     );
-    expect(store.writeValues(ProgressStorageKeys.coinBalance), [20000]);
+    expect(store.writeValues(ProgressStorageKeys.coinBalance), [1000]);
   });
 
   test('coins survive adapter recreation', () async {
@@ -52,7 +52,31 @@ void main() {
     await ProgressStorage.flush();
 
     await _restart(store);
-    expect(ProgressStorage.coinBalance(), 20321);
+    expect(ProgressStorage.coinBalance(), 1321);
+  });
+
+  test('existing 20000 balance ownership and settings survive initialization',
+      () async {
+    final store = _MemoryPersistentStore(initial: {
+      ProgressStorageKeys.coinBalance: 20000,
+      ProgressStorageKeys.ownedProductIds: 'balloon-heart|balloon-lumen',
+      ProgressStorageKeys.equippedProductIds: 'balloon=balloon-lumen',
+      ProgressStorageKeys.soundEnabled: false,
+    });
+    await _initialize(store);
+
+    expect(ProgressStorage.initializeNewUserCoins(), 20000);
+    expect(ProgressStorage.coinBalance(), 20000);
+    expect(
+      ProgressStorage.ownedProductIds(),
+      containsAll(<String>['balloon-heart', 'balloon-lumen']),
+    );
+    expect(
+      ProgressStorage.equippedProductId('balloon'),
+      'balloon-lumen',
+    );
+    expect(ProgressStorage.soundEnabled(), isFalse);
+    expect(store.writeValues(ProgressStorageKeys.coinBalance), isEmpty);
   });
 
   test('verified coin grant is persisted and cannot be applied twice',
@@ -91,7 +115,7 @@ void main() {
 
     await _restart(store);
     expect(ProgressStorage.ownedProductIds(), contains('balloon-heart'));
-    expect(ProgressStorage.coinBalance(), 19500);
+    expect(ProgressStorage.coinBalance(), 500);
   });
 
   test('equipped products survive adapter recreation', () async {
@@ -273,6 +297,7 @@ void main() {
       'poppop_best_score',
       'poppop_last_score',
       'poppop_coin_balance',
+      'poppop_verified_coin_grant_ids',
       'poppop_owned_product_ids',
       'poppop_equipped_product_ids',
       'poppop_nickname',
