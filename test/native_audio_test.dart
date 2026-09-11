@@ -116,6 +116,39 @@ void main() {
     expect(PopSound.activeGameplayVoiceCount, 8);
   });
 
+  test('GEMI hit and pop use ten bounded reusable voices each', () async {
+    const hit = 'assets/images/gemi_pickaxe_hit.mp3.mp3';
+    const pop = 'assets/images/gemi_break.mp3.mp3';
+    await Future.wait([
+      PopSound.prepareGameplayAsset(hit),
+      PopSound.prepareGameplayAsset(pop),
+    ]);
+
+    expect(PopSound.gameplayVoiceCountForAsset(hit), 10);
+    expect(PopSound.gameplayVoiceCountForAsset(pop), 10);
+    expect(backend.capacities[hit], 10);
+    expect(backend.capacities[pop], 10);
+
+    for (var index = 0; index < 11; index++) {
+      PopSound.playGameplayAsset(hit);
+      PopSound.playGameplayAsset(pop);
+    }
+    expect(backend.plays.where((path) => path == hit), hasLength(10));
+    expect(backend.plays.where((path) => path == pop), hasLength(10));
+    expect(backend.active[hit], 10);
+    expect(backend.active[pop], 10);
+
+    backend.complete(hit);
+    backend.complete(pop);
+    for (var index = 0; index < 10; index++) {
+      PopSound.playGameplayAsset(hit);
+      PopSound.playGameplayAsset(pop);
+    }
+    expect(backend.plays.where((path) => path == hit), hasLength(20));
+    expect(backend.plays.where((path) => path == pop), hasLength(20));
+    expect(backend.poolCreateCount, 2);
+  });
+
   test('MUGI native pool preserves twelve voice polyphony', () async {
     const path = 'assets/sounds/muggy_break.mp3.mp3';
     await PopSound.prepareGameplayAsset(path);
@@ -134,7 +167,7 @@ void main() {
   });
 
   test('completed four-voice pool is reused for sequential playback', () async {
-    const path = 'assets/images/gemi_pickaxe_hit.mp3.mp3';
+    const path = 'assets/sounds/kicks_soccer_kick.mp3.mp3';
     await PopSound.prepareGameplayAsset(path);
 
     for (var round = 0; round < 8; round++) {
@@ -343,6 +376,7 @@ void main() {
     final source = File('lib/audio/pop_sound_web.dart').readAsStringSync();
     expect(source, contains('static const int gameplayVoiceCount = 4;'));
     expect(source, contains('static const int rapidGameplayVoiceCount = 8;'));
+    expect(source, contains('static const int gemiGameplayVoiceCount = 10;'));
     expect(source, contains("@JS('AudioContext')"));
     expect(source, contains("@JS('Audio')"));
   });
@@ -452,9 +486,9 @@ final class _FakeNativeAudioBackend implements NativeAudioBackend {
   @override
   void play(String assetPath) {
     if (disposed || !capacities.containsKey(assetPath)) return;
+    if ((active[assetPath] ?? 0) >= capacities[assetPath]!) return;
     plays.add(assetPath);
-    active[assetPath] =
-        ((active[assetPath] ?? 0) + 1).clamp(0, capacities[assetPath]!);
+    active[assetPath] = (active[assetPath] ?? 0) + 1;
   }
 
   @override

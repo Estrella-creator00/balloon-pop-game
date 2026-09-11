@@ -6853,6 +6853,25 @@ void main() {
     expect(impact.pivot, start.pivot);
   });
 
+  test('GEMI voice cap matches the maximum normal-stage balloon count', () {
+    final gemi = BalloonSkinCatalog.byIdOrDefault('balloon-lumen');
+    final maximumBalloonCount = List<int>.generate(30, (index) => index + 1)
+        .map(StageConfig.forStage)
+        .where((stage) => !stage.isBoss)
+        .map((stage) => stage.balloonCount)
+        .reduce(max);
+
+    expect(maximumBalloonCount, 10);
+    expect(
+      PopSound.gameplayVoiceCountForAsset(gemi.hitSoundAssetPath!),
+      maximumBalloonCount,
+    );
+    expect(
+      PopSound.gameplayVoiceCountForAsset(gemi.popSoundAssetPath!),
+      maximumBalloonCount,
+    );
+  });
+
   testWidgets('legendary tools apply damage only at their impact frame', (
     tester,
   ) async {

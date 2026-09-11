@@ -1,6 +1,7 @@
 abstract final class PopSound {
   static const int gameplayVoiceCount = 4;
   static const int rapidGameplayVoiceCount = 8;
+  static const int gemiGameplayVoiceCount = 10;
   static const uiClickAssetPath = 'assets/sounds/ui_click.mp3.mp3';
   static const bossAppearAssetPath = 'assets/sounds/boss_appear.mp3.mp3';
   static const bossClearAssetPath = 'assets/sounds/boss_clear.mp3.mp3';
@@ -32,11 +33,16 @@ abstract final class PopSound {
   static int get readyGameplayAssetCount => _preparedGameplayAssets.length;
   static int get gameplayListenerCount => 0;
 
-  static int gameplayVoiceCountForAsset(String assetPath) =>
-      assetPath.endsWith('wari_watermelon_bite.mp3.mp3') ||
-              assetPath.endsWith('muggy_break.mp3.mp3')
-          ? rapidGameplayVoiceCount
-          : gameplayVoiceCount;
+  static int gameplayVoiceCountForAsset(String assetPath) {
+    if (assetPath.endsWith('gemi_pickaxe_hit.mp3.mp3') ||
+        assetPath.endsWith('gemi_break.mp3.mp3')) {
+      return gemiGameplayVoiceCount;
+    }
+    return assetPath.endsWith('wari_watermelon_bite.mp3.mp3') ||
+            assetPath.endsWith('muggy_break.mp3.mp3')
+        ? rapidGameplayVoiceCount
+        : gameplayVoiceCount;
+  }
 
   static void setEnabled(bool value) => enabled = value;
 

@@ -9,6 +9,7 @@ import 'native_audio_backend.dart';
 abstract final class PopSound {
   static const int gameplayVoiceCount = 4;
   static const int rapidGameplayVoiceCount = 8;
+  static const int gemiGameplayVoiceCount = 10;
   static const int mugiGameplayVoiceCount = 12;
   static const uiClickAssetPath = 'assets/sounds/ui_click.mp3.mp3';
   static const bossAppearAssetPath = 'assets/sounds/boss_appear.mp3.mp3';
@@ -114,6 +115,10 @@ abstract final class PopSound {
   static int get gameplayListenerCount => 0;
 
   static int gameplayVoiceCountForAsset(String assetPath) {
+    if (assetPath.endsWith('gemi_pickaxe_hit.mp3.mp3') ||
+        assetPath.endsWith('gemi_break.mp3.mp3')) {
+      return gemiGameplayVoiceCount;
+    }
     if (assetPath.endsWith('muggy_break.mp3.mp3')) {
       return mugiGameplayVoiceCount;
     }
